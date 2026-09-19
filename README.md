@@ -135,6 +135,8 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open **http://localhost:8080**
 
+Patient-facing **visual mockups** (not the live product): **http://localhost:8080/mockups/**
+
 Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require Gemini.
 
 ### Useful curls (Authorization core)
