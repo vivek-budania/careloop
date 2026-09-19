@@ -20,6 +20,8 @@ const CareLoop = {
     document.getElementById('cl-btn-network').addEventListener('click', () => this.findClinicians());
     document.getElementById('cl-btn-back').addEventListener('click', () => this.back());
     document.getElementById('cl-btn-next').addEventListener('click', () => this.next());
+    const jump = document.getElementById('cl-btn-jump-scribe');
+    if (jump) jump.addEventListener('click', () => this.showStep(7));
   },
 
   resetUi() {
@@ -41,6 +43,9 @@ const CareLoop = {
     document.getElementById('cl-btn-back').disabled = n === 1;
     document.getElementById('cl-btn-next').textContent = n === this.totalSteps ? 'Done' : 'Continue';
     if (n === 2) this.renderReview();
+    if (n === 7 && window.Scribe && typeof Scribe.onShow === 'function') {
+      Scribe.onShow();
+    }
   },
 
   back() {

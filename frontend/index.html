@@ -368,6 +368,9 @@
       <p class="careloop-banner">
         Mock coverage → visit scribe. Not a live eligibility check, EHR, or coverage decision.
         One step at a time. Insurance company is the only required field on step 1.
+        <button type="button" class="btn btn-secondary btn-sm" id="cl-btn-jump-scribe" style="margin-left:0.5rem">
+          Skip to visit / Record (demo)
+        </button>
       </p>
       <p class="form-hint" id="cl-step-label">Step 1 of 8</p>
 
@@ -525,35 +528,70 @@
       </div>
 
       <div class="cl-step" data-step="7" hidden>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <div class="card-title-icon purple">🎤</div>
-              <h2>7. Visit transcript</h2>
+        <div class="voice-stage" id="voice-stage">
+          <header class="voice-stage-header">
+            <div>
+              <p class="voice-eyebrow">Visit room · Grok scribe</p>
+              <h2 class="voice-title">CareLoop Visit</h2>
+              <p class="voice-sub" id="scribe-meta">Patient near doctor — tap to speak. Two voices → Doctor / Patient labels.</p>
             </div>
-            <span class="card-badge">Patient @ doctor</span>
+            <span class="voice-badge">Step 7</span>
+          </header>
+
+          <div class="voice-panel" id="voice-panel" data-state="idle">
+            <p class="voice-journey" id="voice-journey-label">KEEP NEAR DOCTOR &amp; PATIENT</p>
+            <p class="voice-prompt" id="voice-prompt">What’s being said in the visit?</p>
+
+            <div class="voice-viz-wrap">
+              <canvas id="voice-particles" class="voice-particles" width="640" height="320" aria-hidden="true"></canvas>
+              <button type="button" class="voice-mic-btn" id="btn-record-visit" aria-label="Tap to speak">
+                <span class="voice-mic-icon" id="voice-mic-icon" aria-hidden="true">
+                  <!-- mic -->
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 11a7 7 0 0 1-14 0"/>
+                    <path d="M12 18v3"/>
+                  </svg>
+                </span>
+                <span class="voice-pause-icon" id="voice-pause-icon" hidden aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                    <rect x="6" y="5" width="4" height="14" rx="1"/>
+                    <rect x="14" y="5" width="4" height="14" rx="1"/>
+                  </svg>
+                </span>
+              </button>
+            </div>
+
+            <p class="voice-cta" id="voice-cta">Tap to speak</p>
+            <p class="voice-hint" id="scribe-record-status">
+              Grok will transcribe and split <strong>DOCTOR</strong> / <strong>PATIENT</strong> when it hears two voices.
+            </p>
+
+            <div id="scribe-stt-loading" class="scribe-stt-banner" hidden>
+              <div class="spinner"></div>
+              <span>Sending audio to Grok…</span>
+            </div>
           </div>
-          <p class="empty-hint" id="scribe-meta" style="margin-bottom: var(--space-md)">
-            Load the mock PCP visit, paste dialogue, or optionally upload audio for Grok STT.
-            No live mic required for the demo.
-          </p>
-          <div class="form-group">
-            <label class="form-label" for="scribe-transcript">Transcript</label>
-            <textarea class="form-textarea" id="scribe-transcript" rows="14"
-              placeholder="Paste visit dialogue here..."></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="scribe-audio">Optional audio (Grok STT)</label>
-            <input type="file" class="form-input" id="scribe-audio" accept="audio/*,.webm,.mp3,.wav,.m4a">
-          </div>
-          <label class="form-hint" style="display:flex;gap:0.5rem;align-items:center;margin-bottom:var(--space-md)">
-            <input type="checkbox" id="scribe-use-seeded" checked>
-            <span>Use seeded golden-path SOAP (demo; no LLM)</span>
-          </label>
-          <div class="btn-group">
-            <button type="button" class="btn btn-secondary" id="btn-load-fixture">Load mock visit</button>
-            <button type="button" class="btn btn-secondary" id="btn-transcribe-audio">Transcribe audio</button>
-            <button type="button" class="btn btn-primary" id="btn-draft-soap">Draft SOAP + Plan</button>
+
+          <div class="voice-transcript-card">
+            <div class="voice-transcript-head">
+              <label class="form-label" for="scribe-transcript">Live transcript</label>
+              <label class="voice-seeded">
+                <input type="checkbox" id="scribe-use-seeded" checked>
+                Seeded SOAP (demo)
+              </label>
+            </div>
+            <textarea class="form-textarea voice-transcript" id="scribe-transcript" rows="10"
+              placeholder="Transcript appears here after you speak…"></textarea>
+            <div class="voice-actions">
+              <label class="voice-upload">
+                <input type="file" id="scribe-audio" accept="audio/*,.webm,.mp3,.wav,.m4a" hidden>
+                <span class="btn btn-secondary btn-sm" id="btn-pick-audio">Upload audio</span>
+              </label>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-transcribe-audio">Transcribe upload</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-load-fixture">Load mock visit</button>
+              <button type="button" class="btn btn-primary" id="btn-draft-soap">Draft SOAP + Plan</button>
+            </div>
           </div>
         </div>
       </div>

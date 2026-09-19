@@ -1,0 +1,7 @@
+{
+  "text": "Dr. Patel, patient Maya reports high sugars on metformin, plan add semaglutide and order A1C.",
+  "language": "en",
+  "duration": 6.602,
+  "source": "grok-stt",
+  "model": "grok-voice-transcribe-2.0"
+}

@@ -496,7 +496,7 @@ async def scribe_transcribe(
     file: UploadFile = File(...),
     _user: dict = Depends(careloop_auth.require_user),
 ):
-    """Optional Grok STT: upload visit audio → transcript text."""
+    """Optional Grok STT with speaker diarization (doctor vs patient)."""
     data = await file.read()
     try:
         return careloop_stt.transcribe_audio(
