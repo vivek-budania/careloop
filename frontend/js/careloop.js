@@ -560,6 +560,9 @@ const CareLoop = {
       search_zip: '',
       network_specialty: '',
       symptoms_source: '',
+      new_symptoms: '',
+      new_symptoms_source: '',
+      checkin_tab: 'symptoms',
       booked: false,
     };
   },
@@ -587,6 +590,28 @@ const CareLoop = {
     const text = String((j && j.symptoms) || '').trim();
     if (text) return text.length > 56 ? `${text.slice(0, 53)}…` : text;
     return 'New visit';
+  },
+
+  visitReasonText(j) {
+    const booked = String((j && j.symptoms) || '').trim();
+    const extra = String((j && j.new_symptoms) || '').trim();
+    if (booked && extra) return `${booked} New since booking: ${extra}`;
+    return booked || extra || '';
+  },
+
+  checkinTab() {
+    const j = this.thread.journey || {};
+    if (j.checkin_tab === 'checkin' || j.checkin_tab === 'symptoms') return j.checkin_tab;
+    return j.checked_in ? 'checkin' : 'symptoms';
+  },
+
+  toggleChipValue(current, chip) {
+    const s = String(current || '');
+    const escaped = String(chip || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!escaped) return s;
+    return s.toLowerCase().includes(String(chip).toLowerCase())
+      ? s.replace(new RegExp(escaped, 'ig'), '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim()
+      : (s ? `${s}, ` : '') + chip;
   },
 
   syncActiveJourney() {
@@ -648,7 +673,7 @@ const CareLoop = {
       : `Preparing · step ${row.step || 1} of 3`;
     const status = kind === 'upcoming'
       ? ((row.step || 1) >= 4
-        ? (row.checked_in ? 'Checked in · continue recording' : 'Ready to check in')
+        ? (row.checked_in ? 'Checked in · continue recording' : (String(row.new_symptoms || '').trim() ? 'New symptoms noted · ready to check in' : 'Ready to check in'))
         : 'Confirmed · tap to check in')
       : (row.doctor || 'Clinician not chosen yet');
     const title = this.visitTitle(row);
@@ -911,7 +936,7 @@ const CareLoop = {
       ? `${c.payer} — ${c.status} (mock estimate)`
       : 'Not on file';
     const visits = (s.visits || []).map((v) => (
-      `\n### ${v.date} · ${v.doctor}\nReason: ${v.reason}\n${v.summary}\nReview status: ${
+      `\n### ${v.date} · ${v.doctor}\nReason: ${v.reason}${v.new_symptoms ? `\nNew symptoms at check-in: ${v.new_symptoms}` : ''}\n${v.summary}\nReview status: ${
         v.reviewed ? 'Clinician review simulated' : 'Awaiting clinician review'
       }\nCoverage at visit: ${v.coverage}\n`
     )).join('');
@@ -1184,7 +1209,10 @@ const CareLoop = {
     }
     this.clearVisitRuntime();
     const step = (found.step || 3) >= 4 ? found.step : 4;
-    this.saveThread({ journey: { ...found, booked: true, step } });
+    const checkin_tab = found.checked_in
+      ? (found.checkin_tab || 'checkin')
+      : (found.checkin_tab || 'symptoms');
+    this.saveThread({ journey: { ...found, booked: true, step, checkin_tab } });
     this.navigate('Journey');
     if (step >= 5) {
       this.loadScribeDemos().then(() => {
@@ -1270,7 +1298,7 @@ const CareLoop = {
         body = '<p>Unknown step.</p>';
     }
     const skip = j.step === 7 ? this.btn('Skip estimates', 'next', 'secondary') : '';
-    const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? 'Continue to recording' : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
+    const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? (this.checkinTab() === 'symptoms' ? 'Continue to check-in' : 'Continue to recording') : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
     const visitDay = j.step >= 4;
     const dayNames = ['Check in', 'Visit recording', 'Your visit summary', 'Estimated costs', 'Your care plan'];
     const dayIndex = j.step - 4;
@@ -1296,15 +1324,16 @@ const CareLoop = {
 
   recordControls(purpose) {
     const visit = purpose === 'visit';
+    const day = purpose === 'day-symptoms';
     const label = this.recording
       ? `${this.icon('mic')} Stop & transcribe`
       : this.sttBusy
         ? 'Transcribing…'
-        : (visit ? `${this.icon('mic')} Record this visit` : `${this.icon('mic')} Record your reason`);
+        : (visit ? `${this.icon('mic')} Record this visit` : day ? `${this.icon('mic')} Record new symptoms` : `${this.icon('mic')} Record your reason`);
     const recordClass = this.recording ? 'coral' : 'secondary';
     const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
-    const action = visit ? 'record-visit' : 'record-symptoms';
-    const upload = visit ? 'pick-visit-audio' : 'pick-symptoms-audio';
+    const action = visit ? 'record-visit' : day ? 'record-day-symptoms' : 'record-symptoms';
+    const upload = visit ? 'pick-visit-audio' : day ? 'pick-day-symptoms-audio' : 'pick-symptoms-audio';
     const status = this.recordStatus
       ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
       : '';
@@ -1384,6 +1413,18 @@ const CareLoop = {
 
   checkInBody() {
     const j = this.thread.journey || {};
+    const tab = this.checkinTab();
+    const tabs = `<div class="tabs"><button type="button" class="${tab === 'symptoms' ? 'active' : ''}" data-checkin-tab="symptoms">New symptoms</button><button type="button" class="${tab === 'checkin' ? 'active' : ''}" data-checkin-tab="checkin">Check in</button></div>`;
+    if (tab === 'symptoms') {
+      const extra = String(j.new_symptoms || '');
+      const source = j.new_symptoms_source === 'stt'
+        ? `<div class="notice green">Transcribed from your audio. You can edit the text before you check in.</div>`
+        : '';
+      const booked = String(j.symptoms || '').trim()
+        ? `<div class="document">${this.icon('file')}<div><h3>When you booked</h3><small>${this.esc(j.symptoms)}</small></div></div>`
+        : '';
+      return `${tabs}<div class="eyebrow">Visit day</div><h2 class="mt">Any new symptoms before check-in?</h2><p>Share what changed since you booked. This is optional — you can skip it and check in.</p>${booked}<div class="chips">${['Worse than before', 'New rash', 'Fever', 'Headache', 'Nausea', 'Shortness of breath', 'Something else'].map((n) => `<button type="button" class="chip ${extra.toLowerCase().includes(n.toLowerCase()) ? 'selected' : ''}" data-new-symptom="${n}" aria-pressed="${extra.toLowerCase().includes(n.toLowerCase())}">${n}</button>`).join('')}</div><label class="field">New symptoms since booking<textarea id="new-symptoms">${this.esc(extra)}</textarea></label>${this.recordControls('day-symptoms')}${source}<div class="notice">${this.esc(this.audioDisclaimer())}</div>`;
+    }
     const booked = this.openJourneys().filter((row) => row.slot && (row.doctor || (row.step || 1) >= 3));
     const choices = booked.length > 1
       ? `<div class="chips">${booked.map((row) => `<button type="button" class="chip ${row.id === j.id ? 'selected' : ''}" data-checkin-visit="${this.esc(row.id)}">${this.esc(this.visitTitle(row))}</button>`).join('')}</div><p>Choose which open visit to check in for.</p>`
@@ -1392,7 +1433,10 @@ const CareLoop = {
     const warn = onTime
       ? `<div class="notice green">You’re within 15 minutes of ${this.esc(this.appointmentLabel())}.</div>`
       : `<div class="notice">This check-in is not within 15 minutes of the appointment (${this.esc(this.appointmentLabel())}). You can still continue in this demo. A real clinic would ask you to wait or reschedule.</div>`;
-    return `<div class="eyebrow">Visit day</div><h2 class="mt">Check in for this visit.</h2><p>${this.esc(j.doctor || 'Your clinician')} · ${this.esc(this.appointmentLabel())}<br>${this.esc(j.clinic || 'Clinic')}</p>${choices}${warn}<div class="document">${this.icon('check')}<div><h3>${j.checked_in ? 'Checked in' : 'Ready when you are'}</h3><small>${j.checked_in ? 'Next: record the visit, upload audio, or pick Demo 1, 2, or 3.' : 'Confirm check-in to start the visit recording flow.'}</small></div></div>${this.btn(j.checked_in ? 'Checked in ✓' : 'Check in', 'check-in', j.checked_in ? '' : '')}`;
+    const noted = String(j.new_symptoms || '').trim()
+      ? `<div class="notice green">New symptoms noted: ${this.esc(j.new_symptoms)}</div>`
+      : '';
+    return `${tabs}<div class="eyebrow">Visit day</div><h2 class="mt">Check in for this visit.</h2><p>${this.esc(j.doctor || 'Your clinician')} · ${this.esc(this.appointmentLabel())}<br>${this.esc(j.clinic || 'Clinic')}</p>${choices}${noted}${warn}<div class="document">${this.icon('check')}<div><h3>${j.checked_in ? 'Checked in' : 'Ready when you are'}</h3><small>${j.checked_in ? 'Next: record the visit, upload audio, or pick Demo 1, 2, or 3.' : 'Confirm check-in to start the visit recording flow.'}</small></div></div>${this.btn(j.checked_in ? 'Checked in ✓' : 'Check in', 'check-in', j.checked_in ? '' : '')}`;
   },
 
   liveTranscript() {
@@ -1612,7 +1656,7 @@ const CareLoop = {
   },
 
   async toggleVisitRecord(purpose) {
-    this.recordPurpose = purpose === 'symptoms' ? 'symptoms' : 'visit';
+    this.recordPurpose = (purpose === 'symptoms' || purpose === 'day-symptoms') ? purpose : 'visit';
     if (this.sttBusy && !this.recording) return;
     if (this.recording) {
       this.stopVisitRecord();
@@ -1810,6 +1854,17 @@ const CareLoop = {
         });
         this.recordStatus = 'Transcribed your reason. Edit the text if needed, then continue.';
         this.toast('Visit reason transcribed.');
+      } else if (this.recordPurpose === 'day-symptoms') {
+        this.saveThread({
+          journey: {
+            ...this.thread.journey,
+            new_symptoms: plain,
+            new_symptoms_source: 'stt',
+            checkin_tab: 'symptoms',
+          },
+        });
+        this.recordStatus = 'Transcribed your new symptoms. Edit the text if needed, then continue to check-in.';
+        this.toast('New symptoms transcribed.');
       } else {
         this.saveThread({
           journey: {
@@ -1890,7 +1945,7 @@ const CareLoop = {
         this.selectedVisit = null;
         return this.history();
       }
-      content = `<button class="back" data-action="history-back" type="button">${this.icon('back')}My visits</button><h2>${this.esc(v.reason)}</h2><p class="mt">${this.esc(v.date)} · ${this.esc(v.doctor)}</p><div class="rule"></div>${[['What happened', v.summary], ['What’s waiting', v.reviewed ? 'HbA1c result not available. Follow-up to be discussed.' : 'Clinic review of this draft summary and plan.'], ['Who acts', 'Clinic reviews the plan; you arrange tests once orders are ready.'], ['Evidence', 'Sample visit conversation and existing metformin fixture.'], ['Coverage at this visit', `${v.coverage} · mock snapshot`]].map(([t, p]) => `<h3 class="mt">${t}</h3><p style="font-size:12px;margin-top:7px">${this.esc(p)}</p>`).join('')}<div class="notice">Prior authorization: not submitted. Claim: not submitted. These are separate insurance events. PA ≠ claim.</div>${this.btn('View in clinic packet', 'packet')}`;
+      content = `<button class="back" data-action="history-back" type="button">${this.icon('back')}My visits</button><h2>${this.esc(v.reason)}</h2><p class="mt">${this.esc(v.date)} · ${this.esc(v.doctor)}</p><div class="rule"></div>${[['What happened', v.summary], ...(v.new_symptoms ? [['New symptoms at check-in', v.new_symptoms]] : []), ['What’s waiting', v.reviewed ? 'HbA1c result not available. Follow-up to be discussed.' : 'Clinic review of this draft summary and plan.'], ['Who acts', 'Clinic reviews the plan; you arrange tests once orders are ready.'], ['Evidence', 'Sample visit conversation and existing metformin fixture.'], ['Coverage at this visit', `${v.coverage} · mock snapshot`]].map(([t, p]) => `<h3 class="mt">${t}</h3><p style="font-size:12px;margin-top:7px">${this.esc(p)}</p>`).join('')}<div class="notice">Prior authorization: not submitted. Claim: not submitted. These are separate insurance events. PA ≠ claim.</div>${this.btn('View in clinic packet', 'packet')}`;
     } else {
       content = `<div class="tabs"><button type="button" class="${this.historyTab === 'visits' ? 'active' : ''}" data-tab="visits">My visits</button><button type="button" class="${this.historyTab === 'packet' ? 'active' : ''}" data-tab="packet">For the clinic</button></div>`;
       if (this.historyTab === 'visits') {
@@ -2010,6 +2065,12 @@ const CareLoop = {
         this.saveThread({ journey: { ...this.thread.journey, symptoms: e.target.value } });
       });
     }
+    const newSymptoms = document.getElementById('new-symptoms');
+    if (newSymptoms) {
+      newSymptoms.addEventListener('input', (e) => {
+        this.saveThread({ journey: { ...this.thread.journey, new_symptoms: e.target.value } });
+      });
+    }
     const review = document.getElementById('reviewed');
     if (review) {
       review.addEventListener('change', (e) => {
@@ -2120,6 +2181,7 @@ const CareLoop = {
       id: j.id || Date.now().toString(),
       date: 'September 24, 2026',
       reason: j.symptoms || 'Visit',
+      new_symptoms: String(j.new_symptoms || '').trim(),
       doctor: j.doctor,
       reviewed: j.reviewed,
       summary: this.visitCareSummary(pending),
@@ -2141,7 +2203,7 @@ const CareLoop = {
     try {
       const demo = this.usesDemoTranscript();
       const selected = this.selectedDemo();
-      const symptoms = (demo && selected && selected.symptoms) ? selected.symptoms : j.symptoms;
+      const symptoms = (demo && selected && selected.symptoms) ? selected.symptoms : (this.visitReasonText(j) || j.symptoms);
       await API.saveCoverageIntake({
         symptoms,
         use_fixture_prior_visit: Boolean(j.prior) || demo,
@@ -2194,6 +2256,19 @@ const CareLoop = {
       this.saveThread({ journey: { ...this.thread.journey, booked: true, step: 3 } });
       this.navigate('Upcoming visits');
       this.toast('Visit confirmed. Check in from Upcoming visits when you arrive.');
+      return;
+    }
+    if (j.step === 4 && this.checkinTab() !== 'checkin') {
+      const typed = document.getElementById('new-symptoms');
+      this.saveThread({
+        journey: {
+          ...this.thread.journey,
+          new_symptoms: typed ? typed.value : this.thread.journey.new_symptoms,
+          checkin_tab: 'checkin',
+        },
+      });
+      this.render();
+      window.scrollTo(0, 0);
       return;
     }
     if (j.step === 4 && !j.checked_in) {
@@ -2251,6 +2326,15 @@ const CareLoop = {
         this.navigate(d.nav);
         return;
       }
+      if (d.checkinTab) {
+        if (this.recording || this.sttBusy) {
+          this.toast(this.recording ? 'Tap Stop & transcribe first.' : 'Wait for transcription to finish.');
+          return;
+        }
+        this.saveThread({ journey: { ...this.thread.journey, checkin_tab: d.checkinTab } });
+        this.render();
+        return;
+      }
       if (d.tab) {
         this.historyTab = d.tab;
         this.selectedVisit = null;
@@ -2275,11 +2359,22 @@ const CareLoop = {
         return;
       }
       if (d.symptom) {
-        const s = this.thread.journey.symptoms;
-        const next = s.toLowerCase().includes(d.symptom.toLowerCase())
-          ? s.replace(new RegExp(d.symptom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '')
-          : (s ? `${s}, ` : '') + d.symptom;
-        this.saveThread({ journey: { ...this.thread.journey, symptoms: next } });
+        this.saveThread({
+          journey: {
+            ...this.thread.journey,
+            symptoms: this.toggleChipValue(this.thread.journey.symptoms, d.symptom),
+          },
+        });
+        this.render();
+        return;
+      }
+      if (d.newSymptom) {
+        this.saveThread({
+          journey: {
+            ...this.thread.journey,
+            new_symptoms: this.toggleChipValue(this.thread.journey.new_symptoms, d.newSymptom),
+          },
+        });
         this.render();
         return;
       }
@@ -2459,12 +2554,19 @@ const CareLoop = {
       case 'record-symptoms':
         await this.toggleVisitRecord('symptoms');
         break;
+      case 'record-day-symptoms':
+        await this.toggleVisitRecord('day-symptoms');
+        break;
       case 'pick-visit-audio':
         this.recordPurpose = 'visit';
         this.pickVisitAudio();
         break;
       case 'pick-symptoms-audio':
         this.recordPurpose = 'symptoms';
+        this.pickVisitAudio();
+        break;
+      case 'pick-day-symptoms-audio':
+        this.recordPurpose = 'day-symptoms';
         this.pickVisitAudio();
         break;
       case 'toggle-demo-transcript':
@@ -2490,7 +2592,7 @@ const CareLoop = {
         this.render();
         break;
       case 'check-in':
-        this.saveThread({ journey: { ...this.thread.journey, checked_in: true } });
+        this.saveThread({ journey: { ...this.thread.journey, checked_in: true, checkin_tab: 'checkin' } });
         this.render();
         this.toast('Checked in. Continue to record the visit.');
         break;
