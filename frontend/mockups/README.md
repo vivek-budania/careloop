@@ -19,8 +19,8 @@ You can also open `frontend/mockups/index.html` directly from disk.
 - ~390×844 phone frames, calm healthcare UI (sage / cream / ink)
 - Fictional patient **Maya Chen** — no real PHI
 - Copy uses draft / suggest / review language only
-- Visit **Continue** path plus hamburger destinations (Today, Coverage, Reminders, Refills, History, Profile)
-- History includes list, visit breakup, and a share-packet screen
+- Visit **Continue** path (symptoms → … → SOAP → estimated costs → plan) plus hamburger: Today, History, Medicines, Tests, Insurance, Profile, Log out
+- History tabs: **My visits** and **For the clinic** (not labeled “Doctor”)
 
 PNG exports of each screen live with the design handoff (see the PR description), not in this folder, so the repo stays light.
 

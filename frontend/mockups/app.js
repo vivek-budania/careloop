@@ -1,6 +1,6 @@
 const ORDER = [
   "s01","s02","s03","s04","s05","s06","s07","s08","s09","s10",
-  "s11","s12","s13","s14","s15","s16","s17","s18","s19","s20","s21"
+  "s22","s11","s12","s13","s14","s15","s16","s17","s18","s19","s20","s21","s23"
 ];
 
 const NAMES = {
@@ -14,17 +14,19 @@ const NAMES = {
   s08: "08 Doctor visit",
   s09: "09 Transcribing",
   s10: "10 SOAP summary",
+  s22: "22 Estimated costs",
   s11: "11 Care plan",
   s12: "12 Follow-ups",
-  s13: "13 Reminders",
-  s14: "14 Refills",
-  s15: "15 History list",
+  s13: "13 Medicines",
+  s14: "14 Refill (from Medicines)",
+  s15: "15 History · My visits",
   s16: "16 History detail",
-  s17: "17 Share packet",
+  s17: "17 History · For the clinic",
   s18: "18 Menu",
   s19: "19 Today / Home",
-  s20: "20 Coverage",
-  s21: "21 Profile"
+  s20: "20 Insurance",
+  s21: "21 Profile",
+  s23: "23 Tests"
 };
 
 function currentId() {
