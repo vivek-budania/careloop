@@ -1,5 +1,5 @@
 /**
- * CareLoop coverage intake (Dave). Mock data only — no OCR, no live payer.
+ * CareLoop coverage intake (Dave). Mock data + optional Stedi sandbox 270/271.
  * One step visible at a time.
  */
 const CareLoop = {
@@ -103,6 +103,7 @@ const CareLoop = {
       member_name: document.getElementById('cl-member-name').value.trim(),
       member_id: document.getElementById('cl-member-id').value.trim(),
       group_number: document.getElementById('cl-group').value.trim(),
+      date_of_birth: document.getElementById('cl-dob').value.trim(),
       zip: document.getElementById('cl-zip').value.trim(),
       supporting_docs: docs,
     };
@@ -114,6 +115,7 @@ const CareLoop = {
     document.getElementById('cl-member-name').value = profile.member_name || '';
     document.getElementById('cl-member-id').value = profile.member_id || '';
     document.getElementById('cl-group').value = profile.group_number || '';
+    document.getElementById('cl-dob').value = profile.date_of_birth || '';
     document.getElementById('cl-zip').value = profile.zip || '';
     if (profile.zip) document.getElementById('cl-network-zip').value = profile.zip;
   },
@@ -125,7 +127,8 @@ const CareLoop = {
       <p><strong>Payer:</strong> ${App.escapeHTML(p.payer_name || '—')}</p>
       <p><strong>Member:</strong> ${App.escapeHTML(p.member_name || '—')}
         · <strong>ID:</strong> ${App.escapeHTML(p.member_id || '—')}</p>
-      <p><strong>Group:</strong> ${App.escapeHTML(p.group_number || '—')}
+      <p><strong>DOB:</strong> ${App.escapeHTML(p.date_of_birth || '—')}
+        · <strong>Group:</strong> ${App.escapeHTML(p.group_number || '—')}
         · <strong>ZIP:</strong> ${App.escapeHTML(p.zip || '—')}</p>
     `;
   },
@@ -140,10 +143,16 @@ const CareLoop = {
       (payers || []).forEach((p) => {
         const opt = document.createElement('option');
         opt.value = p.name;
-        opt.textContent = `${p.name} (${p.plan_type})`;
+        opt.textContent = p.stedi_demo
+          ? `${p.name} (${p.plan_type}) · Stedi sandbox`
+          : `${p.name} (${p.plan_type})`;
         select.appendChild(opt);
       });
       this.payersLoaded = select.options.length > 1;
+      if (!select.value) {
+        const aetna = Array.from(select.options).find((opt) => opt.value === 'Aetna');
+        if (aetna) select.value = 'Aetna';
+      }
     } catch (err) {
       this.payersLoaded = false;
       App.notify(err.message, 'error');
@@ -191,15 +200,23 @@ const CareLoop = {
       return;
     }
     const live = el.live_api || {};
+    const source = el.source === 'stedi' ? 'Stedi sandbox' : 'CareLoop mock';
+    const badge = document.getElementById('cl-coverage-badge');
+    if (badge) badge.textContent = el.source === 'stedi' ? 'Live sandbox 271' : 'Mock 270/271';
+    const oon = el.oon_deductible != null ? ` · <strong>OON deductible:</strong> $${el.oon_deductible}` : '';
     box.innerHTML = `
       <p><strong>Status:</strong> ${App.escapeHTML(el.status || '')}
-        ${el.in_network ? ' · in-network' : ' · not in-network'}</p>
+        ${el.in_network ? ' · in-network' : ' · not in-network'}
+        · <strong>Source:</strong> ${source}</p>
       <p><strong>Plan:</strong> ${App.escapeHTML(el.plan_type || '')} — ${App.escapeHTML(el.network_name || '')}</p>
-      <p><strong>PCP copay:</strong> $${el.estimated_copay_pcp ?? '—'}
+      <p><strong>Office copay:</strong> $${el.estimated_copay_pcp ?? '—'}
          · <strong>Specialist:</strong> $${el.estimated_copay_specialist ?? '—'}
-         · <strong>Deductible remaining:</strong> $${el.deductible_remaining ?? '—'}</p>
+         · <strong>INN deductible:</strong> $${el.deductible ?? '—'}
+         ($${el.deductible_remaining ?? '—'} remaining)${oon}</p>
+      <p><strong>INN OOP max:</strong> $${el.oop_max ?? '—'}
+         ($${el.oop_remaining ?? '—'} remaining)</p>
       <p class="form-hint">${App.escapeHTML(el.disclaimer || '')}</p>
-      <p class="form-hint">Live 270/271: ${live.attempted ? 'attempted' : 'not configured'}
+      <p class="form-hint">${live.attempted ? 'Stedi call attempted' : 'Stedi not used'}
         — ${App.escapeHTML(live.message || '')}</p>
     `;
   },
@@ -216,7 +233,8 @@ const CareLoop = {
         member_id: document.getElementById('cl-member-id').value.trim(),
       });
       this.renderEligibility(snap.eligibility);
-      App.notify(`Coverage ${snap.eligibility.status} (mock).`, 'success');
+      const src = snap.eligibility && snap.eligibility.source === 'stedi' ? 'Stedi sandbox' : 'mock';
+      App.notify(`Coverage ${snap.eligibility.status} (${src}).`, 'success');
       return true;
     } catch (err) {
       App.notify(err.message, 'error');

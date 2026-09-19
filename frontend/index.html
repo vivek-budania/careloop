@@ -366,8 +366,10 @@
     <!-- ═══════════════ CARELOOP COVERAGE INTAKE (Dave) ═══════════════ -->
     <div class="module-view" id="module-careloop">
       <p class="careloop-banner">
-        Mock coverage intake. Not a live eligibility check, bill, or coverage decision.
-        One step at a time. Insurance company is the only required field on step 1.
+        Coverage intake demo. Not a bill or coverage decision.
+        Pick <strong>Aetna</strong> and load the sample card (Jane Doe / AETNA12345)
+        for the Stedi sandbox member. Set <code>STEDI_API_KEY</code> on the container
+        at launch to run a live 270/271; without it, CareLoop uses matching mock benefits.
       </p>
       <p class="form-hint" id="cl-step-label">Step 1 of 6</p>
 
@@ -391,19 +393,26 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="cl-member-name">Member name (optional)</label>
-              <input type="text" class="form-input" id="cl-member-name" placeholder="Maya Chen">
+              <input type="text" class="form-input" id="cl-member-name" placeholder="Jane Doe">
             </div>
             <div class="form-group">
               <label class="form-label" for="cl-member-id">Member ID (optional)</label>
-              <input type="text" class="form-input" id="cl-member-id" placeholder="M-1001">
+              <input type="text" class="form-input" id="cl-member-id" placeholder="AETNA12345">
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="cl-group">Group number (optional)</label>
-              <input type="text" class="form-input" id="cl-group" placeholder="GRP-4421">
+              <label class="form-label" for="cl-dob">Date of birth (optional)</label>
+              <input type="date" class="form-input" id="cl-dob">
             </div>
+            <div class="form-group">
+              <label class="form-label" for="cl-group">Group number (optional)</label>
+              <input type="text" class="form-input" id="cl-group" placeholder="optional">
+            </div>
+          </div>
+
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="cl-zip">ZIP (optional)</label>
               <input type="text" class="form-input" id="cl-zip" placeholder="94110">
@@ -450,7 +459,7 @@
               <div class="card-title-icon purple">✅</div>
               <h2>3. Confirm coverage</h2>
             </div>
-            <span class="card-badge">Mock 270/271</span>
+            <span class="card-badge" id="cl-coverage-badge">Sandbox 270/271</span>
           </div>
           <button class="btn btn-primary" id="cl-btn-confirm" type="button">Check coverage</button>
           <div class="coverage-result" id="cl-eligibility"></div>

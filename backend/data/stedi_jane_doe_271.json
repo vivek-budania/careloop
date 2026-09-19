@@ -1,0 +1,84 @@
+{
+  "id": "ec_demo_jane_doe_aetna",
+  "payerId": "60054",
+  "plans": [
+    {
+      "benefits": {
+        "statuses": [
+          {
+            "status": "ACTIVE_COVERAGE",
+            "insuranceType": "PREFERRED_PROVIDER_ORGANIZATION_PPO",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "30", "system": "STC", "definition": "Health Benefit Plan Coverage" },
+            "planCoverageDescription": "PPO Gold Plan"
+          }
+        ],
+        "coPayment": [
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "30",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "98", "system": "STC", "definition": "Professional (Physician) Visit - Office" },
+            "timePeriod": "VISIT",
+            "messages": ["PHYSICIAN OFFICE VISIT PCP"]
+          },
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "50",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "98", "system": "STC", "definition": "Professional (Physician) Visit - Office" },
+            "timePeriod": "VISIT",
+            "messages": ["PHYSICIAN OFFICE VISIT SPECIALIST"]
+          }
+        ],
+        "deductible": [
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "500",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "30", "system": "STC" },
+            "timePeriod": "CALENDAR_YEAR"
+          },
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "500",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "30", "system": "STC" },
+            "timePeriod": "REMAINING"
+          },
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "1000",
+            "network": { "indicator": "OUT_OF_NETWORK" },
+            "service": { "value": "30", "system": "STC" },
+            "timePeriod": "CALENDAR_YEAR"
+          }
+        ],
+        "outOfPocket": [
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "7000",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "30", "system": "STC" },
+            "timePeriod": "CALENDAR_YEAR"
+          },
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "amount": "7000",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "30", "system": "STC" },
+            "timePeriod": "REMAINING"
+          }
+        ],
+        "coInsurance": [
+          {
+            "coverageLevel": "INDIVIDUAL",
+            "percent": "20",
+            "network": { "indicator": "IN_NETWORK" },
+            "service": { "value": "30", "system": "STC" }
+          }
+        ]
+      }
+    }
+  ]
+}
