@@ -129,8 +129,23 @@ const CareLoop = {
     return ((parts[0] || 'M')[0] + (parts[1] ? parts[1][0] : (parts[0][1] || ''))).toUpperCase();
   },
 
+  displayName() {
+    const fromLogin = App.user && String(App.user.name || '').trim();
+    const fromThread = this.thread && this.thread.patient && String(this.thread.patient.name || '').trim();
+    return fromLogin || fromThread || 'Jane Doe';
+  },
+
   firstName() {
-    return (this.thread.patient.name || 'Jane').split(' ')[0];
+    return this.displayName().split(/\s+/)[0] || 'Jane';
+  },
+
+  syncPatientName() {
+    const fromLogin = App.user && String(App.user.name || '').trim();
+    if (!fromLogin || !this.thread || !this.thread.patient) return;
+    if (this.thread.patient.name !== fromLogin) {
+      this.thread.patient.name = fromLogin;
+      this.saveThread();
+    }
   },
 
   seedThread(mode) {
@@ -352,7 +367,7 @@ const CareLoop = {
     if (row.preview === 'sample' && !row.dataUrl) {
       this.modal(
         `${this.esc(row.name)} · sample document`,
-        `<div class="notice">DEMO DOCUMENT · Not a valid lab report</div><p>Patient: ${this.esc(this.thread.patient.name)}<br>Date: ${this.esc(row.date || 'Not listed')}<br>Status: ${this.esc(row.status || 'result on file')}<br>${this.esc(row.notes || '')}</p>`,
+        `<div class="notice">DEMO DOCUMENT · Not a valid lab report</div><p>Patient: ${this.esc(this.displayName())}<br>Date: ${this.esc(row.date || 'Not listed')}<br>Status: ${this.esc(row.status || 'result on file')}<br>${this.esc(row.notes || '')}</p>`,
       );
       return;
     }
@@ -905,7 +920,7 @@ const CareLoop = {
       '',
       'FICTIONAL DEMO — not a clinical record or insurance submission.',
       '',
-      `Patient: ${s.patient.name}`,
+      `Patient: ${this.displayName()}`,
       `Coverage: ${coverageLine}`,
       '',
       '## Visits',
@@ -962,9 +977,7 @@ const CareLoop = {
     try {
       App.user = await API.me();
       await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
-      if (this.thread.patient && App.user?.name) {
-        this.thread.patient.name = this.thread.patient.name || App.user.name;
-      }
+      this.syncPatientName();
       this.render();
     } catch (err) {
       API.setToken('');
@@ -1019,8 +1032,7 @@ const CareLoop = {
     } else {
       this.thread = this.loadThread();
       if (!this.thread.visits) this.thread = this.seedThread('returning');
-      this.thread.patient.name = result.user.name || this.thread.patient.name;
-      this.saveThread();
+      this.syncPatientName();
       await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       if (!this.coverageOnFile()) {
         const snap = await API.scanCoverage({
@@ -1085,7 +1097,7 @@ const CareLoop = {
       ['Insurance', 'shield'],
       ['Profile', 'user'],
     ];
-    const name = this.thread.patient.name;
+    const name = this.displayName();
     const crumb = this.view === 'Journey'
       ? ((this.thread.journey && this.thread.journey.step >= 4) ? 'Visit day' : 'Your visit')
       : this.view === 'Setup' ? 'Getting started' : this.view === 'Followups' ? 'Follow-ups' : this.view;
@@ -1935,12 +1947,13 @@ const CareLoop = {
       return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates. Skipping insurance skips the estimated-costs step on the visit.</p><div class="notice">Sample card is Jane Doe / Aetna / AETNA12345 — Stedi’s canned sandbox member. Demo key slots live under Profile.</div>${this.btn('Add insurance', 'update-insurance')}</section></div>`;
     }
     const e = this.coverageSnap.eligibility || {};
-    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.thread.patient.name)}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(`${c.status} · ${this.coverageSource()}`, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>${this.coverageSource()} remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'demo plan')}</small></div></div><div class="notice">${this.esc(this.eligibilityNote())}</div>${e.disclaimer ? `<p class="mt" style="font-size:12px">${this.esc(e.disclaimer)}</p>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage snapshot', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><h3>Two different insurance moments</h3><p class="mt" style="font-size:12px">Prior authorization happens before certain care is covered. A claim happens during or after billing. An approved authorization does not mean a claim has been paid.</p><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon · no claims are submitted in this demo</small></div></div><p class="mt" style="font-size:11px">PA / appeal letter drafts (watermark + human review) remain on a secondary surface, not in this hamburger.</p><a class="link" href="/letters">Open letter drafts ${this.icon('arrow')}</a></section></div>`;
+    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.displayName())}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(`${c.status} · ${this.coverageSource()}`, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>${this.coverageSource()} remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'demo plan')}</small></div></div><div class="notice">${this.esc(this.eligibilityNote())}</div>${e.disclaimer ? `<p class="mt" style="font-size:12px">${this.esc(e.disclaimer)}</p>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage snapshot', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><h3>Two different insurance moments</h3><p class="mt" style="font-size:12px">Prior authorization happens before certain care is covered. A claim happens during or after billing. An approved authorization does not mean a claim has been paid.</p><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon · no claims are submitted in this demo</small></div></div><p class="mt" style="font-size:11px">PA / appeal letter drafts (watermark + human review) remain on a secondary surface, not in this hamburger.</p><a class="link" href="/letters">Open letter drafts ${this.icon('arrow')}</a></section></div>`;
   },
 
   profile() {
     const p = this.thread.patient;
-    return `<div class="narrow">${this.head('A space that’s yours.', 'General details for your fictional patient profile.')}<section class="card journey-panel"><div class="row"><div class="avatar">${this.esc(this.initials(p.name))}</div><div><h2>${this.esc(p.name)}</h2><small>Fictional demo patient${App.user ? ` · signed in as ${this.esc(App.user.username)}` : ''}</small></div></div><div class="rule"></div><form id="profile-form"><label class="field">Display name<input name="name" value="${this.esc(p.name)}" required maxlength="60"></label><label class="field">Demo email<input type="email" name="email" value="${this.esc(p.email)}" required></label><label class="field">ZIP code<input name="zip" pattern="[0-9]{5}" value="${this.esc(p.zip)}" required></label><button class="btn" type="submit">Save profile</button></form>${this.envPanel()}<div class="rule"></div><h3>Ready for another walkthrough?</h3><p style="font-size:12px;margin:10px 0 20px">Reset only this demo’s saved visits, doses, and insurance to the sample record.</p>${this.btn('Reset demo data', 'reset', 'secondary')}</section></div>`;
+    const shown = this.displayName();
+    return `<div class="narrow">${this.head('A space that’s yours.', 'General details for your fictional patient profile.')}<section class="card journey-panel"><div class="row"><div class="avatar">${this.esc(this.initials(shown))}</div><div><h2>${this.esc(shown)}</h2><small>Fictional demo patient${App.user ? ` · signed in as ${this.esc(App.user.username)}` : ''}</small></div></div><div class="rule"></div><form id="profile-form"><label class="field">Display name<input name="name" value="${this.esc(p.name)}" required maxlength="60"></label><label class="field">Demo email<input type="email" name="email" value="${this.esc(p.email)}" required></label><label class="field">ZIP code<input name="zip" pattern="[0-9]{5}" value="${this.esc(p.zip)}" required></label><button class="btn" type="submit">Save profile</button></form>${this.envPanel()}<div class="rule"></div><h3>Ready for another walkthrough?</h3><p style="font-size:12px;margin:10px 0 20px">Reset only this demo’s saved visits, doses, and insurance to the sample record.</p>${this.btn('Reset demo data', 'reset', 'secondary')}</section></div>`;
   },
 
   render() {
@@ -2510,13 +2523,13 @@ const CareLoop = {
         this.saveThread({ refill: true });
         this.modal(
           'A note for your clinic.',
-          `<div class="notice">DRAFT · Fictional demo · Not sent</div><p>For ${this.esc(this.thread.patient.name)}: Please review a refill of the existing metformin prescription. The sample record shows approximately 12 days of supply remaining. No dose change requested.</p><p class="mt">A clinician needs to review and authorize any refill. This is not e-prescribing.</p>`,
+          `<div class="notice">DRAFT · Fictional demo · Not sent</div><p>For ${this.esc(this.displayName())}: Please review a refill of the existing metformin prescription. The sample record shows approximately 12 days of supply remaining. No dose change requested.</p><p class="mt">A clinician needs to review and authorize any refill. This is not e-prescribing.</p>`,
         );
         break;
       case 'test-doc':
         this.modal(
           'HbA1c · sample document',
-          `<div class="notice">DEMO DOCUMENT · Not a valid lab requisition</div><p>Patient: ${this.esc(this.thread.patient.name)}<br>Status: ${this.thread.journey?.reviewed ? 'Mock order ready' : 'Awaiting clinician review'}<br>Result: not available<br>Ordering clinician: review required</p>`,
+          `<div class="notice">DEMO DOCUMENT · Not a valid lab requisition</div><p>Patient: ${this.esc(this.displayName())}<br>Status: ${this.thread.journey?.reviewed ? 'Mock order ready' : 'Awaiting clinician review'}<br>Result: not available<br>Ordering clinician: review required</p>`,
         );
         break;
       case 'export': {
