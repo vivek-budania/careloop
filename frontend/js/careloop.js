@@ -134,6 +134,7 @@ const CareLoop = {
         zip: '94110',
       },
       journey: null,
+      openVisits: [],
       visits: returning ? [{
         id: 'seed',
         date: 'August 20, 2026',
@@ -152,16 +153,124 @@ const CareLoop = {
 
   loadThread() {
     try {
-      return JSON.parse(localStorage.getItem(this.THREAD_KEY)) || this.seedThread('returning');
+      return this.normalizeThread(JSON.parse(localStorage.getItem(this.THREAD_KEY)) || this.seedThread('returning'));
     } catch (err) {
       return this.seedThread('returning');
     }
   },
 
+  normalizeThread(thread) {
+    const t = thread || this.seedThread('returning');
+    if (!Array.isArray(t.openVisits)) t.openVisits = [];
+    if (!Array.isArray(t.visits)) t.visits = [];
+    const j = t.journey;
+    if (j && !j.completed) {
+      if (!j.id) j.id = this.newVisitId();
+      if (!t.openVisits.some((row) => row && row.id === j.id)) {
+        t.openVisits = [j, ...t.openVisits];
+      }
+    }
+    t.openVisits = t.openVisits.filter((row) => row && row.id && !row.completed);
+    return t;
+  },
+
+  newVisitId() {
+    return `visit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  },
+
+  freshJourney(kind) {
+    const golden = kind !== 'blank';
+    return {
+      id: this.newVisitId(),
+      step: 1,
+      symptoms: golden ? 'Fatigue, increased thirst, and a diabetes follow-up.' : '',
+      doctor: '',
+      clinic: '',
+      slot: '10:30 AM',
+      reviewed: false,
+      completed: false,
+      prior: false,
+      suggested_specialty: '',
+      suggested_specialty_label: '',
+      live_transcript: '',
+      transcript_source: 'fixture',
+      stt_meta: '',
+    };
+  },
+
+  openJourneys() {
+    const list = (this.thread && this.thread.openVisits) || [];
+    return list.filter((row) => row && row.id && !row.completed);
+  },
+
+  visitTitle(j) {
+    const text = String((j && j.symptoms) || '').trim();
+    if (text) return text.length > 56 ? `${text.slice(0, 53)}…` : text;
+    return 'New visit';
+  },
+
+  syncActiveJourney() {
+    if (!this.thread) return;
+    if (!Array.isArray(this.thread.openVisits)) this.thread.openVisits = [];
+    const j = this.thread.journey;
+    if (!j) return;
+    if (!j.id) j.id = this.newVisitId();
+    if (j.completed) {
+      this.thread.openVisits = this.thread.openVisits.filter((row) => row && row.id !== j.id);
+      return;
+    }
+    const i = this.thread.openVisits.findIndex((row) => row && row.id === j.id);
+    if (i >= 0) this.thread.openVisits[i] = j;
+    else this.thread.openVisits.unshift(j);
+  },
+
   saveThread(patch) {
     if (patch) Object.assign(this.thread, patch);
+    this.syncActiveJourney();
     localStorage.setItem(this.THREAD_KEY, JSON.stringify(this.thread));
     return this.thread;
+  },
+
+  clearVisitRuntime() {
+    if (typeof this.cancelRecording === 'function') this.cancelRecording();
+    this.encounter = null;
+    this.orders = null;
+    this.extractiveSummary = null;
+    this.scribeFixture = null;
+    this.costEstimate = null;
+  },
+
+  visitHeroActions() {
+    const j = this.thread.journey;
+    const open = this.openJourneys();
+    const active = j && !j.completed;
+    const primary = (j && j.completed && !open.length)
+      ? this.btn('View visit summary', 'latest-visit')
+      : this.btn(active ? 'Continue your visit' : 'Prepare for your visit', 'start');
+    return `<div class="visit-hero-actions">${primary}${this.btn(`${this.icon('plus')} New visit`, 'new-visit', 'secondary')}</div>`;
+  },
+
+  openVisitsPanel() {
+    const open = this.openJourneys();
+    const activeId = this.thread.journey && !this.thread.journey.completed ? this.thread.journey.id : '';
+    const rows = open.length
+      ? open.map((row) => {
+        const current = row.id === activeId;
+        return `<button class="visit-row" data-open-visit="${this.esc(row.id)}" type="button"><div class="tile-icon">${this.icon('file')}</div><div><small>In progress · step ${row.step || 1} of 8</small><h3>${this.esc(this.visitTitle(row))}</h3><small>${this.esc(row.doctor || 'Clinician not chosen yet')}</small></div>${current ? this.tag('This visit') : this.icon('arrow')}</button>`;
+      }).join('')
+      : `<p style="font-size:12px">No other open visits. Start a new one anytime — it will not replace a visit already in progress.</p>`;
+    return `<section class="card"><div class="section-heading"><h2>Open visits</h2><small>${open.length ? `${open.length} in progress` : 'None in progress'}</small></div>${rows}<div class="mt">${this.btn(`${this.icon('plus')} New visit`, 'new-visit', 'secondary')}</div></section>`;
+  },
+
+  historyOpenVisits() {
+    const open = this.openJourneys();
+    if (!open.length) return '';
+    const activeId = this.thread.journey && !this.thread.journey.completed ? this.thread.journey.id : '';
+    const rows = open.map((row) => {
+      const current = row.id === activeId;
+      return `<button class="visit-row" data-open-visit="${this.esc(row.id)}" type="button"><div class="tile-icon">${this.icon('file')}</div><div><small>In progress · step ${row.step || 1} of 8</small><h3>${this.esc(this.visitTitle(row))}</h3><small>${this.esc(row.doctor || 'Clinician not chosen yet')}</small></div>${current ? this.tag('This visit') : this.icon('arrow')}</button>`;
+    }).join('');
+    return `<div class="section-heading"><h2>In progress</h2>${this.btn(`${this.icon('plus')} New visit`, 'new-visit', 'secondary')}</div>${rows}<div class="rule"></div>`;
   },
 
   persistCoverage() {
@@ -565,7 +674,7 @@ const CareLoop = {
     const complete = j?.completed;
     const c = this.coverageLabel();
     const first = this.firstName();
-    return `<section class="greeting"><div><div class="eyebrow">Thursday, September 24</div><h1>A little clarity, ${this.esc(first)}.</h1><p>Here’s where things stand — and what comes next.</p></div><div class="date">${this.icon('calendar')} Your personal care space</div></section><div class="grid"><div class="stack"><section class="card hero"><div class="eyebrow">${complete ? 'One step forward' : 'Your next step'}</div><h2>${complete ? 'Your visit, all in one place.' : j ? 'Let’s pick up where you left off.' : 'Let’s make your next visit easier.'}</h2><p>${complete ? 'Your summary and next steps are saved. Take your story with you to the next visit.' : 'A few details now. A clearer conversation with your doctor later.'}</p>${this.btn(complete ? 'View visit summary' : j ? 'Continue your visit' : 'Prepare for your visit', complete ? 'latest-visit' : 'start')}${this.art()}</section><section class="card"><div class="section-heading"><h2>${j?.slot ? 'Your requested appointment' : 'Your upcoming visit'}</h2>${this.tag(j?.slot ? 'Request saved' : 'Demo appointment', 'peach')}</div><div class="appointment"><div class="day-box"><small>SEP</small><strong>24</strong></div><div><small>${this.esc((j?.suggested_specialty_label || 'PRIMARY CARE').toUpperCase())} · FOLLOW-UP</small><h3>${this.esc(j?.doctor || 'Dr. Priya Shah')}</h3><small>${this.esc(j?.clinic || 'Mission Family Clinic')}</small></div>${this.tag(c?.status === 'active' ? `In network · ${this.coverageSource()}` : 'Confirm network', c?.status === 'active' ? '' : 'peach')}</div><div class="rule"></div><div class="details"><span>${this.icon('clock')}${this.esc(j?.slot || '10:30 AM')} · 30 min</span><span>${this.icon('pin')}San Francisco, CA</span></div></section><section class="card"><div class="section-heading"><h2>A few things for today</h2><small>Small steps count.</small></div><div class="task-row"><div class="tile-icon peach">${this.icon('pill')}</div><div><h3>Your evening medicine</h3><small>Metformin · 8:00 PM · ${this.esc(this.thread.doses.evening)}</small></div>${this.link('View', 'medicines')}</div><div class="task-row"><div class="tile-icon lilac">${this.icon('test')}</div><div><h3>HbA1c blood test</h3><small>${j?.reviewed ? 'Mock order ready · no result yet' : 'Waiting for clinic review'}</small></div>${this.link('Details', 'tests')}</div><div class="task-row"><div class="tile-icon">${this.icon('file')}</div><div><h3>Your story, ready for the clinic</h3><small>Visits, medicines, and coverage together</small></div>${this.link('Prepare', 'packet')}</div></section></div><div class="stack"><section class="card"><div class="progress-top"><h2>Your care journey</h2>${this.tag('In progress', 'gray')}</div><ol class="timeline"><li><span class="point">${c ? '✓' : '1'}</span><div><h3>${c ? 'Insurance added' : 'Add insurance, if you like'}</h3><p>${c ? `${this.esc(c.payer)} · ${this.esc(c.status)} (${this.coverageSource()})` : 'Optional. You can still start a visit.'}</p></div></li><li><span class="point ${complete ? '' : 'now'}">${complete ? '✓' : '2'}</span><div><h3>${complete ? 'Your visit is saved' : 'Prepare for your visit'}</h3><p>${complete ? 'Summary available in your history' : 'Share what’s on your mind.'}</p>${this.tag(complete ? 'Saved' : 'Your next step', complete ? '' : 'peach')}</div></li><li><span class="point ${complete ? 'now' : 'empty'}">3</span><div><h3>Visit &amp; care plan</h3><p>${complete ? 'Clinic reviews your next steps.' : 'A clear summary. A plan to review.'}</p></div></li><li><span class="point empty">4</span><div><h3>Keep your care moving</h3><p>Tests, medicines, and follow-ups.</p></div></li></ol></section><section class="card insurance-mini"><div class="row"><span class="eyebrow">Your coverage</span>${this.icon('shield')}</div><h3>${c ? `${this.esc(c.payer)} · ${this.esc(c.plan || '')}` : 'No insurance on file'}</h3><p>${c ? `${this.coverageSource() === 'sandbox' ? 'Sandbox' : 'Mock'} coverage snapshot · estimates only` : 'Add a plan for estimated costs.'}</p>${c ? `<div class="row"><div><span class="money">${c.status === 'active' ? this.money(c.copay) : '—'}</span><small>&nbsp; est. PCP copay</small></div></div><div class="rule"></div>` : ''}${this.link('View insurance', 'insurance')}</section></div></div>`;
+    return `<section class="greeting"><div><div class="eyebrow">Thursday, September 24</div><h1>A little clarity, ${this.esc(first)}.</h1><p>Here’s where things stand — and what comes next.</p></div><div class="date">${this.icon('calendar')} Your personal care space</div></section><div class="grid"><div class="stack"><section class="card hero"><div class="eyebrow">${complete ? 'One step forward' : 'Your next step'}</div><h2>${complete ? 'Your visit, all in one place.' : j ? 'Let’s pick up where you left off.' : 'Let’s make your next visit easier.'}</h2><p>${complete ? 'Your summary and next steps are saved. Take your story with you to the next visit.' : 'A few details now. A clearer conversation with your doctor later.'}</p>${this.visitHeroActions()}${this.art()}</section>${this.openVisitsPanel()}<section class="card"><div class="section-heading"><h2>${j?.slot ? 'Your requested appointment' : 'Your upcoming visit'}</h2>${this.tag(j?.slot ? 'Request saved' : 'Demo appointment', 'peach')}</div><div class="appointment"><div class="day-box"><small>SEP</small><strong>24</strong></div><div><small>${this.esc((j?.suggested_specialty_label || 'PRIMARY CARE').toUpperCase())} · FOLLOW-UP</small><h3>${this.esc(j?.doctor || 'Dr. Priya Shah')}</h3><small>${this.esc(j?.clinic || 'Mission Family Clinic')}</small></div>${this.tag(c?.status === 'active' ? `In network · ${this.coverageSource()}` : 'Confirm network', c?.status === 'active' ? '' : 'peach')}</div><div class="rule"></div><div class="details"><span>${this.icon('clock')}${this.esc(j?.slot || '10:30 AM')} · 30 min</span><span>${this.icon('pin')}San Francisco, CA</span></div></section><section class="card"><div class="section-heading"><h2>A few things for today</h2><small>Small steps count.</small></div><div class="task-row"><div class="tile-icon peach">${this.icon('pill')}</div><div><h3>Your evening medicine</h3><small>Metformin · 8:00 PM · ${this.esc(this.thread.doses.evening)}</small></div>${this.link('View', 'medicines')}</div><div class="task-row"><div class="tile-icon lilac">${this.icon('test')}</div><div><h3>HbA1c blood test</h3><small>${j?.reviewed ? 'Mock order ready · no result yet' : 'Waiting for clinic review'}</small></div>${this.link('Details', 'tests')}</div><div class="task-row"><div class="tile-icon">${this.icon('file')}</div><div><h3>Your story, ready for the clinic</h3><small>Visits, medicines, and coverage together</small></div>${this.link('Prepare', 'packet')}</div></section></div><div class="stack"><section class="card"><div class="progress-top"><h2>Your care journey</h2>${this.tag('In progress', 'gray')}</div><ol class="timeline"><li><span class="point">${c ? '✓' : '1'}</span><div><h3>${c ? 'Insurance added' : 'Add insurance, if you like'}</h3><p>${c ? `${this.esc(c.payer)} · ${this.esc(c.status)} (${this.coverageSource()})` : 'Optional. You can still start a visit.'}</p></div></li><li><span class="point ${complete ? '' : 'now'}">${complete ? '✓' : '2'}</span><div><h3>${complete ? 'Your visit is saved' : 'Prepare for your visit'}</h3><p>${complete ? 'Summary available in your history' : 'Share what’s on your mind.'}</p>${this.tag(complete ? 'Saved' : 'Your next step', complete ? '' : 'peach')}</div></li><li><span class="point ${complete ? 'now' : 'empty'}">3</span><div><h3>Visit &amp; care plan</h3><p>${complete ? 'Clinic reviews your next steps.' : 'A clear summary. A plan to review.'}</p></div></li><li><span class="point empty">4</span><div><h3>Keep your care moving</h3><p>Tests, medicines, and follow-ups.</p></div></li></ol></section><section class="card insurance-mini"><div class="row"><span class="eyebrow">Your coverage</span>${this.icon('shield')}</div><h3>${c ? `${this.esc(c.payer)} · ${this.esc(c.plan || '')}` : 'No insurance on file'}</h3><p>${c ? `${this.coverageSource() === 'sandbox' ? 'Sandbox' : 'Mock'} coverage snapshot · estimates only` : 'Add a plan for estimated costs.'}</p>${c ? `<div class="row"><div><span class="money">${c.status === 'active' ? this.money(c.copay) : '—'}</span><small>&nbsp; est. PCP copay</small></div></div><div class="rule"></div>` : ''}${this.link('View insurance', 'insurance')}</section></div></div>`;
   },
 
   setup() {
@@ -588,28 +697,38 @@ const CareLoop = {
   startVisit() {
     const j = this.thread.journey;
     if (!j || j.completed) {
-      this.saveThread({
-        journey: {
-          step: 1,
-          symptoms: 'Fatigue, increased thirst, and a diabetes follow-up.',
-          doctor: '',
-          clinic: '',
-          slot: '10:30 AM',
-          reviewed: false,
-          completed: false,
-          prior: false,
-          suggested_specialty: '',
-          suggested_specialty_label: '',
-          live_transcript: '',
-          transcript_source: 'fixture',
-          stt_meta: '',
-        },
-      });
+      this.clearVisitRuntime();
+      this.saveThread({ journey: this.freshJourney('golden') });
     }
     this.navigate('Journey');
     if (this.thread.journey && this.thread.journey.step >= 2) {
       this.loadNetwork();
     }
+  },
+
+  startNewVisit() {
+    this.clearVisitRuntime();
+    this.saveThread({ journey: this.freshJourney('blank') });
+    this.navigate('Journey');
+    this.toast('New visit started. Your other open visits stay on Today.');
+  },
+
+  resumeOpenVisit(id) {
+    const found = this.openJourneys().find((row) => row.id === id);
+    if (!found) {
+      this.toast('That visit is no longer open.');
+      return;
+    }
+    if (this.thread.journey && this.thread.journey.id === found.id && !this.thread.journey.completed) {
+      this.startVisit();
+      return;
+    }
+    this.clearVisitRuntime();
+    this.saveThread({ journey: { ...found } });
+    this.navigate('Journey');
+    if (found.step >= 2) this.loadNetwork();
+    if (found.step >= 5) this.loadScribeFixture();
+    if (found.step >= 6) this.draftScribeEncounter();
   },
 
   suggestedSpecialty() {
@@ -1055,9 +1174,10 @@ const CareLoop = {
     } else {
       content = `<div class="tabs"><button type="button" class="${this.historyTab === 'visits' ? 'active' : ''}" data-tab="visits">My visits</button><button type="button" class="${this.historyTab === 'packet' ? 'active' : ''}" data-tab="packet">For the clinic</button></div>`;
       if (this.historyTab === 'visits') {
-        content += this.thread.visits.length
+        const past = this.thread.visits.length
           ? this.thread.visits.map((v) => `<button class="visit-row" data-visit="${v.id}" type="button"><div class="tile-icon">${this.icon('file')}</div><div><small>${this.esc(v.date)}</small><h3>${this.esc(v.reason)}</h3><small>${this.esc(v.doctor)} · ${v.reviewed ? 'Review simulated' : 'Draft — awaiting review'}</small></div>${this.icon('arrow')}</button>`).join('')
-          : `<div class="empty">${this.icon('history')}<h2>Your story starts here.</h2><p>Complete a demo visit and it will appear in your history.</p>${this.btn('Start a visit', 'start')}</div>`;
+          : `<div class="empty">${this.icon('history')}<h2>Your story starts here.</h2><p>Complete a demo visit and it will appear in your history. You can also start another visit without finishing this one.</p>${this.btn(`${this.icon('plus')} New visit`, 'new-visit')}</div>`;
+        content += `${this.historyOpenVisits()}${this.thread.visits.length ? `<div class="section-heading"><h2>Past visits</h2></div>${past}` : (this.openJourneys().length ? `<div class="section-heading"><h2>Past visits</h2></div><p style="font-size:12px">None saved yet.</p>` : past)}`;
       } else {
         content += `<h2>Don’t start from scratch.</h2><p class="mt">A patient history packet from the same saved care record. This is a record export — not an appeal or PA letter. Generated letters still need human review before download.</p><div class="notice green">Record export only. This is not a prescription, appeal letter, or verified medical record.</div><pre class="packet">${this.esc(this.historyPacket())}</pre><div class="actions"><small>Includes visits, medicines, tests, and coverage.</small><div class="row">${this.btn(`${this.icon('download')} Download .md`, 'export', 'secondary')}${this.btn(`${this.icon('download')} Download PDF`, 'export-pdf')}</div></div>`;
       }
@@ -1204,19 +1324,22 @@ const CareLoop = {
     const j = this.thread.journey;
     if (!j || j.completed) return;
     const c = this.coverageLabel();
-    const visits = [
-      {
-        id: Date.now().toString(),
-        date: 'September 24, 2026',
-        reason: j.symptoms,
-        doctor: j.doctor,
-        reviewed: j.reviewed,
-        summary: 'Draft plan: discuss HbA1c testing, current metformin and possible add-on therapy with the clinician.',
-        coverage: c ? c.payer : 'No plan on file',
-      },
-      ...this.thread.visits,
-    ];
-    this.saveThread({ visits, journey: { ...j, completed: true } });
+    const done = {
+      id: j.id || Date.now().toString(),
+      date: 'September 24, 2026',
+      reason: j.symptoms || 'Visit',
+      doctor: j.doctor,
+      reviewed: j.reviewed,
+      summary: 'Draft plan: discuss HbA1c testing, current metformin and possible add-on therapy with the clinician.',
+      coverage: c ? c.payer : 'No plan on file',
+    };
+    const remaining = this.openJourneys().filter((row) => row.id !== done.id);
+    this.saveThread({
+      visits: [done, ...this.thread.visits],
+      openVisits: remaining,
+      journey: { ...j, completed: true },
+    });
+    this.clearVisitRuntime();
   },
 
   async loadCostGuess() {
@@ -1320,6 +1443,10 @@ const CareLoop = {
         this.render();
         return;
       }
+      if (d.openVisit) {
+        this.resumeOpenVisit(d.openVisit);
+        return;
+      }
       if (d.symptom) {
         const s = this.thread.journey.symptoms;
         const next = s.toLowerCase().includes(d.symptom.toLowerCase())
@@ -1367,6 +1494,10 @@ const CareLoop = {
       case 'start':
         this.closeModal();
         this.startVisit();
+        break;
+      case 'new-visit':
+        this.closeModal();
+        this.startNewVisit();
         break;
       case 'medicines':
         this.closeModal();
