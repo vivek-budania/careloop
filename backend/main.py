@@ -595,6 +595,9 @@ FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fronten
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
     app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
+    _img = os.path.join(FRONTEND_DIR, "img")
+    if os.path.isdir(_img):
+        app.mount("/img", StaticFiles(directory=_img), name="img")
     _mockups = os.path.join(FRONTEND_DIR, "mockups")
     if os.path.isdir(_mockups):
         app.mount("/mockups", StaticFiles(directory=_mockups, html=True), name="mockups")
