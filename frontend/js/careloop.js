@@ -187,10 +187,30 @@ const CareLoop = {
     return String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
   },
 
+  parseCareName(description) {
+    const raw = String(description || '').trim();
+    let text = raw.replace(/^(continue|start|begin|add|take|buy)\s+/i, '').trim();
+    let leftover = '';
+    const cut = text.search(/\s+\d|\s+\(|\s+once\b|\s+twice\b|\s+daily\b|\s+weekly\b/i);
+    if (cut > 0) {
+      leftover = text.slice(cut).trim().replace(/^[·,\-–]+\s*/, '');
+      text = text.slice(0, cut).trim();
+    }
+    let name = text || raw;
+    if (name && !/[A-Z].*[A-Z0-9]/.test(name) && !/[a-z][A-Z]/.test(name)) {
+      name = name.replace(/\b([a-z])/g, (ch) => ch.toUpperCase());
+    }
+    return { name, leftover };
+  },
+
   careName(description) {
-    return String(description || '')
-      .replace(/^(continue|start|begin|add|take|buy)\s+/i, '')
-      .trim() || String(description || '').trim();
+    return this.parseCareName(description).name;
+  },
+
+  tidyCareItem(item) {
+    const parsed = this.parseCareName(item.name || item.description);
+    const notes = [parsed.leftover, item.notes].filter(Boolean).filter((note, i, all) => all.indexOf(note) === i).join(' · ');
+    return { ...item, name: parsed.name || item.name, notes };
   },
 
   demoFallbackCare() {
@@ -237,9 +257,13 @@ const CareLoop = {
     const tests = [];
     items.forEach((item) => {
       const type = String(item.type || '').toLowerCase();
-      const name = this.careName(item.description);
+      const parsed = this.parseCareName(item.description);
+      const name = parsed.name;
       if (!name) return;
-      const notes = [item.notes, item.pa_required ? 'PA may be required' : ''].filter(Boolean).join(' · ');
+      const notes = [parsed.leftover, item.notes, item.pa_required ? 'PA may be required' : '']
+        .filter(Boolean)
+        .filter((note, i, all) => all.indexOf(note) === i)
+        .join(' · ');
       if (type === 'rx') {
         prescriptions.push({
           id: item.id || item.plan_item_id || `rx-${this.careKey(name)}`,
@@ -299,7 +323,8 @@ const CareLoop = {
 
   applyVisitCare() {
     const pending = this.thread.pendingCare || this.careFromEncounter();
-    const prescriptions = this.mergeCareItems(this.thread.prescriptions, pending.prescriptions);
+    const incomingRx = (pending.prescriptions || []).map((item) => this.tidyCareItem(item));
+    const prescriptions = this.mergeCareItems(this.thread.prescriptions, incomingRx);
     const incomingTests = (pending.tests || []).map((item) => ({
       ...item,
       kind: item.kind || 'order',
@@ -477,6 +502,15 @@ const CareLoop = {
       t.testRecords = (t.visits || []).some((v) => v.id === 'seed') ? this.seedTestRecords() : [];
     }
     if (t.pendingCare === undefined) t.pendingCare = null;
+    if (Array.isArray(t.prescriptions)) {
+      t.prescriptions = this.mergeCareItems([], t.prescriptions.map((item) => this.tidyCareItem(item)));
+    }
+    if (t.pendingCare && Array.isArray(t.pendingCare.prescriptions)) {
+      t.pendingCare = {
+        ...t.pendingCare,
+        prescriptions: t.pendingCare.prescriptions.map((item) => this.tidyCareItem(item)),
+      };
+    }
     return t;
   },
 
