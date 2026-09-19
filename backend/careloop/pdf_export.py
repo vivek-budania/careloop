@@ -6,11 +6,11 @@ the Stream C helper that turns the same markdown packet into a downloadable PDF.
 
 from __future__ import annotations
 
-from fpdf import FPDF
-
 
 def build_history_pdf(markdown: str, title: str = "CareLoop history packet") -> bytes:
     """Render plain/markdown-ish text to a minimal multi-page PDF."""
+    from fpdf import FPDF
+
     text = (markdown or "").replace("\r\n", "\n").strip()
     if not text:
         raise ValueError("No packet text to export.")
