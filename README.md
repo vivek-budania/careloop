@@ -132,6 +132,7 @@ cp .env.example .env
 #   GEMINI_API_KEY=your_key_here          # Insurance OCR + /letters
 #   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
 #   GROQ_API_KEY=                         # optional letter fallback; add when you have it
+#   SESSION_SECRET=                       # optional; signs login tokens + coverage cookie
 ```
 
 Same names on the **process/container at launch** or in **Vercel → Project Settings → Environment Variables** (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
