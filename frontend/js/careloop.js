@@ -469,12 +469,17 @@ const CareLoop = {
     }
   },
 
-  async login(username, password, mode) {
+  async login(username, password, mode, profile = null) {
     const result = await API.login(username, password);
     API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
       this.thread = this.seedThread('first');
+      if (profile) {
+        this.thread.patient.name = profile.name;
+        this.thread.patient.email = profile.email;
+        this.thread.patient.dateOfBirth = profile.dateOfBirth;
+      }
       this.saveThread();
       await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
       this.rememberCoverage({ profile: null, eligibility: null });
@@ -528,7 +533,7 @@ const CareLoop = {
 
   renderLogin() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and tests together on one health journey.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<div class="password-wrap"><input name="password" type="password" autocomplete="current-password" value="demo" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><div class="field-row"><button type="button" class="link forgot-link">Forgot Password?</button></div><div class="error" id="login-error" role="alert"></div><button class="btn pill full" type="submit" name="mode" value="returning">LOGIN</button><p class="signup-line">New here? <button type="submit" name="mode" value="first">Start my first visit</button></p><p class="fine-print">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
+    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and tests together on one health journey.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<div class="password-wrap"><input name="password" type="password" autocomplete="current-password" value="demo" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><div class="field-row"><button type="button" class="link forgot-link">Forgot Password?</button></div><div class="error" id="login-error" role="alert"></div><button class="btn pill full" type="submit" name="mode" value="returning">LOGIN</button><p class="signup-line">New here? <button type="button" class="open-signup">Start my first visit</button></p><p class="fine-print">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
     const form = document.getElementById('login-form');
     const passwordInput = form.password;
     form.querySelector('.toggle-password').addEventListener('click', (e) => {
@@ -541,6 +546,7 @@ const CareLoop = {
     form.querySelector('.forgot-link').addEventListener('click', () => {
       this.toast('Seeded demo: jane / demo');
     });
+    form.querySelector('.open-signup').addEventListener('click', () => this.renderSignup());
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = form.username.value.trim();
@@ -552,6 +558,93 @@ const CareLoop = {
         await this.login(username, password, mode);
       } catch (err) {
         errBox.textContent = err.message;
+      }
+    });
+  },
+
+  renderSignup() {
+    const app = document.getElementById('app');
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your information stays in this interactive demo.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">UI demo only · No real account is created.</p></form></section></div>`;
+    const form = document.getElementById('signup-form');
+    const passwordInput = form.password;
+    const errBox = document.getElementById('signup-error');
+    const today = new Date();
+    form.noValidate = true;
+    form.dateOfBirth.max = today.toISOString().slice(0, 10);
+    form.querySelectorAll('input').forEach((input) => {
+      input.addEventListener('input', () => {
+        input.removeAttribute('aria-invalid');
+        errBox.textContent = '';
+      });
+    });
+    const showSignupError = (message, input) => {
+      errBox.textContent = message;
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
+    };
+    form.querySelector('.signup-back').addEventListener('click', () => this.renderLogin());
+    form.querySelector('.toggle-password').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const shown = passwordInput.type === 'text';
+      passwordInput.type = shown ? 'password' : 'text';
+      btn.innerHTML = this.icon(shown ? 'eye' : 'eye-off');
+      btn.setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.textContent = '';
+      form.querySelectorAll('[aria-invalid="true"]').forEach((input) => input.removeAttribute('aria-invalid'));
+      const fullName = form.name.value.trim().replace(/\s+/g, ' ');
+      const nameParts = fullName.split(' ').filter(Boolean);
+      if (fullName.length < 2 || /\d/.test(fullName) || nameParts.some((part) => !/\p{L}/u.test(part))) {
+        showSignupError('Enter your name without numbers.', form.name);
+        return;
+      }
+      const birthDate = new Date(`${form.dateOfBirth.value}T00:00:00`);
+      const oldestDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
+      if (!form.dateOfBirth.value || Number.isNaN(birthDate.getTime())) {
+        showSignupError('Enter a valid date of birth.', form.dateOfBirth);
+        return;
+      }
+      if (birthDate >= today) {
+        showSignupError('Date of birth must be in the past.', form.dateOfBirth);
+        return;
+      }
+      if (birthDate < oldestDate) {
+        showSignupError('Check the year in your date of birth.', form.dateOfBirth);
+        return;
+      }
+      const email = form.email.value.trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        showSignupError('Enter a valid email address, like name@example.com.', form.email);
+        return;
+      }
+      if (form.password.value.length < 8) {
+        showSignupError('Password must be at least 8 characters.', form.password);
+        return;
+      }
+      if (form.password.value !== form.confirmPassword.value) {
+        showSignupError('Passwords do not match.', form.confirmPassword);
+        return;
+      }
+      if (!form.consent.checked) {
+        showSignupError('Please confirm this is fictional demo information.', form.consent);
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      submit.textContent = 'CREATING YOUR CARE SPACE…';
+      try {
+        await this.login('jane', 'demo', 'first', {
+          name: fullName,
+          email,
+          dateOfBirth: form.dateOfBirth.value,
+        });
+        this.toast('Your demo care space is ready');
+      } catch (err) {
+        errBox.textContent = err.message;
+        submit.disabled = false;
+        submit.innerHTML = `CREATE MY CARE SPACE ${this.icon('arrow')}`;
       }
     });
   },
