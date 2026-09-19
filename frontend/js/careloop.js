@@ -20,6 +20,7 @@ const CareLoop = {
   scribeFixture: null,
   encounter: null,
   orders: null,
+  extractiveSummary: null,
   thread: null,
   clickBound: false,
   recording: false,
@@ -741,18 +742,23 @@ const CareLoop = {
     const soap = (this.encounter && this.encounter.soap) || {};
     const source = (this.encounter && this.encounter.source) || 'seeded';
     const live = this.liveTranscript();
+    const sum = this.extractiveSummary || {};
+    const bullets = (sum.bullets || []).map((b) => `<li style="margin:6px 0;font-size:12px">${this.esc(b)}</li>`).join('');
+    const sumBlock = bullets
+      ? `<div class="notice green" style="margin-bottom:22px"><strong style="display:block;margin-bottom:8px">Extractive summary (Sumy LexRank)</strong><ul style="margin:0;padding-left:18px">${bullets}</ul><small style="display:block;margin-top:10px">${this.esc(sum.note || 'Draft only — clinician must review.')}</small></div>`
+      : `<div class="notice" style="margin-bottom:22px">Sumy extractive summary unavailable. SOAP/Plan below still uses the scribe draft.</div>`;
     const intro = live && source === 'llm'
-      ? 'A draft SOAP/Plan from your recording. Nothing becomes an order without clinician review.'
+      ? 'Sumy extractive summary plus a draft SOAP/Plan from your recording. Nothing becomes an order without clinician review.'
       : live
-        ? 'Your recording is saved on the previous step. This SOAP is still the sample note until Gemini can draft from it.'
-        : 'A draft SOAP/Plan from Sreekar’s scribe API. Nothing becomes an order without clinician review.';
+        ? 'Your recording is saved on the previous step. Sumy summarizes the transcript; SOAP may still use the sample note until Gemini can draft from it.'
+        : 'Sumy extractive summary (Python, no Grok) plus a draft SOAP/Plan from Sreekar’s scribe API. Nothing becomes an order without clinician review.';
     const rows = [
       ['S', 'What you shared', soap.subjective || 'Fatigue and increased thirst; taking metformin twice daily.'],
       ['O', 'What’s on file', soap.objective || 'Current metformin routine. No new lab result is available in this demo.'],
       ['A', 'What to review', soap.assessment || 'Diabetes follow-up. Any change in assessment needs clinician verification.'],
       ['P', 'Suggested next steps', soap.plan_summary || 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.'],
     ];
-    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis. Prior authorization, if needed, is separate from any later claim.</small>`;
+    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis. Prior authorization, if needed, is separate from any later claim.</small>`;
   },
 
   async loadScribeFixture() {
@@ -773,13 +779,21 @@ const CareLoop = {
         try {
           const result = await API.draftScribe({ transcript, use_seeded: false });
           this.encounter = result.encounter || result;
-          return;
         } catch (err) {
           this.toast(`${err.message} Using the sample SOAP until Gemini can draft from your recording.`);
+          const result = await API.draftScribe({ transcript, use_seeded: true });
+          this.encounter = result.encounter || result;
         }
+      } else {
+        const result = await API.draftScribe({ transcript, use_seeded: true });
+        this.encounter = result.encounter || result;
       }
-      const result = await API.draftScribe({ transcript, use_seeded: true });
-      this.encounter = result.encounter || result;
+      try {
+        this.extractiveSummary = await API.summarizeScribe({ transcript, sentence_count: 5 });
+      } catch (sumErr) {
+        this.extractiveSummary = null;
+        this.toast(sumErr.message || 'Sumy summary failed');
+      }
     } catch (err) {
       this.encounter = null;
       this.toast(err.message);
@@ -1044,7 +1058,7 @@ const CareLoop = {
           ? this.thread.visits.map((v) => `<button class="visit-row" data-visit="${v.id}" type="button"><div class="tile-icon">${this.icon('file')}</div><div><small>${this.esc(v.date)}</small><h3>${this.esc(v.reason)}</h3><small>${this.esc(v.doctor)} · ${v.reviewed ? 'Review simulated' : 'Draft — awaiting review'}</small></div>${this.icon('arrow')}</button>`).join('')
           : `<div class="empty">${this.icon('history')}<h2>Your story starts here.</h2><p>Complete a demo visit and it will appear in your history.</p>${this.btn('Start a visit', 'start')}</div>`;
       } else {
-        content += `<h2>Don’t start from scratch.</h2><p class="mt">A patient history packet from the same saved care record. This is a record export — not an appeal or PA letter. Generated letters still need human review before download.</p><div class="notice green">Record export only. This is not a prescription, appeal letter, or verified medical record.</div><pre class="packet">${this.esc(this.historyPacket())}</pre><div class="actions"><small>Includes visits, medicines, tests, and coverage.</small>${this.btn(`${this.icon('download')} Download packet (.md)`, 'export')}</div>`;
+        content += `<h2>Don’t start from scratch.</h2><p class="mt">A patient history packet from the same saved care record. This is a record export — not an appeal or PA letter. Generated letters still need human review before download.</p><div class="notice green">Record export only. This is not a prescription, appeal letter, or verified medical record.</div><pre class="packet">${this.esc(this.historyPacket())}</pre><div class="actions"><small>Includes visits, medicines, tests, and coverage.</small><div class="row">${this.btn(`${this.icon('download')} Download .md`, 'export', 'secondary')}${this.btn(`${this.icon('download')} Download PDF`, 'export-pdf')}</div></div>`;
       }
     }
     return `<div class="narrow">${this.head('Your story stays with you.', 'Every visit adds a little more context for the next one.')}<section class="card journey-panel">${content}</section></div>`;
@@ -1511,6 +1525,14 @@ const CareLoop = {
         this.toast('Your demo history packet was downloaded.');
         break;
       }
+      case 'export-pdf':
+        try {
+          await API.downloadHistoryPdf(this.historyPacket(), 'CareLoop history packet');
+          this.toast('PDF packet downloaded.');
+        } catch (err) {
+          this.toast(err.message);
+        }
+        break;
       case 'reset':
         this.modal(
           'Start with a fresh sample record?',

@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from backend.llm import generate, generate_json
@@ -33,6 +33,8 @@ from backend.careloop import coverage as careloop_coverage
 from backend.careloop import auth as careloop_auth
 from backend.careloop import scribe as careloop_scribe
 from backend.careloop import stt as careloop_stt
+from backend.careloop import summary as careloop_summary
+from backend.careloop import pdf_export as careloop_pdf
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -151,6 +153,16 @@ class ScribeDraftRequest(BaseModel):
 
 class ScribeApproveRequest(BaseModel):
     encounter: dict
+
+
+class ScribeSummarizeRequest(BaseModel):
+    transcript: str = ""
+    sentence_count: int = 5
+
+
+class HistoryPdfRequest(BaseModel):
+    markdown: str
+    title: str = "CareLoop history packet"
 
 
 class LoginRequest(BaseModel):
@@ -642,6 +654,45 @@ def scribe_approve(
         return careloop_scribe.approve_encounter(req.encounter)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/careloop/scribe/summarize")
+def scribe_summarize(
+    req: ScribeSummarizeRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Extractive visit summary via Sumy LexRank (no Grok / no LLM)."""
+    transcript = (req.transcript or "").strip()
+    if not transcript:
+        transcript = (careloop_scribe.load_fixture().get("transcript") or "").strip()
+    try:
+        return careloop_summary.summarize_text(transcript, sentence_count=req.sentence_count)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Summarize failed: {e}")
+
+
+@app.post("/api/careloop/history/pdf")
+def history_pdf(
+    req: HistoryPdfRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """PDF export of the patient history packet (record view — not a letter)."""
+    try:
+        data = careloop_pdf.build_history_pdf(
+            req.markdown,
+            title=req.title or "CareLoop history packet",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF export failed: {e}")
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="careloop-history.pdf"'},
+    )
 
 
 # ---------------------------------------------------------------------------
