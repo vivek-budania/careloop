@@ -33,8 +33,6 @@ from backend.careloop import coverage as careloop_coverage
 from backend.careloop import auth as careloop_auth
 from backend.careloop import scribe as careloop_scribe
 from backend.careloop import stt as careloop_stt
-from backend.careloop import summary as careloop_summary
-from backend.careloop import pdf_export as careloop_pdf
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -662,6 +660,8 @@ def scribe_summarize(
     _user: dict = Depends(careloop_auth.require_user),
 ):
     """Extractive visit summary via Sumy LexRank (no Grok / no LLM)."""
+    from backend.careloop import summary as careloop_summary
+
     transcript = (req.transcript or "").strip()
     if not transcript:
         transcript = (careloop_scribe.load_fixture().get("transcript") or "").strip()
@@ -679,6 +679,8 @@ def history_pdf(
     _user: dict = Depends(careloop_auth.require_user),
 ):
     """PDF export of the patient history packet (record view — not a letter)."""
+    from backend.careloop import pdf_export as careloop_pdf
+
     try:
         data = careloop_pdf.build_history_pdf(
             req.markdown,
