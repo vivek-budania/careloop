@@ -1314,3 +1314,62 @@ a:hover { color: var(--accent-blue); }
 [hidden] {
   display: none !important;
 }
+
+/* --- Visit Scribe (Stream C) --- */
+.soap-block {
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.soap-block h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-cyan);
+  margin-bottom: var(--space-xs);
+}
+
+.soap-block p {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.plan-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0 0;
+}
+
+.plan-list li {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.45;
+}
+
+.plan-list code {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: var(--accent-blue-glow);
+  color: var(--accent-blue);
+}
+
+.pa-flag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+}
+
+.empty-hint {
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 0.9rem;
+  line-height: 1.45;
+}

@@ -366,10 +366,10 @@
     <!-- ═══════════════ CARELOOP COVERAGE INTAKE (Dave) ═══════════════ -->
     <div class="module-view" id="module-careloop">
       <p class="careloop-banner">
-        Mock coverage intake. Not a live eligibility check, bill, or coverage decision.
+        Mock coverage → visit scribe. Not a live eligibility check, EHR, or coverage decision.
         One step at a time. Insurance company is the only required field on step 1.
       </p>
-      <p class="form-hint" id="cl-step-label">Step 1 of 6</p>
+      <p class="form-hint" id="cl-step-label">Step 1 of 8</p>
 
       <div class="cl-step" data-step="1">
         <div class="card">
@@ -524,6 +524,65 @@
         </div>
       </div>
 
+      <div class="cl-step" data-step="7" hidden>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon purple">🎤</div>
+              <h2>7. Visit transcript</h2>
+            </div>
+            <span class="card-badge">Patient @ doctor</span>
+          </div>
+          <p class="empty-hint" id="scribe-meta" style="margin-bottom: var(--space-md)">
+            Load the mock PCP visit, paste dialogue, or optionally upload audio for Grok STT.
+            No live mic required for the demo.
+          </p>
+          <div class="form-group">
+            <label class="form-label" for="scribe-transcript">Transcript</label>
+            <textarea class="form-textarea" id="scribe-transcript" rows="14"
+              placeholder="Paste visit dialogue here..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="scribe-audio">Optional audio (Grok STT)</label>
+            <input type="file" class="form-input" id="scribe-audio" accept="audio/*,.webm,.mp3,.wav,.m4a">
+          </div>
+          <label class="form-hint" style="display:flex;gap:0.5rem;align-items:center;margin-bottom:var(--space-md)">
+            <input type="checkbox" id="scribe-use-seeded" checked>
+            <span>Use seeded golden-path SOAP (demo; no LLM)</span>
+          </label>
+          <div class="btn-group">
+            <button type="button" class="btn btn-secondary" id="btn-load-fixture">Load mock visit</button>
+            <button type="button" class="btn btn-secondary" id="btn-transcribe-audio">Transcribe audio</button>
+            <button type="button" class="btn btn-primary" id="btn-draft-soap">Draft SOAP + Plan</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="cl-step" data-step="8" hidden>
+        <div class="card" style="position:relative">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon cyan">📝</div>
+              <h2>8. SOAP / Plan review</h2>
+            </div>
+            <span class="card-badge">Clinician gate</span>
+          </div>
+          <div id="scribe-loading" class="loading-overlay">
+            <div class="spinner spinner-lg"></div>
+            <div class="loading-text">Drafting encounter note...</div>
+          </div>
+          <div id="scribe-soap">
+            <p class="empty-hint">Draft from step 7 first. Clinician must review before Orders are created.</p>
+          </div>
+          <div style="margin-top: var(--space-md);">
+            <button class="btn btn-success" id="btn-approve-encounter" style="display: none;" type="button">
+              I've Reviewed — Approve Plan → Orders
+            </button>
+          </div>
+          <div id="scribe-orders"></div>
+        </div>
+      </div>
+
       <div class="cl-pager">
         <button class="btn btn-secondary" type="button" id="cl-btn-back" disabled>Back</button>
         <button class="btn btn-primary" type="button" id="cl-btn-next">Continue</button>
@@ -560,5 +619,6 @@
   <script src="/js/provider.js"></script>
   <script src="/js/patient.js"></script>
   <script src="/js/careloop.js"></script>
+  <script src="/js/scribe.js"></script>
 </body>
 </html>

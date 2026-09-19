@@ -278,4 +278,5 @@ document.addEventListener('DOMContentLoaded', () => {
   Provider.init();
   Patient.init();
   CareLoop.init();
+  Scribe.init();
 });

@@ -12,6 +12,10 @@ GEMINI_MODEL = "gemini-flash-lite-latest"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
 
+# Optional xAI Grok speech-to-text for visit scribe (not Groq).
+XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+XAI_STT_URL = os.getenv("XAI_STT_URL", "https://api.x.ai/v1/stt")
+
 # Safety watermark stamped on every generated document
 DRAFT_WATERMARK = (
     "⚠️ AI-DRAFTED DOCUMENT — NOT YET REVIEWED BY A LICENSED PROFESSIONAL. "

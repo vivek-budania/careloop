@@ -13,7 +13,7 @@ import json
 import os
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -25,11 +25,14 @@ from backend.prompts import (
     APPEAL_SYSTEM_PROMPT,
     DEMAND_SYSTEM_PROMPT,
     DENIAL_PARSE_PROMPT,
+    SCRIBE_SYSTEM_PROMPT,
 )
 from backend.risk_engine import calculate_risk_score
 from backend.config import NATIONAL_APPEAL_STATS
 from backend.careloop import coverage as careloop_coverage
 from backend.careloop import auth as careloop_auth
+from backend.careloop import scribe as careloop_scribe
+from backend.careloop import stt as careloop_stt
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -131,6 +134,15 @@ class CoverageIntakeRequest(BaseModel):
 class CoverageVisitGuessRequest(BaseModel):
     symptoms: str = ""
     prior_visit_note: str = ""
+
+
+class ScribeDraftRequest(BaseModel):
+    transcript: str = ""
+    use_seeded: bool = True  # golden-path fixture SOAP; set false to call LLM
+
+
+class ScribeApproveRequest(BaseModel):
+    encounter: dict
 
 
 class LoginRequest(BaseModel):
@@ -467,6 +479,89 @@ def careloop_network(
     _user: dict = Depends(careloop_auth.require_user),
 ):
     return careloop_coverage.search_network(specialty=specialty, zip_code=zip)
+
+
+# ---------------------------------------------------------------------------
+# CareLoop — Stream C scribe (transcript → SOAP/Plan → Orders)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/careloop/scribe/fixture")
+def scribe_fixture(_user: dict = Depends(careloop_auth.require_user)):
+    """Return the mock PCP visit transcript (Maya Chen golden path)."""
+    return careloop_scribe.load_fixture()
+
+
+@app.post("/api/careloop/scribe/transcribe")
+async def scribe_transcribe(
+    file: UploadFile = File(...),
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Optional Grok STT: upload visit audio → transcript text."""
+    data = await file.read()
+    try:
+        return careloop_stt.transcribe_audio(
+            filename=file.filename or "visit.webm",
+            content_type=file.content_type or "application/octet-stream",
+            data=data,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
+
+
+@app.post("/api/careloop/scribe/draft")
+def scribe_draft(
+    req: ScribeDraftRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Draft SOAP + structured Plan from a transcript.
+
+    Default use_seeded=true for demo without LLM. Set use_seeded=false to
+    draft from the transcript via Gemini/Groq. Always returns clinician_reviewed=false.
+    """
+    transcript = (req.transcript or "").strip()
+    if not transcript and not req.use_seeded:
+        raise HTTPException(status_code=400, detail="Transcript is required when use_seeded is false.")
+
+    if req.use_seeded:
+        encounter = careloop_scribe.build_encounter_draft(
+            transcript=transcript,
+            use_seeded=True,
+        )
+        return {"encounter": encounter}
+
+    try:
+        user_message = f"Visit transcript:\n\n{transcript}"
+        raw_json = generate_json(SCRIBE_SYSTEM_PROMPT, user_message)
+        payload = json.loads(raw_json)
+        encounter = careloop_scribe.build_encounter_draft(
+            transcript=transcript,
+            use_seeded=False,
+            llm_payload=payload,
+        )
+        return {"encounter": encounter}
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to parse LLM scribe response as JSON. Try use_seeded=true or retry.",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scribe draft failed: {str(e)}")
+
+
+@app.post("/api/careloop/scribe/approve")
+def scribe_approve(
+    req: ScribeApproveRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Clinician review gate — mark encounter reviewed and create Orders from Plan."""
+    try:
+        return careloop_scribe.approve_encounter(req.encounter)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
