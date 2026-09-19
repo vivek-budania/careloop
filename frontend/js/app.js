@@ -78,13 +78,13 @@ const App = {
     document.getElementById('app-shell').hidden = true;
   },
 
-  enterApp(user) {
+  async enterApp(user) {
     this.user = user;
     document.getElementById('login-screen').hidden = true;
     document.getElementById('app-shell').hidden = false;
     document.getElementById('nav-user-label').textContent = `${user.name} (${user.role})`;
     this.applyRole(user);
-    if (window.CareLoop) CareLoop.loadPayers();
+    await CareLoop.loadPayers();
   },
 
   applyRole(user) {
