@@ -1,0 +1,212 @@
+[
+  {
+    "code": "CO-4",
+    "reason": "The procedure code is inconsistent with the modifier used, or a required modifier is missing.",
+    "plain_english": "The billing code doesn't match what was done, or a required detail is missing from the claim.",
+    "appeal_tip": "Verify the CPT/HCPCS code matches the procedure performed and attach operative notes. Check if a modifier (e.g., -25, -59, -LT, -RT) is needed.",
+    "risk_weight": 0.3
+  },
+  {
+    "code": "CO-11",
+    "reason": "The diagnosis is inconsistent with the procedure.",
+    "plain_english": "The insurance company says your diagnosis doesn't justify the treatment that was billed.",
+    "appeal_tip": "This is a medical necessity denial. Obtain a Letter of Medical Necessity from the treating physician linking the diagnosis to the procedure with clinical evidence.",
+    "risk_weight": 0.7
+  },
+  {
+    "code": "CO-16",
+    "reason": "Claim/service lacks information or has submission/billing error(s).",
+    "plain_english": "The claim was missing required information or had errors when it was submitted.",
+    "appeal_tip": "Review the claim for missing fields (demographics, NPI, date of service) and resubmit with corrections. This is often a clerical fix.",
+    "risk_weight": 0.2
+  },
+  {
+    "code": "CO-18",
+    "reason": "Exact duplicate claim/service.",
+    "plain_english": "This claim was already submitted and processed — it's a duplicate.",
+    "appeal_tip": "Check if the original claim was paid. If this is a legitimately separate service, resubmit with documentation distinguishing the two encounters.",
+    "risk_weight": 0.1
+  },
+  {
+    "code": "CO-22",
+    "reason": "This care may be covered by another payer per coordination of benefits.",
+    "plain_english": "Another insurance policy may be responsible for paying this claim first.",
+    "appeal_tip": "Update coordination of benefits information with the correct primary/secondary payer order and resubmit.",
+    "risk_weight": 0.15
+  },
+  {
+    "code": "CO-29",
+    "reason": "The time limit for filing has expired.",
+    "plain_english": "The claim was filed too late — past the insurance company's deadline.",
+    "appeal_tip": "Extremely difficult to overturn. Document any extenuating circumstances (system outage, prior authorization delays) and file a formal appeal with proof of timely filing attempt.",
+    "risk_weight": 0.9
+  },
+  {
+    "code": "CO-45",
+    "reason": "Charge exceeds fee schedule/maximum allowable amount.",
+    "plain_english": "The amount charged is more than what the insurance company has agreed to pay for this service.",
+    "appeal_tip": "Review contracted rates. If out-of-network, provide documentation of usual and customary charges in your geographic area.",
+    "risk_weight": 0.25
+  },
+  {
+    "code": "CO-50",
+    "reason": "These are non-covered services because this is not deemed a 'medical necessity' by the payer.",
+    "plain_english": "The insurance company says this treatment wasn't medically necessary.",
+    "appeal_tip": "This is the most common and most important denial to fight. Submit peer-reviewed literature, clinical guidelines (e.g., AMA, specialty society), and a detailed Letter of Medical Necessity. Request a peer-to-peer review.",
+    "risk_weight": 0.8
+  },
+  {
+    "code": "CO-96",
+    "reason": "Non-covered charge(s). At least one Remark Code must be provided.",
+    "plain_english": "The service isn't covered under your plan at all.",
+    "appeal_tip": "Review the specific plan exclusions. If the service is medically necessary and no alternative exists, appeal with clinical justification and request an exception review.",
+    "risk_weight": 0.6
+  },
+  {
+    "code": "CO-97",
+    "reason": "The benefit for this service is included in the allowance/payment for another service/procedure.",
+    "plain_english": "The insurance company says this procedure is already included ('bundled') in another procedure they paid for.",
+    "appeal_tip": "Review NCCI edits. If the services were truly distinct, append modifier -59 or -XE/XS/XP/XU and resubmit with operative notes proving the services were separate.",
+    "risk_weight": 0.4
+  },
+  {
+    "code": "CO-109",
+    "reason": "Claim/service not covered by this payer/contractor.",
+    "plain_english": "This insurance company doesn't cover this type of service at all.",
+    "appeal_tip": "Verify the claim was sent to the correct payer. If it's a plan exclusion, request an exception or redirect to the appropriate payer.",
+    "risk_weight": 0.5
+  },
+  {
+    "code": "CO-119",
+    "reason": "Benefit maximum for this time period or occurrence has been reached.",
+    "plain_english": "You've used up all the allowed visits or dollar amount for this service this year.",
+    "appeal_tip": "If continued treatment is medically necessary, file for a benefit exception with clinical documentation showing medical necessity beyond the plan maximum.",
+    "risk_weight": 0.55
+  },
+  {
+    "code": "CO-151",
+    "reason": "Payment adjusted because the payer deems the information submitted does not support this many/frequency of services.",
+    "plain_english": "The insurance company thinks you're getting this treatment too often.",
+    "appeal_tip": "Provide clinical rationale for the treatment frequency, including worsening condition documentation, specialist recommendations, and any clinical guidelines supporting the schedule.",
+    "risk_weight": 0.5
+  },
+  {
+    "code": "CO-167",
+    "reason": "This (these) diagnosis(es) is (are) not covered.",
+    "plain_english": "Your specific diagnosis is excluded from coverage.",
+    "appeal_tip": "Check if a more specific ICD-10 code would be covered. If the condition is genuinely excluded, request an exception review citing medical necessity.",
+    "risk_weight": 0.65
+  },
+  {
+    "code": "CO-197",
+    "reason": "Precertification/authorization/notification absent.",
+    "plain_english": "The required prior authorization was never obtained before the service was performed.",
+    "appeal_tip": "If PA was obtained, submit the authorization number. If it was an emergency, document the emergent nature. For retroactive PA, submit within the payer's exception window with clinical urgency documentation.",
+    "risk_weight": 0.85
+  },
+  {
+    "code": "CO-198",
+    "reason": "Precertification/authorization exceeded.",
+    "plain_english": "The treatment went beyond what was authorized — more units, more time, or a different service than approved.",
+    "appeal_tip": "Submit documentation showing why the additional services were medically necessary during the encounter. Include operative notes and request retroactive authorization.",
+    "risk_weight": 0.6
+  },
+  {
+    "code": "CO-204",
+    "reason": "This service/equipment/drug is not covered under the patient's current benefit plan.",
+    "plain_english": "Your plan simply doesn't cover this — it's a plan exclusion, not a medical decision.",
+    "appeal_tip": "Request the specific plan language citing the exclusion. If medically necessary with no alternative, file a formal exception request with supporting literature.",
+    "risk_weight": 0.7
+  },
+  {
+    "code": "CO-222",
+    "reason": "Exceeds the contracted maximum number of hours/days/units by this provider for this period.",
+    "plain_english": "The provider has hit their maximum contracted volume for this service.",
+    "appeal_tip": "This is typically a provider contract issue, not patient-facing. The provider should contact their contract representative.",
+    "risk_weight": 0.3
+  },
+  {
+    "code": "PR-1",
+    "reason": "Deductible amount.",
+    "plain_english": "This amount is your responsibility because it's applied to your annual deductible.",
+    "appeal_tip": "Verify the deductible amount is correct by checking your EOB year-to-date. Not typically appealable unless the deductible was already met.",
+    "risk_weight": 0.05
+  },
+  {
+    "code": "PR-2",
+    "reason": "Coinsurance amount.",
+    "plain_english": "This is your share of the cost — the percentage you pay after the deductible is met.",
+    "appeal_tip": "Verify the coinsurance percentage matches your plan. If out-of-network rates were applied incorrectly, appeal with network status documentation.",
+    "risk_weight": 0.05
+  },
+  {
+    "code": "PR-3",
+    "reason": "Co-payment amount.",
+    "plain_english": "This is your fixed co-pay for this type of visit or service.",
+    "appeal_tip": "Verify the copay amount matches your plan for this type of service. Check if the service level (specialist vs. PCP) was categorized correctly.",
+    "risk_weight": 0.05
+  },
+  {
+    "code": "OA-23",
+    "reason": "The impact of prior payer(s) adjudication including payments and/or adjustments.",
+    "plain_english": "Another insurance already paid part of this claim — this adjustment reflects that.",
+    "appeal_tip": "Ensure the primary payer's EOB was correctly forwarded. Verify coordination of benefits order is correct.",
+    "risk_weight": 0.1
+  },
+  {
+    "code": "CO-236",
+    "reason": "This procedure or procedure/modifier combination is not compatible with another procedure or procedure/modifier combination provided on the same day.",
+    "plain_english": "Two procedures billed on the same day conflict with each other according to insurance rules.",
+    "appeal_tip": "Review NCCI edits. If procedures were truly separate and distinct, use appropriate modifiers (-59, -XE/XS/XP/XU) with supporting documentation.",
+    "risk_weight": 0.35
+  },
+  {
+    "code": "CO-242",
+    "reason": "Services not provided by network/primary care providers.",
+    "plain_english": "The provider who treated you is not in your insurance network.",
+    "appeal_tip": "If there were no in-network providers available, file a network adequacy appeal. Document attempts to find in-network care and the medical urgency of the situation.",
+    "risk_weight": 0.5
+  },
+  {
+    "code": "CO-252",
+    "reason": "An attachment/other documentation is required to adjudicate this claim/service.",
+    "plain_english": "The insurance company needs additional documentation before they can process the claim.",
+    "appeal_tip": "Submit the requested documentation promptly. Common requests include operative notes, pathology reports, or letters of medical necessity.",
+    "risk_weight": 0.2
+  },
+  {
+    "code": "CO-256",
+    "reason": "Service not payable per managed care contract.",
+    "plain_english": "The provider's contract with the insurance company doesn't include payment for this service.",
+    "appeal_tip": "Provider should review their managed care contract. If the service is covered for the patient but not in the provider contract, the patient may need to seek an in-network provider or file a gap exception.",
+    "risk_weight": 0.45
+  },
+  {
+    "code": "PI-265",
+    "reason": "Claim/service denied or reduced based on a payer's immunization/preventive care policy.",
+    "plain_english": "The preventive service wasn't covered because it didn't meet the payer's specific preventive care rules.",
+    "appeal_tip": "Verify the service meets ACA preventive care mandates. If required by law to be covered without cost-sharing, cite the specific ACA provision.",
+    "risk_weight": 0.3
+  },
+  {
+    "code": "CO-B7",
+    "reason": "This provider was not certified/eligible to be paid for this procedure/service on this date of service.",
+    "plain_english": "The provider wasn't credentialed or authorized to perform this service on the date it was done.",
+    "appeal_tip": "Verify provider credentialing status. If there was a credentialing gap, provide evidence of completed credentialing and request retroactive eligibility.",
+    "risk_weight": 0.4
+  },
+  {
+    "code": "CO-N527",
+    "reason": "Payment adjusted: the procedure/service was provided prior to the patient's coverage effective date or after the coverage termination date.",
+    "plain_english": "The service happened when the patient wasn't covered — either before insurance started or after it ended.",
+    "appeal_tip": "Verify coverage dates. If the patient was covered, submit evidence of active enrollment. If COBRA or continuation coverage applies, provide documentation.",
+    "risk_weight": 0.3
+  },
+  {
+    "code": "CO-N386",
+    "reason": "This decision was based on a Local Coverage Determination (LCD) or National Coverage Determination (NCD).",
+    "plain_english": "The denial is based on Medicare's specific coverage rules for this service.",
+    "appeal_tip": "Review the specific LCD/NCD cited. If the patient meets coverage criteria, document compliance point-by-point. If clinical circumstances warrant an exception, file an ALJ hearing request after exhausting lower appeals.",
+    "risk_weight": 0.65
+  }
+]
