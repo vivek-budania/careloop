@@ -22,6 +22,16 @@ const CareLoop = {
     document.getElementById('cl-btn-next').addEventListener('click', () => this.next());
   },
 
+  resetUi() {
+    this.showStep(1);
+    const status = document.getElementById('cl-identity-status');
+    if (status) status.textContent = '';
+    ['cl-eligibility', 'cl-visit-guess', 'cl-network', 'cl-review-summary'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '';
+    });
+  },
+
   showStep(n) {
     this.step = n;
     document.querySelectorAll('.cl-step').forEach((el) => {
@@ -121,18 +131,21 @@ const CareLoop = {
   },
 
   async loadPayers() {
-    if (this.payersLoaded) return;
+    const select = document.getElementById('cl-payer');
+    if (!select) return;
+    if (this.payersLoaded && select.options.length > 1) return;
     try {
       const payers = await API.listPayers();
-      const select = document.getElementById('cl-payer');
-      payers.forEach((p) => {
+      while (select.options.length > 1) select.remove(1);
+      (payers || []).forEach((p) => {
         const opt = document.createElement('option');
         opt.value = p.name;
         opt.textContent = `${p.name} (${p.plan_type})`;
         select.appendChild(opt);
       });
-      this.payersLoaded = true;
+      this.payersLoaded = select.options.length > 1;
     } catch (err) {
+      this.payersLoaded = false;
       App.notify(err.message, 'error');
     }
   },

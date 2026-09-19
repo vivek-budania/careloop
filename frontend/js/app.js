@@ -41,7 +41,7 @@ const App = {
     }
     try {
       const user = await API.me();
-      this.enterApp(user);
+      await this.enterApp(user);
     } catch (err) {
       API.setToken('');
       this.showLogin();
@@ -56,7 +56,7 @@ const App = {
     try {
       const result = await API.login(username, password);
       API.setToken(result.token);
-      this.enterApp(result.user);
+      await this.enterApp(result.user);
     } catch (err) {
       errBox.textContent = err.message;
     }
@@ -70,6 +70,7 @@ const App = {
     }
     API.setToken('');
     this.user = null;
+    CareLoop.resetUi();
     this.showLogin();
   },
 
@@ -80,11 +81,12 @@ const App = {
 
   async enterApp(user) {
     this.user = user;
-    document.getElementById('login-screen').hidden = true;
-    document.getElementById('app-shell').hidden = false;
     document.getElementById('nav-user-label').textContent = `${user.name} (${user.role})`;
     this.applyRole(user);
+    CareLoop.resetUi();
     await CareLoop.loadPayers();
+    document.getElementById('login-screen').hidden = true;
+    document.getElementById('app-shell').hidden = false;
   },
 
   applyRole(user) {
