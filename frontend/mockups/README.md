@@ -23,3 +23,5 @@ You can also open `frontend/mockups/index.html` directly from disk.
 - History includes list, visit breakup, and a share-packet screen
 
 PNG exports of each screen live with the design handoff (see the PR description), not in this folder, so the repo stays light.
+
+Teammate text map of the same IA (stages, buttons, mocked vs real): [`../../workflow.md`](../../workflow.md).
