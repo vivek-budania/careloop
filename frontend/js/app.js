@@ -184,10 +184,18 @@ const App = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootApp() {
+  if (App._booted) return;
+  App._booted = true;
   App.init();
   if (App.page === 'letters') {
     if (window.Provider) Provider.init();
     if (window.Patient) Patient.init();
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootApp);
+} else {
+  bootApp();
+}

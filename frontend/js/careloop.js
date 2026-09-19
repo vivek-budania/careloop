@@ -53,6 +53,8 @@ const CareLoop = {
   ],
 
   init() {
+    if (this._inited) return;
+    this._inited = true;
     this.thread = this.loadThread();
     this.bindClicks();
     this.restoreSession();
@@ -906,3 +908,11 @@ const CareLoop = {
     }
   },
 };
+
+if (document.body && document.body.dataset.page === 'careloop') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => CareLoop.init());
+  } else {
+    CareLoop.init();
+  }
+}
