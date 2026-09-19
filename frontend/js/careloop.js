@@ -608,7 +608,9 @@ const CareLoop = {
     if (j && this.isBookedVisit(j) && !j.completed) {
       primary = this.btn('Check in for your visit', 'open-upcoming');
     } else if (j && j.completed && !preparing.length && !upcoming.length) {
-      primary = this.btn('View visit summary', 'latest-visit');
+      primary = this.thread.pendingCare
+        ? this.btn('View follow-ups', 'followups')
+        : this.btn('View visit summary', 'latest-visit');
     } else {
       primary = this.btn(active ? 'Continue your visit' : 'Prepare for your visit', 'start');
     }
@@ -2162,6 +2164,10 @@ const CareLoop = {
       case 'today':
         this.closeModal();
         this.navigate('Today');
+        break;
+      case 'followups':
+        this.closeModal();
+        this.navigate('Followups');
         break;
       case 'start':
         this.closeModal();
