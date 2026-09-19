@@ -113,16 +113,39 @@ def _rest(path: str, params: dict, key: str) -> Any:
     return _request("GET", f"{supabase_url()}/rest/v1/{path}?{query}", key=key)
 
 
+def _escape_filter(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def profile_by_username(username: str) -> Optional[dict]:
     needle = (username or "").strip()
     if not needle:
         return None
-    escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    escaped = _escape_filter(needle)
     rows = _rest(
         "profiles",
         {
             "select": "id,username,email,first_name,last_name,created_at",
             "username": f"ilike.{escaped}",
+            "limit": "1",
+        },
+        service_role_key(),
+    )
+    if not isinstance(rows, list) or not rows:
+        return None
+    return rows[0]
+
+
+def profile_by_email(email: str) -> Optional[dict]:
+    needle = (email or "").strip()
+    if not needle:
+        return None
+    escaped = _escape_filter(needle)
+    rows = _rest(
+        "profiles",
+        {
+            "select": "id,username,email,first_name,last_name,created_at",
+            "email": f"ilike.{escaped}",
             "limit": "1",
         },
         service_role_key(),
@@ -167,6 +190,43 @@ def password_sign_in(email: str, password: str) -> dict:
         f"{supabase_url()}/auth/v1/token?grant_type=password",
         key=anon_key(),
         body={"email": email, "password": password},
+    )
+
+
+def sign_up(email: str, password: str, metadata: Optional[dict] = None) -> dict:
+    body: dict[str, Any] = {"email": email, "password": password}
+    if metadata:
+        body["data"] = metadata
+    data = _request(
+        "POST",
+        f"{supabase_url()}/auth/v1/signup",
+        key=anon_key(),
+        body=body,
+    )
+    return data if isinstance(data, dict) else {}
+
+
+def insert_profile(row: dict) -> dict:
+    data = _request(
+        "POST",
+        f"{supabase_url()}/rest/v1/profiles",
+        key=service_role_key(),
+        body=row,
+        extra_headers={"Prefer": "return=representation"},
+    )
+    if isinstance(data, list) and data:
+        return data[0]
+    if isinstance(data, dict):
+        return data
+    return row
+
+
+def request_password_reset(email: str) -> None:
+    _request(
+        "POST",
+        f"{supabase_url()}/auth/v1/recover",
+        key=anon_key(),
+        body={"email": email},
     )
 
 

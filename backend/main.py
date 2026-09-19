@@ -168,6 +168,18 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SignupRequest(BaseModel):
+    first_name: str
+    last_name: str
+    username: str
+    email: str
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    username: str = ""
+
+
 def require_coverage_user(
     request: Request,
     user: dict = Depends(careloop_auth.require_user),
@@ -404,6 +416,33 @@ def careloop_login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=401, detail=str(e))
     careloop_coverage.bind_user(result["user"]["username"])
     return _set_session_cookies(JSONResponse(result), request, result["token"])
+
+
+@app.post("/api/careloop/signup")
+def careloop_signup(req: SignupRequest, request: Request):
+    try:
+        result = careloop_auth.signup(
+            req.first_name,
+            req.last_name,
+            req.username,
+            req.email,
+            req.password,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    token = result.get("token") or ""
+    if token:
+        careloop_coverage.bind_user(result["user"]["username"])
+        return _set_session_cookies(JSONResponse(result), request, token)
+    return JSONResponse(result)
+
+
+@app.post("/api/careloop/forgot-password")
+def careloop_forgot_password(req: ForgotPasswordRequest):
+    try:
+        return careloop_auth.forgot_password(req.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/careloop/logout")

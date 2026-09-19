@@ -54,6 +54,7 @@ const CareLoop = {
     camera: 'M3 7h5l2-3h4l2 3h5v14H3V7Zm13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
     close: 'm6 6 12 12M6 18 18 6',
     mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Zm7 9a7 7 0 0 1-14 0M12 19v3',
+    eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   },
 
   stepNames: [
@@ -469,10 +470,15 @@ const CareLoop = {
 
   async login(username, password, mode) {
     const result = await API.login(username, password);
+    await this.enterSession(result, mode || 'returning');
+  },
+
+  async enterSession(result, mode) {
     API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
       this.thread = this.seedThread('first');
+      this.thread.patient.name = result.user.name || this.thread.patient.name;
       this.saveThread();
       await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
       this.rememberCoverage({ profile: null, eligibility: null });
@@ -526,17 +532,147 @@ const CareLoop = {
 
   renderLogin() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and next steps in one place.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<input name="password" type="password" autocomplete="current-password" value="demo" required></label><div class="error" id="login-error" role="alert"></div><button class="btn" type="submit" name="mode" value="returning">I’m returning ${this.icon('arrow')}</button><button class="btn secondary" type="submit" name="mode" value="first">Start my first visit</button><div class="hint">Seeded demo: <strong>jane</strong> / <strong>demo</strong></div><p style="text-align:center;margin:22px 0 0;font-size:10px">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    const loginForm = `<form id="login-form" class="auth-panel is-on" data-panel="login">
+      ${this.authOauthRow()}
+      <label class="auth-field">Username / Email
+        <input name="username" autocomplete="username" required placeholder="jane or jane@careloop.local">
+      </label>
+      ${this.passwordField('password', 'current-password')}
+      <div class="auth-forgot-row"><button type="button" class="auth-text" data-auth-panel="forgot">Forgot Password?</button></div>
+      <div class="error" id="login-error" role="alert"></div>
+      <button class="auth-submit" type="submit">LOGIN</button>
+      <p class="auth-switch">Don’t have an account? <button type="button" class="auth-text strong" data-auth-panel="signup">Sign up for free</button></p>
+    </form>`;
+    const signupForm = `<form id="signup-form" class="auth-panel" data-panel="signup">
+      <label class="auth-field">First name<input name="first_name" autocomplete="given-name" required></label>
+      <label class="auth-field">Last name<input name="last_name" autocomplete="family-name" required></label>
+      <label class="auth-field">Username<input name="username" autocomplete="username" required placeholder="jane"></label>
+      <label class="auth-field">Email<input name="email" type="email" autocomplete="email" required placeholder="jane@careloop.local"></label>
+      ${this.passwordField('password', 'new-password')}
+      <div class="error" id="signup-error" role="alert"></div>
+      <button class="auth-submit" type="submit">Create account</button>
+      <p class="auth-switch">Already have an account? <button type="button" class="auth-text strong" data-auth-panel="login">Log in</button></p>
+    </form>`;
+    const forgotForm = `<form id="forgot-form" class="auth-panel" data-panel="forgot">
+      <label class="auth-field">Username / Email
+        <input name="username" autocomplete="username" required placeholder="jane or jane@careloop.local">
+      </label>
+      <div class="error" id="forgot-error" role="alert"></div>
+      <p class="auth-note" id="forgot-note" hidden></p>
+      <button class="auth-submit" type="submit">Send reset link</button>
+      <p class="auth-switch"><button type="button" class="auth-text strong" data-auth-panel="login">Back to login</button></p>
+    </form>`;
+    app.innerHTML = `<div class="login auth-screen">
+      <section class="auth-card">
+        <h1>Hello, <strong>Welcome Back!</strong></h1>
+        <p class="auth-product">Welcome to your Health Journey</p>
+        <p class="auth-sub">We’re happy to see you again. Let’s stay ahead of the game.</p>
+        ${loginForm}${signupForm}${forgotForm}
+        <p class="auth-demo">Seeded demo: <strong>jane</strong> / <strong>demo</strong> · Interactive demo · fictional data</p>
+      </section>
+    </div>`;
+    this.bindAuthScreen();
+  },
+
+  authOauthRow() {
+    return `<div class="auth-oauth" role="group" aria-label="Social login coming soon">
+      <button type="button" class="auth-oauth-btn" disabled title="Coming soon">${this.googleMark()} Google</button>
+      <button type="button" class="auth-oauth-btn" disabled title="Coming soon">${this.appleMark()} Apple</button>
+    </div>
+    <p class="auth-coming">Google and Apple sign-in are coming soon.</p>
+    <div class="auth-or"><span>Or Continue With</span></div>`;
+  },
+
+  googleMark() {
+    return `<svg class="auth-brand" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>`;
+  },
+
+  appleMark() {
+    return `<svg class="auth-brand" viewBox="0 0 24 24" aria-hidden="true"><path fill="#111" d="M16.37 12.63c.03 3.1 2.72 4.13 2.75 4.14-.02.07-.43 1.47-1.42 2.91-.85 1.24-1.74 2.48-3.13 2.5-1.37.03-1.81-.81-3.38-.81-1.57 0-2.06.79-3.36.84-1.35.05-2.38-1.34-3.25-2.57C2.9 16.7 1.5 12.3 3.4 9.32c.94-1.48 2.63-2.42 4.46-2.45 1.39-.03 2.7.94 3.38.94.68 0 2.2-1.16 3.71-.99.63.03 2.4.26 3.54 1.92-.09.06-2.11 1.23-2.12 3.89zM13.9 5.3c.75-.91 1.26-2.17 1.12-3.43-1.08.04-2.39.72-3.17 1.62-.7.8-1.31 2.09-1.15 3.32 1.22.09 2.46-.62 3.2-1.51z"/></svg>`;
+  },
+
+  passwordField(name, autocomplete) {
+    return `<label class="auth-field">Password
+      <span class="auth-password">
+        <input name="${name}" type="password" autocomplete="${autocomplete}" required>
+        <button type="button" class="auth-eye" aria-label="Show password" aria-pressed="false">${this.icon('eye')}</button>
+      </span>
+    </label>`;
+  },
+
+  showAuthPanel(name) {
+    document.querySelectorAll('.auth-panel').forEach((el) => {
+      el.classList.toggle('is-on', el.dataset.panel === name);
+    });
+  },
+
+  bindPasswordToggles(root) {
+    root.querySelectorAll('.auth-eye').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = btn.parentElement.querySelector('input');
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      });
+    });
+  },
+
+  bindAuthScreen() {
+    const root = document.querySelector('.auth-screen');
+    if (!root) return;
+    this.bindPasswordToggles(root);
+    root.querySelectorAll('[data-auth-panel]').forEach((btn) => {
+      btn.addEventListener('click', () => this.showAuthPanel(btn.getAttribute('data-auth-panel')));
+    });
+    const loginForm = document.getElementById('login-form');
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const form = e.currentTarget;
-      const username = form.username.value.trim();
-      const password = form.password.value;
-      const mode = (e.submitter && e.submitter.value) || 'returning';
       const errBox = document.getElementById('login-error');
       errBox.textContent = '';
       try {
-        await this.login(username, password, mode);
+        await this.login(loginForm.username.value.trim(), loginForm.password.value, 'returning');
+      } catch (err) {
+        errBox.textContent = err.message;
+      }
+    });
+    const signupForm = document.getElementById('signup-form');
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('signup-error');
+      errBox.textContent = '';
+      try {
+        const result = await API.signup({
+          first_name: signupForm.first_name.value.trim(),
+          last_name: signupForm.last_name.value.trim(),
+          username: signupForm.username.value.trim(),
+          email: signupForm.email.value.trim(),
+          password: signupForm.password.value,
+        });
+        if (!result.token) {
+          errBox.textContent = result.needs_confirmation
+            ? 'Check your email to confirm this account, then log in. Nothing was billed or submitted.'
+            : 'Account created. Log in to continue.';
+          this.showAuthPanel('login');
+          document.getElementById('login-error').textContent = errBox.textContent;
+          return;
+        }
+        await this.enterSession(result, 'first');
+      } catch (err) {
+        errBox.textContent = err.message;
+      }
+    });
+    const forgotForm = document.getElementById('forgot-form');
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('forgot-error');
+      const note = document.getElementById('forgot-note');
+      errBox.textContent = '';
+      note.hidden = true;
+      try {
+        const result = await API.forgotPassword(forgotForm.username.value.trim());
+        note.textContent = result.message;
+        note.hidden = false;
       } catch (err) {
         errBox.textContent = err.message;
       }

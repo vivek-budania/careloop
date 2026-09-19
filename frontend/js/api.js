@@ -34,7 +34,7 @@ const API = {
     try {
       const response = await fetch(url, config);
 
-      if (response.status === 401 && !endpoint.includes('/login')) {
+      if (response.status === 401 && !/\/(login|signup|forgot-password)\b/.test(endpoint)) {
         this.setToken('');
         if (window.App && typeof App.showLogin === 'function') {
           App.showLogin();
@@ -161,6 +161,14 @@ const API = {
 
   login(username, password) {
     return this.post('/api/careloop/login', { username, password });
+  },
+
+  signup(data) {
+    return this.post('/api/careloop/signup', data);
+  },
+
+  forgotPassword(username) {
+    return this.post('/api/careloop/forgot-password', { username });
   },
 
   logout() {

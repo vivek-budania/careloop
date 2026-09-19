@@ -11,6 +11,8 @@ import hashlib
 import hmac
 import json
 import os
+import re
+import secrets
 import time
 from typing import Optional
 
@@ -36,11 +38,36 @@ def _users() -> list[dict]:
         return json.load(f)
 
 
-def _find_user(username: str) -> Optional[dict]:
-    needle = (username or "").strip().lower()
+_MOCK_SIGNUPS: dict[str, dict] = {}
+_USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,32}$")
+_PBKDF2_ROUNDS = 120_000
+
+
+def _looks_like_email(value: str) -> bool:
+    return "@" in (value or "") and "." in (value or "").split("@")[-1]
+
+
+def _mock_email(user: dict) -> str:
+    email = (user.get("email") or "").strip().lower()
+    if email:
+        return email
+    return f"{user['username'].lower()}@careloop.local"
+
+
+def _find_user(identifier: str) -> Optional[dict]:
+    needle = (identifier or "").strip().lower()
+    if not needle:
+        return None
     for user in _users():
-        if user["username"].lower() == needle:
+        if user["username"].lower() == needle or _mock_email(user) == needle:
             return user
+    signup = _MOCK_SIGNUPS.get(needle)
+    if signup:
+        return signup
+    if _looks_like_email(needle):
+        for user in list(_users()) + list(_MOCK_SIGNUPS.values()):
+            if _mock_email(user) == needle:
+                return user
     return None
 
 
@@ -148,29 +175,52 @@ def list_accounts() -> list[dict]:
 
 
 def login(username: str, password: str) -> dict:
-    username = (username or "").strip()
+    identifier = (username or "").strip()
     password = password or ""
+    if not identifier or not password:
+        raise ValueError("Unknown username or password.")
     if supabase_auth.configured():
-        return _login_supabase(username, password)
-    return _login_mock(username.lower(), password)
+        return _login_supabase(identifier, password)
+    return _login_mock(identifier, password)
 
 
-def _login_mock(username: str, password: str) -> dict:
-    match = next(
-        (u for u in _users() if u["username"].lower() == username and u["password"] == password),
-        None,
-    )
-    if not match:
+def _hash_password(password: str, salt: bytes) -> str:
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    return digest.hex()
+
+
+def _password_matches(user: dict, password: str) -> bool:
+    if user.get("pw_hash") and user.get("pw_salt"):
+        salt = bytes.fromhex(user["pw_salt"])
+        expected = user["pw_hash"]
+        actual = _hash_password(password, salt)
+        return hmac.compare_digest(expected, actual)
+    stored = user.get("password")
+    return bool(stored) and stored == password
+
+
+def _login_mock(identifier: str, password: str) -> dict:
+    match = _find_user(identifier)
+    if not match or not _password_matches(match, password):
         raise ValueError("Unknown username or password.")
     pub = public_user(match)
     return {"token": issue_token(match["username"]), "user": pub}
 
 
-def _login_supabase(username: str, password: str) -> dict:
+def _profile_for_identifier(identifier: str) -> Optional[dict]:
     try:
-        profile = supabase_auth.profile_by_username(username)
+        profile = supabase_auth.profile_by_username(identifier)
+        if profile:
+            return profile
+        if _looks_like_email(identifier):
+            return supabase_auth.profile_by_email(identifier)
     except ValueError as exc:
         raise ValueError(str(exc)) from None
+    return None
+
+
+def _login_supabase(identifier: str, password: str) -> dict:
+    profile = _profile_for_identifier(identifier)
     if not profile or not (profile.get("email") or "").strip():
         raise ValueError("Unknown username or password.")
     try:
@@ -181,6 +231,130 @@ def _login_supabase(username: str, password: str) -> dict:
     if not token:
         raise ValueError("Unknown username or password.")
     return {"token": token, "user": public_user_from_profile(profile)}
+
+
+def _validate_signup(first_name: str, last_name: str, username: str, email: str, password: str) -> tuple[str, str, str, str, str]:
+    first = (first_name or "").strip()
+    last = (last_name or "").strip()
+    user = (username or "").strip()
+    mail = (email or "").strip().lower()
+    secret = password or ""
+    if not first or not last:
+        raise ValueError("First name and last name are required.")
+    if not _USERNAME_RE.match(user):
+        raise ValueError("Username must be 3–32 letters, numbers, or underscores.")
+    if not _looks_like_email(mail):
+        raise ValueError("A valid email is required.")
+    if len(secret) < 4:
+        raise ValueError("Password is required.")
+    return first, last, user, mail, secret
+
+
+def signup(
+    first_name: str,
+    last_name: str,
+    username: str,
+    email: str,
+    password: str,
+) -> dict:
+    first, last, user, mail, secret = _validate_signup(first_name, last_name, username, email, password)
+    if supabase_auth.configured():
+        return _signup_supabase(first, last, user, mail, secret)
+    return _signup_mock(first, last, user, mail, secret)
+
+
+def _signup_mock(first: str, last: str, username: str, email: str, password: str) -> dict:
+    if _find_user(username) or _find_user(email):
+        raise ValueError("That username or email is already in use.")
+    salt = secrets.token_bytes(16)
+    row = {
+        "username": username,
+        "email": email,
+        "first_name": first,
+        "last_name": last,
+        "name": f"{first} {last}".strip(),
+        "role": "patient",
+        "pw_salt": salt.hex(),
+        "pw_hash": _hash_password(password, salt),
+    }
+    _MOCK_SIGNUPS[username.lower()] = row
+    pub = public_user(row)
+    return {"token": issue_token(username), "user": pub, "needs_confirmation": False}
+
+
+def _signup_supabase(first: str, last: str, username: str, email: str, password: str) -> dict:
+    existing_user = supabase_auth.profile_by_username(username)
+    existing_mail = supabase_auth.profile_by_email(email)
+    if existing_user or existing_mail:
+        raise ValueError("That username or email is already in use.")
+    try:
+        session = supabase_auth.sign_up(
+            email,
+            password,
+            {"username": username, "first_name": first, "last_name": last},
+        )
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
+    auth_user = session.get("user") if isinstance(session.get("user"), dict) else session
+    user_id = (auth_user or {}).get("id") or ""
+    profile = {
+        "username": username,
+        "email": email,
+        "first_name": first,
+        "last_name": last,
+    }
+    if user_id:
+        profile["id"] = user_id
+        try:
+            saved = supabase_auth.insert_profile(profile)
+            if saved:
+                profile = saved
+        except ValueError as exc:
+            raise ValueError(str(exc)) from None
+    token = session.get("access_token") if isinstance(session, dict) else None
+    return {
+        "token": token or "",
+        "user": public_user_from_profile(profile),
+        "needs_confirmation": not bool(token),
+    }
+
+
+def forgot_password(identifier: str) -> dict:
+    needle = (identifier or "").strip()
+    if not needle:
+        raise ValueError("Enter a username or email.")
+    configured = supabase_auth.configured()
+    if not configured:
+        return {
+            "sent": False,
+            "auth_configured": False,
+            "message": (
+                "If an account exists for that username or email, check your inbox. "
+                "No reset email was sent — login Auth is not configured on this host."
+            ),
+        }
+    email = needle if _looks_like_email(needle) else ""
+    try:
+        profile = _profile_for_identifier(needle)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
+    if profile:
+        email = (profile.get("email") or email).strip()
+    if not email:
+        return {
+            "sent": False,
+            "auth_configured": True,
+            "message": "If an account exists for that username or email, check your inbox.",
+        }
+    try:
+        supabase_auth.request_password_reset(email)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
+    return {
+        "sent": True,
+        "auth_configured": True,
+        "message": "If an account exists for that username or email, check your inbox.",
+    }
 
 
 def logout(token: Optional[str]) -> dict:

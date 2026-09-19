@@ -1,30 +1,35 @@
 [
   {
     "username": "jane",
+    "email": "jane@careloop.local",
     "password": "demo",
     "name": "Jane Doe",
     "role": "patient"
   },
   {
     "username": "maya",
+    "email": "maya@careloop.local",
     "password": "demo",
     "name": "Jane Doe",
     "role": "patient"
   },
   {
     "username": "priya",
+    "email": "priya@careloop.local",
     "password": "demo",
     "name": "Dr. Priya Shah",
     "role": "clinician"
   },
   {
     "username": "advocate",
+    "email": "advocate@careloop.local",
     "password": "demo",
     "name": "Alex Rivera",
     "role": "advocate"
   },
   {
     "username": "demo",
+    "email": "demo@careloop.local",
     "password": "demo",
     "name": "Jane Doe",
     "role": "demo"
