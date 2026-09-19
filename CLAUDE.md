@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CareLoop** is the running web app: a mocked US patient-journey demo (not a real payer/EHR platform). FastAPI + vanilla JS/HTML/CSS, one process.
 
-Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**: [`AGENTS.md`](AGENTS.md). Owner split: [`plan.md`](plan.md).
+Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**: [`AGENTS.md`](AGENTS.md). Owner split: [`plan.md`](plan.md). Hosted schema: [`docs/database/`](docs/database/README.md) (SQL: [`supabase/`](supabase/README.md)).
 
 **Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
 
-**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Insurance requires payer + date of birth. Optional Gemini vision (`GEMINI_API_KEY` at launch) reads uploaded card/SBC JSON on Insurance only — no letter watermark, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Gemini / Groq / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
+**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Optional Gemini vision (`GEMINI_API_KEY` at launch) reads uploaded card/SBC JSON on Insurance only — no letter watermark, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Gemini / Groq / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
 ## Commands
 
@@ -44,6 +44,8 @@ Request flow for all AI-generated documents (PA letters, appeals, demand letters
 - `js/app.js` — login, tab nav (**CareLoop** + **Insurance Claims Management**), toast, HITL modal if letters are generated. Every generated document must still go through `App.requestApproval()` before download.
 - `js/careloop.js` — paginated coverage intake.
 - `js/provider.js` / `js/patient.js` — leftover DenialShield modules; **not in the nav**.
+
+**Database (hosted Supabase, not wired to coverage/login beyond `profiles`):** [`docs/database/`](docs/database/README.md). Matching SQL: [`supabase/migrations/`](supabase/migrations/). No `login` table.
 
 ## Safety invariants
 

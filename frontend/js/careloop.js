@@ -59,6 +59,8 @@ const CareLoop = {
     close: 'm6 6 12 12M6 18 18 6',
     mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Zm7 9a7 7 0 0 1-14 0M12 19v3',
     trash: 'M5 7h14M9 7V5h6v2m-7 0 1 14h8l1-14',
+    eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+    'eye-off': 'M3 3l18 18M10.58 10.58a3 3 0 0 0 4.24 4.24M9.88 4.24A10.94 10.94 0 0 1 12 5c6 0 10 7 10 7a17.9 17.9 0 0 1-3.14 4.06M6.1 6.1C3.51 7.86 2 10.5 2 10.5S6 17.5 12 17.5c1.13 0 2.19-.2 3.17-.55',
   },
 
   stepNames: [
@@ -140,10 +142,18 @@ const CareLoop = {
   },
 
   syncPatientName() {
-    const fromLogin = App.user && String(App.user.name || '').trim();
-    if (!fromLogin || !this.thread || !this.thread.patient) return;
-    if (this.thread.patient.name !== fromLogin) {
-      this.thread.patient.name = fromLogin;
+    if (!this.thread || !this.thread.patient) return;
+    const threadName = String(this.thread.patient.name || '').trim();
+    const loginName = App.user && String(App.user.name || '').trim();
+    const source = this.thread.patient.identity_source;
+    const localWins = (source === 'signup' || source === 'profile' || this.thread.patient.dateOfBirth) && threadName;
+    if (localWins) {
+      if (App.user && App.user.name !== threadName) App.user.name = threadName;
+      return;
+    }
+    if (loginName && this.thread.patient.name !== loginName) {
+      this.thread.patient.name = loginName;
+      this.thread.patient.identity_source = 'login';
       this.saveThread();
     }
   },
@@ -1037,13 +1047,21 @@ const CareLoop = {
     }
   },
 
-  async login(username, password, mode) {
+  async login(username, password, mode, profile = null) {
     const result = await API.login(username, password);
     API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
       this.thread = this.seedThread('first');
+      if (profile) {
+        this.thread.patient.name = profile.name;
+        this.thread.patient.email = profile.email;
+        this.thread.patient.dateOfBirth = profile.dateOfBirth;
+        this.thread.patient.identity_source = 'signup';
+        if (App.user && profile.name) App.user.name = profile.name;
+      }
       this.saveThread();
+      this.syncPatientName();
       await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
       this.rememberCoverage({ profile: null, eligibility: null });
       this.costEstimate = null;
@@ -1095,12 +1113,24 @@ const CareLoop = {
 
   renderLogin() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and next steps in one place.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<input name="password" type="password" autocomplete="current-password" value="demo" required></label><div class="error" id="login-error" role="alert"></div><button class="btn" type="submit" name="mode" value="returning">I’m returning ${this.icon('arrow')}</button><button class="btn secondary" type="submit" name="mode" value="first">Start my first visit</button><div class="hint">Seeded demo: <strong>jane</strong> / <strong>demo</strong></div><p style="text-align:center;margin:22px 0 0;font-size:10px">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, prescriptions, and test records together on one health journey.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<div class="password-wrap"><input name="password" type="password" autocomplete="current-password" value="demo" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><div class="field-row"><button type="button" class="link forgot-link">Forgot Password?</button></div><div class="error" id="login-error" role="alert"></div><button class="btn pill full" type="submit" name="mode" value="returning">LOGIN</button><p class="signup-line">New here? <button type="button" class="open-signup">Start my first visit</button></p><p class="fine-print">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
+    const form = document.getElementById('login-form');
+    const passwordInput = form.password;
+    form.querySelector('.toggle-password').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const shown = passwordInput.type === 'text';
+      passwordInput.type = shown ? 'password' : 'text';
+      btn.innerHTML = this.icon(shown ? 'eye' : 'eye-off');
+      btn.setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+    });
+    form.querySelector('.forgot-link').addEventListener('click', () => {
+      this.toast('Seeded demo: jane / demo');
+    });
+    form.querySelector('.open-signup').addEventListener('click', () => this.renderSignup());
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const form = e.currentTarget;
       const username = form.username.value.trim();
-      const password = form.password.value;
+      const password = passwordInput.value;
       const mode = (e.submitter && e.submitter.value) || 'returning';
       const errBox = document.getElementById('login-error');
       errBox.textContent = '';
@@ -1108,6 +1138,93 @@ const CareLoop = {
         await this.login(username, password, mode);
       } catch (err) {
         errBox.textContent = err.message;
+      }
+    });
+  },
+
+  renderSignup() {
+    const app = document.getElementById('app');
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your information stays in this interactive demo.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">UI demo only · No real account is created.</p></form></section></div>`;
+    const form = document.getElementById('signup-form');
+    const passwordInput = form.password;
+    const errBox = document.getElementById('signup-error');
+    const today = new Date();
+    form.noValidate = true;
+    form.dateOfBirth.max = today.toISOString().slice(0, 10);
+    form.querySelectorAll('input').forEach((input) => {
+      input.addEventListener('input', () => {
+        input.removeAttribute('aria-invalid');
+        errBox.textContent = '';
+      });
+    });
+    const showSignupError = (message, input) => {
+      errBox.textContent = message;
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
+    };
+    form.querySelector('.signup-back').addEventListener('click', () => this.renderLogin());
+    form.querySelector('.toggle-password').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const shown = passwordInput.type === 'text';
+      passwordInput.type = shown ? 'password' : 'text';
+      btn.innerHTML = this.icon(shown ? 'eye' : 'eye-off');
+      btn.setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.textContent = '';
+      form.querySelectorAll('[aria-invalid="true"]').forEach((input) => input.removeAttribute('aria-invalid'));
+      const fullName = form.name.value.trim().replace(/\s+/g, ' ');
+      const nameParts = fullName.split(' ').filter(Boolean);
+      if (fullName.length < 2 || /\d/.test(fullName) || nameParts.some((part) => !/\p{L}/u.test(part))) {
+        showSignupError('Enter your name without numbers.', form.name);
+        return;
+      }
+      const birthDate = new Date(`${form.dateOfBirth.value}T00:00:00`);
+      const oldestDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
+      if (!form.dateOfBirth.value || Number.isNaN(birthDate.getTime())) {
+        showSignupError('Enter a valid date of birth.', form.dateOfBirth);
+        return;
+      }
+      if (birthDate >= today) {
+        showSignupError('Date of birth must be in the past.', form.dateOfBirth);
+        return;
+      }
+      if (birthDate < oldestDate) {
+        showSignupError('Check the year in your date of birth.', form.dateOfBirth);
+        return;
+      }
+      const email = form.email.value.trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        showSignupError('Enter a valid email address, like name@example.com.', form.email);
+        return;
+      }
+      if (form.password.value.length < 8) {
+        showSignupError('Password must be at least 8 characters.', form.password);
+        return;
+      }
+      if (form.password.value !== form.confirmPassword.value) {
+        showSignupError('Passwords do not match.', form.confirmPassword);
+        return;
+      }
+      if (!form.consent.checked) {
+        showSignupError('Please confirm this is fictional demo information.', form.consent);
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      submit.textContent = 'CREATING YOUR CARE SPACE…';
+      try {
+        await this.login('jane', 'demo', 'first', {
+          name: fullName,
+          email,
+          dateOfBirth: form.dateOfBirth.value,
+        });
+        this.toast('Your demo care space is ready');
+      } catch (err) {
+        errBox.textContent = err.message;
+        submit.disabled = false;
+        submit.innerHTML = `CREATE MY CARE SPACE ${this.icon('arrow')}`;
       }
     });
   },
@@ -1336,8 +1453,8 @@ const CareLoop = {
     const upload = visit ? 'pick-visit-audio' : day ? 'pick-day-symptoms-audio' : 'pick-symptoms-audio';
     const status = this.recordStatus
       ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
-      : '';
-    return `<div class="visit-record">${this.btn(label, action, recordClass, recordDisabled)}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg"></div>${status}`;
+      : '<div id="scribe-record-status" hidden></div>';
+    return `<div class="visit-record" id="visit-record-controls">${this.btn(label, action, recordClass, recordDisabled)}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
   },
 
   symptomsBody() {
@@ -1501,6 +1618,34 @@ const CareLoop = {
       }).join('')
       : [['pill', 'Current medicine', 'Metformin stays on the existing fixture schedule. No dose changes.'], ['test', 'HbA1c blood test', j.reviewed ? 'Mock order ready. Result not available.' : 'Suggested test. Clinic needs to review.'], ['shield', 'Possible add-on therapy', 'Clinician may consider a GLP-1 class add-on. Prior authorization may be required — not an approval, denial, or price.'], ['calendar', 'Follow-up visit', 'Discuss a follow-up in 3 months with your clinic.']].map(([i, t, p]) => `<div class="task-row"><span class="tile-icon">${this.icon(i)}</span><div><h3>${t}</h3><p style="font-size:12px">${p}</p></div></div>`).join('');
     return `<h2>Your next steps, together.</h2><p>${j.reviewed ? 'Clinician review simulated. These mock plan items are ready for the next step.' : 'Draft plan · waiting for clinician review. No orders have been created.'}</p>${rows}`;
+  },
+
+  refreshRecordUi() {
+    const row = document.getElementById('visit-record-controls') || document.querySelector('.visit-record');
+    if (!row) {
+      this.render();
+      return;
+    }
+    const html = this.recordControls(this.recordPurpose || 'visit');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const nextRow = tmp.querySelector('.visit-record');
+    const nextStatus = tmp.querySelector('#scribe-record-status');
+    const oldStatus = document.getElementById('scribe-record-status');
+    row.replaceWith(nextRow);
+    if (oldStatus && nextStatus) oldStatus.replaceWith(nextStatus);
+    else if (nextStatus && nextRow.nextSibling) nextRow.after(nextStatus);
+    this.bindVisitAudio();
+  },
+
+  bindVisitAudio() {
+    const visitAudio = document.getElementById('visit-audio');
+    if (!visitAudio || visitAudio.dataset.bound === '1') return;
+    visitAudio.dataset.bound = '1';
+    visitAudio.addEventListener('change', () => {
+      const file = visitAudio.files && visitAudio.files[0];
+      if (file) this.transcribeVisitFile(file);
+    });
   },
 
   soapBody() {
@@ -1697,7 +1842,7 @@ const CareLoop = {
       } else {
         this.toast(err.message || 'Could not access the microphone.');
       }
-      this.render();
+      this.refreshRecordUi();
       return;
     }
 
@@ -1715,7 +1860,7 @@ const CareLoop = {
       this.mediaRecorder.onerror = () => {
         this.toast('Recording error. Try again.');
         this.cancelRecording();
-        this.render();
+        this.refreshRecordUi();
       };
       this.mediaRecorder.onstop = async () => {
         const mimeType = (this.mediaRecorder && this.mediaRecorder.mimeType) || mime || 'audio/webm';
@@ -1727,13 +1872,14 @@ const CareLoop = {
           this.discardRecording = false;
           this.sttBusy = false;
           this.recordStatus = '';
+          this.refreshRecordUi();
           return;
         }
         if (!blob.size) {
           this.sttBusy = false;
           this.recordStatus = 'No audio captured. Tap Record this visit again.';
           this.toast('Recording was empty — speak for a few seconds.');
-          this.render();
+          this.refreshRecordUi();
           return;
         }
         const file = new File([blob], `visit-recording.${ext}`, { type: mimeType });
@@ -1744,13 +1890,13 @@ const CareLoop = {
       this.recording = true;
       this.recordStatus = 'Listening… 120s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.';
       this.startRecordTimer();
-      this.render();
+      this.refreshRecordUi();
       this.toast('Listening — max 2 minutes. Tap Stop & transcribe when done.');
     } catch (err) {
       this.stopRecordTracks();
       this.recording = false;
       this.toast(err.message || 'Could not start the recorder.');
-      this.render();
+      this.refreshRecordUi();
     }
   },
 
@@ -1760,13 +1906,13 @@ const CareLoop = {
     this.sttBusy = true;
     this.clearRecordTimer();
     this.recordStatus = 'Sending the recording to Grok…';
-    this.render();
+    this.refreshRecordUi();
     try {
       if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
     } catch (err) {
       this.sttBusy = false;
       this.toast(err.message || 'Failed to stop recording.');
-      this.render();
+      this.refreshRecordUi();
     }
   },
 
@@ -1833,7 +1979,7 @@ const CareLoop = {
     }
     this.sttBusy = true;
     this.recordStatus = `Grok is transcribing ${file.name}…`;
-    this.render();
+    this.refreshRecordUi();
     try {
       const result = await API.transcribeScribeAudio(file);
       const labeled = (result.text || '').trim();
@@ -1883,8 +2029,15 @@ const CareLoop = {
         this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : 'Transcribed. Continue for a draft summary.');
       }
     } catch (err) {
-      this.recordStatus = 'Transcription failed — try again or keep the sample transcript.';
-      this.toast(err.message);
+      const raw = String(err.message || '');
+      let msg = raw;
+      if (/incorrect api key|invalid api key|401/i.test(raw)) {
+        msg = 'XAI_API_KEY on this host is invalid or expired. Update the key, or use the sample transcript.';
+      } else if (/not set|XAI_API_KEY/i.test(raw) && /not set/i.test(raw)) {
+        msg = 'XAI_API_KEY is not set. Add it to .env for live STT, or keep the sample transcript.';
+      }
+      this.recordStatus = 'Transcription failed — keep the sample transcript, or fix the xAI key and retry.';
+      this.toast(msg);
     } finally {
       this.sttBusy = false;
       this.recording = false;
@@ -2048,13 +2201,17 @@ const CareLoop = {
       profile.addEventListener('submit', (e) => {
         e.preventDefault();
         const d = new FormData(e.currentTarget);
+        const name = String(d.get('name') || '').trim() || 'Jane Doe';
         this.saveThread({
           patient: {
-            name: String(d.get('name') || '').trim() || 'Jane Doe',
+            ...this.thread.patient,
+            name,
             email: d.get('email'),
             zip: d.get('zip'),
+            identity_source: 'profile',
           },
         });
+        if (App.user) App.user.name = name;
         this.render();
         this.toast('Demo profile saved');
       });
@@ -2077,13 +2234,7 @@ const CareLoop = {
         this.approveScribeEncounter(e.target.checked);
       });
     }
-    const visitAudio = document.getElementById('visit-audio');
-    if (visitAudio) {
-      visitAudio.addEventListener('change', () => {
-        const file = visitAudio.files && visitAudio.files[0];
-        if (file) this.transcribeVisitFile(file);
-      });
-    }
+    this.bindVisitAudio();
     const labForm = document.getElementById('lab-form');
     if (labForm) {
       labForm.addEventListener('submit', (e) => {
