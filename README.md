@@ -126,12 +126,12 @@ Commands match [`plan.md`](plan.md) and [`CLAUDE.md`](CLAUDE.md).
 cp .env.example .env
 # Edit .env (do not use `echo > .env` — that wipes other keys):
 #   GEMINI_API_KEY=your_key_here          # free: https://aistudio.google.com/apikey
-#   STEDI_API_KEY=test_your_sandbox_key   # optional local demo; never commit
+#   STEDI_API_KEY=test_your_sandbox_key   # optional; prefer injecting at launch
 ```
 
 Optional Groq fallback (used by `backend/llm.py` if Gemini fails): add `GROQ_API_KEY` to `.env`. Not required if Gemini works.
 
-Optional Stedi sandbox eligibility: add `STEDI_API_KEY` (a **test_** key from the Stedi portal) to **local** `.env` only. Dummy logins and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md). Do not put this key in git, chat, or production deploy for this hackathon.
+Optional Stedi sandbox eligibility: set `STEDI_API_KEY` (a **test_** key from the Stedi portal) on the **container/process at launch**. Dummy logins and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md). Do not bake the key into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
 
 ### 3. Install and run (API + frontend, one process)
 

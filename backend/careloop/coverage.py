@@ -1,7 +1,8 @@
 """Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
 
-No Gemini. Live 270/271 is optional: put a Stedi *test* key in local `.env`
-as STEDI_API_KEY. Aetna + Jane Doe / AETNA12345 is the canned sandbox member.
+No Gemini. Live 270/271 is optional: inject STEDI_API_KEY (Stedi *test* key)
+as a container env var at launch. Aetna + Jane Doe / AETNA12345 is the canned
+sandbox member.
 """
 
 from __future__ import annotations
@@ -222,7 +223,7 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
     if payer.get("stedi_demo"):
         disclaimer = (
             "Mock eligibility matching this payer's Stedi canned sandbox member. "
-            "Add STEDI_API_KEY to local .env to run a live test 270/271. "
+            "Set STEDI_API_KEY on the container at launch to run a live test 270/271. "
             "This is not a coverage determination."
         )
     else:

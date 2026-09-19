@@ -179,7 +179,7 @@ What production systems actually call is **X12 270/271 eligibility** (JSON wrapp
 | **CMS Patient Access / SMART on FHIR** | Patient OAuths into *their* payer | Correct long-term consumer path; per-payer apps; bad demo. |
 | **CareLoop mock** (`MockEligibility.check`) | Map dropdown payer (+ optional member ID) → fixture: active, network, copay/deductible/OOP | **This is the judged path.** Label the UI as mock. |
 
-**Dave implements:** `MockEligibility.check(profile)` always, as fallback. If `STEDI_API_KEY` is a **test** key in local `.env` **and** the profile matches a Stedi canned subscriber (Aetna Jane Doe / `AETNA12345` / `2004-04-04` / payerId `60054`), call Stedi’s `POST …/2026-06-01/eligibility-check` (`Authorization: Key …`) and flatten 271 benefits onto the coverage card. Ignore raw `x12`. If it does not match or the key is missing, fall back to the fixture and say so. Do **not** send real card PHI to a production eligibility endpoint. Do **not** commit the key or paste it in chat — only local `.env`.
+**Dave implements:** `MockEligibility.check(profile)` always, as fallback. If `STEDI_API_KEY` is a **test** key on the process/container at launch (laptop `.env` is a fallback) **and** the profile matches a Stedi canned subscriber (Aetna Jane Doe / `AETNA12345` / `2004-04-04` / payerId `60054`), call Stedi’s `POST …/2026-06-01/eligibility-check` (`Authorization: Key …`) and flatten 271 benefits onto the coverage card. Ignore raw `x12`. If it does not match or the key is missing, fall back to the fixture and say so. Do **not** send real card PHI to a production eligibility endpoint. Do **not** commit the key, bake it into the image, or paste it in chat.
 
 ### Visit / cost guess (step 5)
 

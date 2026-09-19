@@ -42,16 +42,16 @@ Use the returned `token` as `Authorization: Bearer <token>` on `/api/careloop/*`
 ```bash
 cp .env.example .env
 # GEMINI_API_KEY is not required for mock coverage/login
-# For a live Stedi sandbox 271, put your test key in .env only:
-#   STEDI_API_KEY=test_…
-# Never commit .env or paste the key in chat/GitHub.
+# For a live Stedi sandbox 271, inject the test key at launch (preferred):
+#   STEDI_API_KEY=test_… python3 -m uvicorn backend.main:app --port 8080
+# Laptop fallback: STEDI_API_KEY in gitignored .env. Never paste it in chat/GitHub.
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
 Open http://localhost:8080 → log in as `jane` / `demo` → CareLoop wizard. Pick **Aetna** (preselected) → Load sample card (Jane Doe / AETNA12345 / 2004-04-04) → confirm coverage. Gemini/Azure are for OCR later; this slice does not OCR.
 
-**Where the Stedi key goes:** local `.env` as `STEDI_API_KEY`. That file is gitignored. Do not put it in deployment secrets for this demo, and do not share it in chat. Restart uvicorn after saving. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, step 3 still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500, OON $1000, INN OOP $7000 remaining $7000).
+**Where the Stedi key goes:** `STEDI_API_KEY` on the **process/container at launch**. Do not bake it into the image, commit it, or paste it in chat. A laptop `.env` is a fallback; `load_dotenv(override=False)` so the container env always wins. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, step 3 still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500, OON $1000, INN OOP $7000 remaining $7000).
 
 ## CareLoop wizard (Dave)
 
@@ -84,6 +84,6 @@ Coverage state is **in-memory** until Vivek’s thread store exists.
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`
 - `frontend/index.html` — login, CareLoop wizard, claims coming-soon tab
-- `.env.example` — `STEDI_API_KEY=` placeholder (put the real test key in `.env` only)
+- `.env.example` — documents `STEDI_API_KEY` (inject at launch; do not commit the secret)
 
 `frontend/js/provider.js` and `frontend/js/patient.js` are leftover DenialShield modules; they are not product tabs.

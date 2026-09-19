@@ -3,13 +3,15 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Process / container env wins. Inject STEDI_API_KEY at launch; do not bake it
+# into the image. A laptop `.env` is only a fallback (gitignored).
+load_dotenv(override=False)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-flash-lite-latest"
 
-# Local demo only. Copy from Stedi portal → API keys (Test mode). Gitignored .env.
-# Never commit this value. Production Stedi keys are out of scope.
+# Stedi *test* key. Prefer the container env at launch. Never commit this value.
+# Production Stedi keys are out of scope.
 STEDI_API_KEY = os.getenv("STEDI_API_KEY", "")
 
 # Backup LLM, used automatically if Gemini fails (quota exceeded, outage, etc.)

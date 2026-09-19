@@ -1,7 +1,8 @@
 """Optional Stedi sandbox 270/271 for CareLoop step 3.
 
-Put the Stedi *test* key in local `.env` as STEDI_API_KEY (gitignored).
-Never commit it, never paste it in chat, never use a production key.
+Inject STEDI_API_KEY as a container/runtime env var at launch (preferred).
+A laptop `.env` also works because load_dotenv does not override process env.
+Never commit the key, never paste it in chat, never use a production key.
 
 Sandbox only accepts Stedi's canned members. CareLoop's Aetna fixture is
 Jane Doe / AETNA12345 / 2004-04-04 / payerId 60054 — the member Dave
@@ -11,11 +12,13 @@ confirmed in the Stedi portal.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from typing import Any, Optional
 
-from backend.config import STEDI_API_KEY
+# Import config so load_dotenv(override=False) runs before we read the env.
+import backend.config  # noqa: F401
 
 STEDI_ELIGIBILITY_URL = "https://healthcare.us.stedi.com/2026-06-01/eligibility-check"
 DEMO_PROVIDER_NPI = "1999999984"
@@ -27,7 +30,7 @@ _PLAN_STCS = {"30", ""}
 
 
 def configured() -> bool:
-    key = (STEDI_API_KEY or "").strip()
+    key = _raw_key()
     return bool(key) and key not in ("your_api_key_here", "your_stedi_key_here")
 
 
@@ -42,8 +45,9 @@ def status() -> dict:
             "configured": False,
             "test_mode": False,
             "message": (
-                "STEDI_API_KEY is not set. Put your Stedi *test* key in local "
-                ".env (gitignored). Do not paste it in chat or commit it."
+                "STEDI_API_KEY is not set. Inject the Stedi *test* key as a "
+                "container env var at launch (or a local gitignored .env). "
+                "Do not paste it in chat or commit it."
             ),
         }
     if not is_test_key():
@@ -59,14 +63,14 @@ def status() -> dict:
         "configured": True,
         "test_mode": True,
         "message": (
-            "Stedi test key loaded from .env. Aetna + Jane Doe / AETNA12345 "
-            "is the canned sandbox member."
+            "Stedi test key loaded from the process environment. "
+            "Aetna + Jane Doe / AETNA12345 is the canned sandbox member."
         ),
     }
 
 
 def _raw_key() -> str:
-    key = (STEDI_API_KEY or "").strip()
+    key = (os.getenv("STEDI_API_KEY") or "").strip()
     if key.lower().startswith("key "):
         return key[4:].strip()
     return key
