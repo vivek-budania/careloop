@@ -22,6 +22,13 @@ const CareLoop = {
   orders: null,
   thread: null,
   clickBound: false,
+  recording: false,
+  recordChunks: [],
+  recordStream: null,
+  mediaRecorder: null,
+  sttBusy: false,
+  recordStatus: '',
+  discardRecording: false,
 
   paths: {
     loop: 'M17 7c-5-8-15-4-13 3 2 6 8 9 14 6 6-3 6-12 0-13-5-1-8 5-6 11 2 6 10 8 15 2',
@@ -45,6 +52,7 @@ const CareLoop = {
     plus: 'M12 4v16M4 12h16',
     camera: 'M3 7h5l2-3h4l2 3h5v14H3V7Zm13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
     close: 'm6 6 12 12M6 18 18 6',
+    mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Zm7 9a7 7 0 0 1-14 0M12 19v3',
   },
 
   stepNames: [
@@ -296,7 +304,7 @@ const CareLoop = {
         name: 'xAI visit STT',
         tag: xai.configured ? 'loaded' : 'optional',
         tagType: xai.configured ? '' : 'gray',
-        detail: xai.message || 'Add XAI_API_KEY the same way when you have it. Seeded transcript works without it.',
+        detail: xai.message || 'Add XAI_API_KEY the same way when you have it. Record on the visit transcript step, or keep the sample conversation.',
       },
       {
         name: 'Vercel',
@@ -405,6 +413,7 @@ const CareLoop = {
   },
 
   navigate(next) {
+    if (next !== this.view) this.cancelRecording();
     this.view = next;
     this.selectedVisit = null;
     this.render();
@@ -469,6 +478,7 @@ const CareLoop = {
       this.scribeFixture = null;
       this.encounter = null;
       this.orders = null;
+      this.cancelRecording();
       this.insuranceMode = 'hub';
       this.insuranceReturn = false;
       this.view = 'Setup';
@@ -588,6 +598,9 @@ const CareLoop = {
           prior: false,
           suggested_specialty: '',
           suggested_specialty_label: '',
+          live_transcript: '',
+          transcript_source: 'fixture',
+          stt_meta: '',
         },
       });
     }
@@ -653,7 +666,7 @@ const CareLoop = {
         body = `<h2>Make room for your health.</h2><p>${this.esc(j.doctor)} · ${this.esc(j.clinic || 'Clinic')}<br>Choose a sample time for Thursday, September 24, 2026.</p><div class="chips">${['9:00 AM', '10:30 AM', '2:00 PM', '3:30 PM'].map((t) => `<button type="button" class="chip ${j.slot === t ? 'selected' : ''}" data-slot="${t}">${t}</button>`).join('')}</div><div class="notice">This saves an appointment request in the demo. No clinic is contacted. Cost estimates come after SOAP, not here.</div>`;
         break;
       case 4:
-        body = `<div class="eyebrow">You’re in the right place</div><h2 class="mt">Let’s start the conversation.</h2><p>${this.esc(j.doctor)} · Sep 24 at ${this.esc(j.slot)}<br>Your insurance and visit notes are ready to bring along.</p><div class="document">${this.icon('check')}<div><h3>Demo check-in complete</h3><small>Next: sample transcript → draft summary → estimated costs (if a plan is on file) → plan</small></div></div><div class="notice green">We’ll use a fictional conversation. Your microphone stays off. Nothing is an order until a clinician confirms.</div>`;
+        body = `<div class="eyebrow">You’re in the right place</div><h2 class="mt">Let’s start the conversation.</h2><p>${this.esc(j.doctor)} · Sep 24 at ${this.esc(j.slot)}<br>Your insurance and visit notes are ready to bring along.</p><div class="document">${this.icon('check')}<div><h3>Demo check-in complete</h3><small>Next: record or use the sample transcript → draft summary → estimated costs (if a plan is on file) → plan</small></div></div><div class="notice green">On the next step you can record or upload a short visit, or keep the sample conversation. Nothing is an order until a clinician confirms.</div>`;
         break;
       case 5:
         body = this.transcriptBody();
@@ -671,33 +684,75 @@ const CareLoop = {
         body = '<p>Unknown step.</p>';
     }
     const skip = j.step === 7 ? this.btn('Skip estimates', 'next', 'secondary') : '';
-    const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? 'View sample transcript' : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
+    const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? 'Continue to transcript' : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
     return `<div class="narrow">${this.head('One visit. A connected story.', 'Your progress is saved as you go.')}<div class="stepper">${this.stepNames.map((_, i) => `<span class="${i < j.step ? 'done' : ''}"></span>`).join('')}</div><div class="step-label">Step ${j.step} of 8 &nbsp; / &nbsp; ${this.stepNames[j.step - 1]}</div><section class="card journey-panel">${body}<div class="actions">${this.btn(j.step === 1 ? 'Save & exit' : 'Back', 'previous', 'secondary')}<div class="row">${skip}${this.btn(nextLabel, 'next')}</div></div></section></div>`;
   },
 
+  liveTranscript() {
+    return String((this.thread.journey && this.thread.journey.live_transcript) || '').trim();
+  },
+
+  transcriptText() {
+    return this.liveTranscript() || (this.scribeFixture && this.scribeFixture.transcript) || '';
+  },
+
+  renderTranscriptParas(text) {
+    if (!text) {
+      return `<p><strong>${this.esc(this.firstName().toUpperCase())} · 00:08</strong>“I’ve been feeling more tired and thirsty. I’m still taking my metformin twice a day.”</p><p><strong>DR. SHAH · 00:24</strong>“Let’s review how things have been going and discuss an HbA1c test.”</p><p><strong>DR. SHAH · 01:02</strong>“We can discuss an add-on medicine after reviewing your results. It may need prior authorization — that’s separate from any later claim.”</p>`;
+    }
+    return text.split(/\n\n+/).map((block) => {
+      const line = block.replace(/\n/g, ' ').trim();
+      const m = line.match(/^([^:]{2,48}):\s*(.*)$/);
+      if (m) return `<p><strong>${this.esc(m[1])}</strong> “${this.esc(m[2])}”</p>`;
+      return `<p>${this.esc(line)}</p>`;
+    }).join('');
+  },
+
   transcriptBody() {
-    const text = (this.scribeFixture && this.scribeFixture.transcript) || '';
-    const paras = text
-      ? text.split(/\n\n+/).map((block) => {
-        const line = block.replace(/\n/g, ' ').trim();
-        const m = line.match(/^([^:]{2,48}):\s*(.*)$/);
-        if (m) return `<p><strong>${this.esc(m[1])}</strong> “${this.esc(m[2])}”</p>`;
-        return `<p>${this.esc(line)}</p>`;
-      }).join('')
-      : `<p><strong>${this.esc(this.firstName().toUpperCase())} · 00:08</strong>“I’ve been feeling more tired and thirsty. I’m still taking my metformin twice a day.”</p><p><strong>DR. SHAH · 00:24</strong>“Let’s review how things have been going and discuss an HbA1c test.”</p><p><strong>DR. SHAH · 01:02</strong>“We can discuss an add-on medicine after reviewing your results. It may need prior authorization — that’s separate from any later claim.”</p>`;
-    return `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${this.tag('Sample transcript', 'gray')}</div><p>A seeded Stream C visit note. A clinician reviews the summary before anything becomes an order.</p><div class="transcript">${paras}</div><div class="notice">Fixture conversation (Maya Chen / Dr. Patel). Jane Doe remains the logged-in patient. Not a live recording. Optional XAI_API_KEY transcribes audio later.</div>`;
+    const live = this.liveTranscript();
+    const text = this.transcriptText();
+    const xaiOn = Boolean(this.demoEnv && this.demoEnv.xai && this.demoEnv.xai.configured);
+    const tag = live
+      ? this.tag('Live transcript', '')
+      : this.tag('Sample transcript', 'gray');
+    const recordLabel = this.recording
+      ? `${this.icon('mic')} Stop & transcribe`
+      : this.sttBusy
+        ? 'Transcribing…'
+        : `${this.icon('mic')} Record this visit`;
+    const recordClass = this.recording ? 'coral' : 'secondary';
+    const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
+    const status = this.recordStatus
+      ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
+      : '';
+    const hint = live
+      ? 'This came from Grok speech-to-text. Speaker labels are a heuristic — a clinician still reviews before anything becomes an order.'
+      : (xaiOn
+        ? 'Sample conversation (Maya Chen / Dr. Patel) until you record or upload. Jane Doe remains the logged-in patient. Keep recordings short for this demo.'
+        : 'Sample conversation (Maya Chen / Dr. Patel). Jane Doe remains the logged-in patient. Record or upload needs XAI_API_KEY on this host or in Vercel.');
+    const restore = live
+      ? this.btn('Use sample transcript', 'use-sample-transcript', 'secondary')
+      : '';
+    return `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${tag}</div><p>Record a short visit, upload audio, or keep the sample note. A clinician reviews the summary before anything becomes an order.</p><div class="visit-record">${this.btn(recordLabel, 'record-visit', recordClass, recordDisabled)}${this.btn('Upload audio', 'pick-visit-audio', 'secondary', this.sttBusy ? 'disabled' : '')}${restore}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg"></div>${status}<div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
   },
 
   soapBody() {
     const j = this.thread.journey || {};
     const soap = (this.encounter && this.encounter.soap) || {};
+    const source = (this.encounter && this.encounter.source) || 'seeded';
+    const live = this.liveTranscript();
+    const intro = live && source === 'llm'
+      ? 'A draft SOAP/Plan from your recording. Nothing becomes an order without clinician review.'
+      : live
+        ? 'Your recording is saved on the previous step. This SOAP is still the sample note until Gemini can draft from it.'
+        : 'A draft SOAP/Plan from Sreekar’s scribe API. Nothing becomes an order without clinician review.';
     const rows = [
       ['S', 'What you shared', soap.subjective || 'Fatigue and increased thirst; taking metformin twice daily.'],
       ['O', 'What’s on file', soap.objective || 'Current metformin routine. No new lab result is available in this demo.'],
       ['A', 'What to review', soap.assessment || 'Diabetes follow-up. Any change in assessment needs clinician verification.'],
       ['P', 'Suggested next steps', soap.plan_summary || 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.'],
     ];
-    return `<h2>Your visit, in plain language.</h2><p>A draft SOAP/Plan from Sreekar’s scribe API. Nothing becomes an order without clinician review.</p>${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis. Prior authorization, if needed, is separate from any later claim.</small>`;
+    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis. Prior authorization, if needed, is separate from any later claim.</small>`;
   },
 
   async loadScribeFixture() {
@@ -710,13 +765,233 @@ const CareLoop = {
   },
 
   async draftScribeEncounter() {
+    const live = this.liveTranscript();
+    const fixture = (this.scribeFixture && this.scribeFixture.transcript) || '';
+    const transcript = live || fixture;
     try {
-      const transcript = (this.scribeFixture && this.scribeFixture.transcript) || '';
+      if (live) {
+        try {
+          const result = await API.draftScribe({ transcript, use_seeded: false });
+          this.encounter = result.encounter || result;
+          return;
+        } catch (err) {
+          this.toast(`${err.message} Using the sample SOAP until Gemini can draft from your recording.`);
+        }
+      }
       const result = await API.draftScribe({ transcript, use_seeded: true });
       this.encounter = result.encounter || result;
     } catch (err) {
       this.encounter = null;
       this.toast(err.message);
+    }
+  },
+
+  pickRecordMime() {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus',
+    ];
+    for (const type of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return '';
+  },
+
+  stopRecordTracks() {
+    if (this.recordStream) {
+      this.recordStream.getTracks().forEach((track) => track.stop());
+      this.recordStream = null;
+    }
+  },
+
+  cancelRecording() {
+    this.discardRecording = this.recording || Boolean(this.mediaRecorder);
+    this.recording = false;
+    this.sttBusy = false;
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try { this.mediaRecorder.stop(); } catch (_) { /* ignore */ }
+    }
+    this.stopRecordTracks();
+    this.recordChunks = [];
+    this.recordStatus = '';
+  },
+
+  async toggleVisitRecord() {
+    if (this.sttBusy && !this.recording) return;
+    if (this.recording) {
+      this.stopVisitRecord();
+      return;
+    }
+    await this.startVisitRecord();
+  },
+
+  async startVisitRecord() {
+    if (!window.isSecureContext) {
+      this.toast('Mic needs http://localhost (or HTTPS).');
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      this.toast('Mic not available. Upload an audio file instead.');
+      return;
+    }
+    if (!window.MediaRecorder) {
+      this.toast('This browser cannot record audio. Upload a file instead.');
+      return;
+    }
+
+    try {
+      this.recordStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+        },
+      });
+    } catch (err) {
+      const name = err && err.name;
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        this.recordStatus = 'Mic blocked — allow Microphone in the address bar.';
+        this.toast('Allow microphone access, then tap Record this visit again.');
+      } else if (name === 'NotFoundError') {
+        this.toast('No microphone found. Upload an audio file instead.');
+      } else {
+        this.toast(err.message || 'Could not access the microphone.');
+      }
+      this.render();
+      return;
+    }
+
+    try {
+      this.discardRecording = false;
+      this.recordChunks = [];
+      const mime = this.pickRecordMime();
+      this.mediaRecorder = mime
+        ? new MediaRecorder(this.recordStream, { mimeType: mime })
+        : new MediaRecorder(this.recordStream);
+
+      this.mediaRecorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) this.recordChunks.push(ev.data);
+      };
+      this.mediaRecorder.onerror = () => {
+        this.toast('Recording error. Try again.');
+        this.cancelRecording();
+        this.render();
+      };
+      this.mediaRecorder.onstop = async () => {
+        const mimeType = (this.mediaRecorder && this.mediaRecorder.mimeType) || mime || 'audio/webm';
+        const ext = mimeType.includes('mp4') ? 'm4a' : (mimeType.includes('ogg') ? 'ogg' : 'webm');
+        this.stopRecordTracks();
+        const blob = new Blob(this.recordChunks, { type: mimeType });
+        this.recordChunks = [];
+        if (this.discardRecording) {
+          this.discardRecording = false;
+          this.sttBusy = false;
+          this.recordStatus = '';
+          return;
+        }
+        if (!blob.size) {
+          this.sttBusy = false;
+          this.recordStatus = 'No audio captured. Tap Record this visit again.';
+          this.toast('Recording was empty — speak for a few seconds.');
+          this.render();
+          return;
+        }
+        const file = new File([blob], `visit-recording.${ext}`, { type: mimeType });
+        await this.transcribeVisitFile(file);
+      };
+
+      this.mediaRecorder.start(250);
+      this.recording = true;
+      this.recordStatus = 'Listening… keep both voices near the mic, then tap Stop & transcribe.';
+      this.render();
+      this.toast('Listening — tap Stop & transcribe when done.');
+    } catch (err) {
+      this.stopRecordTracks();
+      this.recording = false;
+      this.toast(err.message || 'Could not start the recorder.');
+      this.render();
+    }
+  },
+
+  stopVisitRecord() {
+    if (!this.mediaRecorder || !this.recording) return;
+    this.recording = false;
+    this.sttBusy = true;
+    this.recordStatus = 'Sending the recording to Grok…';
+    this.render();
+    try {
+      if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
+    } catch (err) {
+      this.sttBusy = false;
+      this.toast(err.message || 'Failed to stop recording.');
+      this.render();
+    }
+  },
+
+  pickVisitAudio() {
+    const input = document.getElementById('visit-audio');
+    if (input) input.click();
+  },
+
+  useSampleTranscript() {
+    this.cancelRecording();
+    this.saveThread({
+      journey: {
+        ...this.thread.journey,
+        live_transcript: '',
+        transcript_source: 'fixture',
+        stt_meta: '',
+      },
+    });
+    this.recordStatus = '';
+    this.render();
+    this.toast('Sample transcript restored.');
+  },
+
+  async transcribeVisitFile(file) {
+    if (!file) {
+      this.toast('Choose an audio file first, or tap Record this visit.');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      this.toast(`${file.name} is larger than 8MB. Keep the demo recording short.`);
+      return;
+    }
+    this.sttBusy = true;
+    this.recordStatus = `Grok is transcribing ${file.name}…`;
+    this.render();
+    try {
+      const result = await API.transcribeScribeAudio(file);
+      const text = (result.text || '').trim();
+      if (!text) throw new Error('Grok returned an empty transcript.');
+      const n = result.speaker_count || 0;
+      const roles = (result.speakers || [])
+        .map((row) => row.label || row.role)
+        .filter(Boolean)
+        .join(' + ');
+      this.saveThread({
+        journey: {
+          ...this.thread.journey,
+          live_transcript: text,
+          transcript_source: 'live',
+          stt_meta: result.diarized
+            ? `Grok · ${n} voices → ${roles || 'Doctor / Patient'}`
+            : `Grok · ${n || 1} voice`,
+        },
+      });
+      this.recordStatus = result.diarized
+        ? `Ready — ${roles || 'Doctor / Patient'}. Review the lines, then see the draft summary.`
+        : ((result.warnings && result.warnings[0]) || 'Transcribed. Record doctor and patient for speaker labels.');
+      this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : 'Transcribed. Review the lines, then continue.');
+    } catch (err) {
+      this.recordStatus = 'Transcription failed — try again or keep the sample transcript.';
+      this.toast(err.message);
+    } finally {
+      this.sttBusy = false;
+      this.recording = false;
+      this.render();
     }
   },
 
@@ -854,6 +1129,13 @@ const CareLoop = {
         this.approveScribeEncounter(e.target.checked);
       });
     }
+    const visitAudio = document.getElementById('visit-audio');
+    if (visitAudio) {
+      visitAudio.addEventListener('change', () => {
+        const file = visitAudio.files && visitAudio.files[0];
+        if (file) this.transcribeVisitFile(file);
+      });
+    }
   },
 
   async saveInsuranceForm(form) {
@@ -938,6 +1220,10 @@ const CareLoop = {
   },
 
   async goNext() {
+    if (this.recording || this.sttBusy) {
+      this.toast(this.recording ? 'Tap Stop & transcribe first.' : 'Wait for transcription to finish.');
+      return;
+    }
     const j = this.thread.journey;
     if (j.step === 1 && !String(j.symptoms || '').trim()) {
       this.toast('Add a few words about the reason for your visit.');
@@ -982,6 +1268,10 @@ const CareLoop = {
   },
 
   goPrevious() {
+    if (this.recording || this.sttBusy) {
+      this.toast(this.recording ? 'Tap Stop & transcribe first.' : 'Wait for transcription to finish.');
+      return;
+    }
     const j = this.thread.journey;
     if (j.step === 1) {
       this.navigate('Today');
@@ -1163,6 +1453,15 @@ const CareLoop = {
         this.saveThread({ journey: { ...this.thread.journey, prior: true } });
         this.render();
         this.toast('Sample prior-visit note attached');
+        break;
+      case 'record-visit':
+        await this.toggleVisitRecord();
+        break;
+      case 'pick-visit-audio':
+        this.pickVisitAudio();
+        break;
+      case 'use-sample-transcript':
+        this.useSampleTranscript();
         break;
       case 'choose-doctor': {
         const doc = this.clinicians.find((row) => row.npi === d.npi) || {};
