@@ -64,16 +64,17 @@ DenialShield today is a FastAPI + vanilla JS SPA (no frontend build). Two **disc
 | Med schedule / taken / missed / refill | Simple; not a full pharmacy system | Sreekar (E) |
 | Unified timeline UX | **New CareLoop journey UI**; old tabs remain | Vivek (F) |
 | Distinct claim flow | Light mock claim + EOB; not the same as PA denial | Sreekar (assigned from original D/greenfield claim path) |
-| **Insurance card scan → coverage** | **Added** (was missing). Mock OCR/scan of a card → member/plan fields | Dave |
-| **In-network clinicians** | **Added/assigned** from original mock eligibility “in-network” stub | Dave |
-| **Copay / deductible / OOP display** | **Added/assigned** from original “estimated copay”; optional richer cost share | Dave |
+| **Insurance identity → coverage** | **Added.** Payer dropdown (required) + optional typed fields, card OCR, SBC/EOB | Dave |
+| **In-network clinicians** | **Added/assigned** from original mock eligibility “in-network” stub; filter by ZIP | Dave |
+| **Copay / deductible / OOP + visit/cost guess** | **Added/assigned** from original “estimated copay”; labeled next-visit cost range | Dave |
+| **Reason for visit / prior-visit uploads** | **Added.** Symptoms text + optional PDF/image; intake only (not SOAP) | Dave |
 | **History maintenance + share at next visit** | **Added, first-class.** Capture facts (Dave/Sreekar) + patient share/export thread (Vivek) | All three (split below) |
 
 Local code sets are tiny (~91 ICD / ~76 CPT). No test suite, linter, or build step.
 
 #### Golden path (demo script)
 
-Insurance card / coverage panel (optional but in Dave’s slice) → find in-network clinician (optional) → PCP visit → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → submit mock PA → **step-therapy denial** with citable policy → match policy to encounter evidence → appeal (HITL + watermark) → mock approve → dispense → mark dose taken/missed + refill nudge → unified timeline / follow-up summary → **history packet the patient can share at the next visit**. Keep a **separate** claim (and optional claim denial/correction) so judges see two insurance moments.
+Payer dropdown and/or card / coverage panel (Dave) → mock eligibility confirm → symptoms + optional prior-visit docs → labeled visit/cost guess → find in-network clinician (ZIP) → PCP visit → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → submit mock PA → **step-therapy denial** with citable policy → match policy to encounter evidence → appeal (HITL + watermark) → mock approve → dispense → mark dose taken/missed + refill nudge → unified timeline / follow-up summary → **history packet the patient can share at the next visit**. Keep a **separate** claim (and optional claim denial/correction) so judges see two insurance moments.
 
 #### Original workstream map (A–F preserved)
 
@@ -87,7 +88,7 @@ Coordinate on **object shapes** first (original stream B). Frontend talks only t
 | **D** | Mock payer + step-therapy denial + policy-to-evidence | **Sreekar**; **eligibility/benefits/network/copay** from D **assigned to Dave** |
 | **E** | Med adherence + refill | **Sreekar** |
 | **F** | Unified timeline UX (CareLoop journey) | **Vivek** |
-| **(new)** | Card scan / coverage details / which doctors / optional cost-share UI | **Dave** |
+| **(new)** | Payer dropdown + optional card/SBC, mock eligibility, symptoms/prior-visit intake, visit/cost guess, which doctors | **Dave** |
 | **(new, first-class)** | History maintenance so the patient can share history on the next doctor visit | Capture: **Dave** (coverage) + **Sreekar** (encounter/order/med/auth/claim/follow-up). Share/export/history thread UX: **Vivek** |
 
 Suggested fixture patient (unchanged): adult with T2DM, on metformin, elevated HbA1c, PCP visit, GLP-1 or similar **PA-required** Rx, HbA1c lab **no PA**.
@@ -96,41 +97,115 @@ Suggested fixture patient (unchanged): adult with T2DM, on metformin, elevated H
 
 ## Dave — coverage, card scan, network, cost display
 
-Pre-visit insurance context: **what this mocked plan covers, who is in network, what the patient might pay.** Mock is OK. Real payer APIs stay out of scope unless already listed as future (they are not; they remain out of scope).
+Pre-visit insurance context: **what this mocked plan covers, who is in network, what the patient might pay, and a labeled guess at the next visit’s shape and cost.** Mock is the demo default. Real payer 270/271 stays optional / out of the judged golden path (see **Coverage confirmation APIs** below).
+
+### Intake pipeline (Dave demo)
+
+Manual entry is first-class. Photo/PDF is optional enrichment, not the only path.
+
+```
+1. Insurance identity
+   Required: insurance-company dropdown (bare minimum).
+   Optional: type member ID / group / plan / DOB / ZIP into inputs,
+             upload card photo, optional SBC / EOB / benefits PDF.
+        ↓
+2. Card/docs → InsuranceProfile draft  (skip if user typed everything)
+        ↓
+3. Optional HITL  — user may confirm/edit member ID / group / payer,
+                    or skip and continue with whatever is on the form
+        ↓
+4a. Coverage confirmation  — active | inactive (+ copay estimate when known)
+4b. Reason for visit         — symptoms text + optional prior-visit PDF/image
+        ↓
+5. Coverage overview + visit/cost guess
+   parsed SBC ∪ mock-plan fixture → “what the next visit may look like”
+   and a labeled cost estimate (copay / coinsurance / deductible remaining)
+        ↓
+6. In-network clinicians  — fixture network ∩ distance(ZIP)
+```
+
+Do **not** reimplement PA letters or let the model approve coverage. Cost figures are **estimates**, never a determination.
 
 ### Scope
 
-- Insurance **card scan / OCR** (**added**; was missing from the original plan): photo or upload → mocked member ID, payer name, plan type, group number. A fixture “scan this card” path is enough; live OCR is optional.
-- **Coverage details** from the card/plan: active/inactive, in-network vs out, PA-relevant flags the journey needs later.
-- **Which doctors to go to:** mocked in-network clinician list for the golden-path specialty (PCP / referring as needed).
+- **Insurance identity (required + optional):** dropdown of mocked payers is the only required field. Optional input boxes for member ID, group, plan type, subscriber name, DOB, ZIP. Optional card image and supporting insurance PDFs (SBC, EOB, benefits summary) for accuracy.
+- Insurance **card scan / OCR** (**added**): photo or upload → member ID, payer name, plan type, group number, Rx BIN/PCN when printed. A fixture “scan this card” path must work with **no** OCR key. Live extractors are optional (see **Card/docs → JSON**).
+- **Coverage confirmation (step 4a):** mocked eligibility — active/inactive, in-network flag, estimated copay. Optional later adapter to a 270/271 sandbox (Stedi) that only runs on known mock members — never claim a live check against a random uploaded card.
+- **Reason for visit (step 4b, added):** patient symptoms (text) plus optional **previous doctor visit summaries** (PDF or image). Dave persists this as intake/history context for the cost guess. SOAP/Plan/orders stay **Sreekar**; do not stand up a second scribe.
+- **Coverage overview + visit/cost guess (step 5):** plan snapshot from SBC ∪ fixture; then a **guess** at likely next-visit type (PCP follow-up vs new vs specialty) and patient-owed range. Label as estimate; remaining deductible is mocked unless a 271 supplied it.
+- **Which doctors to go to (step 6):** mocked in-network clinician list filtered by specialty + ZIP/distance. Golden-path PCP can be chosen or preselected.
 - **Copay, deductible, OOP** display (**optional** richness; original D already had “estimated copay” — keep at least that).
 - **Pre-visit coverage panel** in the journey (Vivek renders; Dave owns data + APIs).
-- **History fact capture (coverage):** persist Coverage snapshots so the next visit can show “this is the plan we had / these were the estimates” (**assigned** as the coverage half of history).
+- **History fact capture (coverage):** persist Coverage snapshots + intake symptoms/prior-visit notes so the next visit can show “this is the plan we had / these were the estimates.”
+
+### Card/docs → JSON (not married to Gemini vision)
+
+Use whatever extractor is available; always the same `InsuranceProfile` JSON. Confidence / `[NEEDS VERIFICATION]` on unreadable fields. Never invent a copay that is not on the card or SBC.
+
+| Option | Role | When to use |
+|--------|------|-------------|
+| **Manual inputs + payer dropdown** | Source of truth the user typed | Always available. Required path if there is no image. |
+| **Fixture scan** (`image_note: fixture:front-of-card`) | Deterministic demo | Golden path; no API keys. |
+| **Azure Document Intelligence `prebuilt-healthInsuranceCard.us`** | Best dedicated **US card** model (insurer, member, group, Rx BIN/PCN, printed copays, per-field confidence) | Optional upgrade if someone adds an Azure key. Cards only — not SBCs or visit notes. |
+| **Gemini `generate_json()` (vision)** | Already in this repo; handles **card + SBC/EOB + prior-visit PDF/image** with one client | Default live extractor for the hackathon if a Gemini key exists. Same zero-hallucination rule as other JSON paths (no letter watermark). |
+| **AWS Textract / generic OCR** | Raw text or key-values; you still map to `InsuranceProfile` | Skip unless we are already on AWS. No US-card schema. |
+
+**Recommendation for this repo:** fixture + manual entry first; Gemini vision when a key is present (one stack for card, SBC, and prior-visit uploads); Azure card model only if we want higher card-field confidence and accept a second vendor.
+
+### Coverage confirmation APIs (step 4a) — can we search, and what do we use?
+
+**Yes, the industry API exists. No, it will not verify an arbitrary uploaded card in this hackathon.**
+
+What production systems actually call is **X12 270/271 eligibility** (JSON wrappers exist). You send payer ID + member ID (or demographics) + a **provider NPI**. The payer returns active/inactive and, unevenly, copay / deductible / OOP remaining.
+
+| Vendor | What you’d use | Hackathon reality |
+|--------|----------------|-------------------|
+| **Stedi** Eligibility JSON (`POST …/eligibility`) | Best DX; free **test API key**; mock 271s for Aetna / UHC / Cigna / CMS | Sandbox **only** accepts **exact documented mock members**. Arbitrary card data fails. Production key = real payer traffic + enrollment. |
+| **Availity Coverages** (`POST /v1/coverages`) | Large US clearinghouse 270/271 | Demo plan is **canned scenarios**, auto-approved. Live data needs contracting. |
+| **Change / Optum, Eligible, etc.** | Same 270/271 idea | Sales / enrollment; not a weekend integration. |
+| **CMS Patient Access / SMART on FHIR** | Patient OAuths into *their* payer | Correct long-term consumer path; per-payer apps; bad demo. |
+| **CareLoop mock** (`MockEligibility.check`) | Map dropdown payer (+ optional member ID) → fixture: active, network, copay/deductible/OOP | **This is the judged path.** Label the UI as mock. |
+
+**Dave implements:** `MockEligibility.check(profile)` always. Optional later: if `STEDI_API_KEY` is a test key **and** the profile matches a Stedi mock subscriber, call Stedi and store the 271-shaped benefits. If it does not match, fall back to the fixture and say so. Do **not** send real card PHI to a production eligibility endpoint.
+
+### Visit / cost guess (step 5)
+
+Not a coverage decision and not Sreekar’s SOAP.
+
+1. Combine symptoms + optional prior-visit extract (problems, last visit date, meds mentioned).
+2. Map to 1–3 **likely visit types** from a fixture (e.g. established PCP 99213–99214, new patient, endocrinology follow-up) — tagged `[NEEDS VERIFICATION]` if inferred.
+3. Apply mock plan: copay vs coinsurance, deductible remaining, allowed-amount fixture → **patient-owed range**.
+4. Copy must say this is a **guess**, not a bill and not a guarantee the visit is covered.
 
 ### Inherited original workstreams
 
 - From **D — Mock payer**: mock **eligibility** (active, in-network, estimated copay) — **assigned to Dave**; Sreekar keeps the PA denial/policy half of D.
 - From **greenfield**: mock eligibility row — **assigned to Dave**.
-- **Added:** card OCR/scan, clinician finder UI/API, copay/deductible/OOP panel, Coverage object, coverage facts on History.
+- **Added:** card OCR/scan, manual payer/card inputs, optional HITL, clinician finder UI/API, copay/deductible/OOP panel, reason-for-visit + prior-visit uploads, visit/cost guess, Coverage object, coverage facts on History.
 
 ### Files (proposed)
 
-- `backend/careloop/eligibility.py` or `backend/careloop/coverage.py`
-- `backend/data/mock_insurance_card.json` / `backend/data/mock_network.json` (fixtures)
-- Coverage fields on the store (Vivek owns store shape; Dave proposes Coverage contract)
-- Journey **coverage / card / network** panels consumed via `frontend/js/api.js` named methods (Vivek wires CareLoop chrome)
+- `backend/careloop/eligibility.py` or `backend/careloop/coverage.py` (scan/extract, mock eligibility, visit/cost guess)
+- `backend/data/mock_insurance_card.json` / `backend/data/mock_network.json` / `backend/data/mock_fee_schedule.json` (fixtures)
+- Payer dropdown source: small list in `backend/data/mock_payers.json` (Aetna, UHC, Cigna, BCBS, Mock Payer, Medicare — names only)
+- Coverage fields on the store (Vivek owns store shape; Dave proposes Coverage contract, including `symptoms`, `prior_visit_notes`, `visit_cost_estimate`)
+- Journey **coverage / card / network / intake** panels consumed via `frontend/js/api.js` named methods (Vivek wires CareLoop chrome)
 
-Do **not** reimplement PA letters or decide coverage. Surface mocked benefits only.
+Do **not** reimplement PA letters or decide coverage. Surface mocked benefits and labeled estimates only.
 
 ### Done when
 
-- Demo can start from a **card scan or fixture card** and show member/plan fields without a live payer.
+- Demo can start from **payer dropdown alone**, from **typed card fields**, or from a **card scan / fixture card**, and show member/plan fields without a live payer.
+- Optional supporting SBC/EOB improves the coverage overview when present; fixture fills gaps.
+- Optional confirm/edit of extracted fields; user can skip HITL.
 - Mock eligibility: **active**, **in-network** flag, **estimated copay** (original D DoD fragment).
 - Optional: deductible remaining / OOP max display from the same mock plan.
-- Mock **in-network clinicians** list the golden-path PCP can be chosen from (or is preselected).
+- Reason-for-visit text + optional prior-visit PDF/image persist on the thread (not a second SOAP).
+- Visit/cost guess returns likely visit types + patient-owed range, labeled as an estimate.
+- Mock **in-network clinicians** list filtered by ZIP/distance; golden-path PCP can be chosen from (or is preselected).
 - Coverage object is written to the thread (not local-only UI state) so timeline/history can read it.
 - Coverage snapshot is included in History facts for the next visit.
-- No real eligibility/benefits API.
+- No production eligibility/benefits API on the golden path. Stedi/Availity only as an explicit optional sandbox adapter.
 
 ### Copy-pasteable commands (Dave)
 
@@ -143,7 +218,7 @@ pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open **http://localhost:8080**. Gemini key is **not** required for mocked coverage/card/network.
+Open **http://localhost:8080**. Gemini key is **not** required for mocked coverage/card/network (fixture + manual entry). It **is** required for live card/SBC/prior-visit extraction.
 
 Isolate by curling coverage endpoints (once added); skip scribe/PA UI.
 
@@ -153,16 +228,29 @@ curl -s -X POST http://localhost:8080/api/careloop/coverage/scan \
   -H "Content-Type: application/json" \
   -d '{"image_note":"fixture:front-of-card"}'
 
+# Manual identity (dropdown is the minimum)
+curl -s -X POST http://localhost:8080/api/careloop/coverage \
+  -H "Content-Type: application/json" \
+  -d '{"payer_name":"Mock Payer","member_id":"M-1001","zip":"94110"}'
+
+curl -s -X POST http://localhost:8080/api/careloop/coverage/confirm \
+  -H "Content-Type: application/json" \
+  -d '{"payer_name":"Mock Payer","member_id":"M-1001"}'
+
+curl -s -X POST http://localhost:8080/api/careloop/coverage/visit-guess \
+  -H "Content-Type: application/json" \
+  -d '{"symptoms":"follow-up type 2 diabetes, A1c check","payer_name":"Mock Payer"}'
+
 curl -s http://localhost:8080/api/careloop/coverage
-curl -s "http://localhost:8080/api/careloop/network?specialty=pcp"
+curl -s "http://localhost:8080/api/careloop/network?specialty=pcp&zip=94110"
 ```
 
 Until those exist, use `GET /api/careloop/thread` (Vivek) and read `coverage` once seeded.
 
 ### Dependencies on the other two
 
-- **Vivek:** Coverage/History live on the thread store; Dave does not invent a second source of truth. Patient-facing coverage panel and “who to see” screens are Vivek’s UX; Dave supplies APIs + fixtures.
-- **Sreekar:** PA submit needs eligibility/in-network/copay context on the thread. Sreekar’s mock **payer** (step-therapy) is **not** Dave’s job; do not collapse eligibility with PA denial.
+- **Vivek:** Coverage/History live on the thread store; Dave does not invent a second source of truth. Patient-facing coverage panel, intake form, and “who to see” screens are Vivek’s UX; Dave supplies APIs + fixtures.
+- **Sreekar:** PA submit needs eligibility/in-network/copay context on the thread. Sreekar’s mock **payer** (step-therapy) is **not** Dave’s job; do not collapse eligibility with PA denial. Prior-visit uploads are **intake context** for Dave’s cost guess; Sreekar still owns SOAP/Plan when the visit starts — reuse those notes, do not duplicate a scribe.
 
 ---
 
@@ -393,7 +481,7 @@ curl -s http://localhost:8080/api/careloop/history
 
 ### Dependencies on the other two
 
-- **Dave:** coverage/card/network/cost APIs + Coverage facts. Vivek does not fake a second eligibility model once Dave lands.
+- **Dave:** coverage/card/network/cost APIs + Coverage facts (including intake symptoms and visit/cost guess). Vivek does not fake a second eligibility model once Dave lands.
 - **Sreekar:** encounter/orders/auth/meds/claim/follow-up events + letter APIs. Journey **calls** existing generate/parse/appeal; no new letter types. HITL stays in `app.js`.
 
 ---
@@ -413,7 +501,7 @@ Freeze shapes early so the three owners can work in parallel. Frontend talks onl
 | **Claim** | Codes, amounts, adjudication/EOB, patient responsibility, **separate** denial | Sreekar | Vivek |
 | **Medication** | Rx, schedule, taken/missed, remaining supply, refill | Sreekar (E) | Vivek |
 | **Follow-up** | Symptoms, labs, adherence, insurance status, next encounter | Sreekar | Vivek |
-| **Coverage** | Card/OCR fields, eligibility, network, copay/deductible/OOP estimates | **Dave (added)** | Vivek pre-visit panel |
+| **Coverage** | Payer dropdown, optional card/OCR + SBC fields, eligibility, network, copay/deductible/OOP, symptoms/prior-visit notes, visit/cost guess | **Dave (added)** | Vivek pre-visit panel |
 | **History** | Ordered packet of the above facts for **next visit share/export** | Capture: Dave (coverage) + Sreekar (clinical/admin). Assemble/export UX: **Vivek** | Vivek share/export |
 
 History is not a second database: it is a **view + export** over the thread, plus whatever snapshot fields writers persist so the next visit still has last time’s evidence.
@@ -447,14 +535,14 @@ B store (Vivek)  ─────────────────────
 
 1. **B first** (or a frozen JSON schema) so C/D/E/F/Dave/history do not invent incompatible objects. **Vivek.**
 2. **A in parallel** from day one (protect existing endpoints; add CareLoop-shaped wrappers). **Sreekar.**
-3. **Dave coverage/card/network in parallel** with A (fixtures OK); bind to B when store exists.
+3. **Dave coverage/card/network in parallel** with A (dropdown + fixtures OK); bind to B when store exists. Live 270/271 is optional sandbox only.
 4. **C then D** for the insurance half of the golden path (orders must exist before PA submit). **Sreekar.** Eligibility must be on the thread before PA (Dave or seed).
 5. **E after** mock approve + dispense (or a seeded “already dispensed” state). **Sreekar.**
 6. **F can prototype** against a static thread, then bind to B. **Vivek.**
 7. **History share/export** as soon as thread objects exist; treat as a demo beat, not a leftover.
 8. **Dribbble visual polish last** (Vivek), after the basic patient workflow is walkable.
 
-Integration demo order: seed/reset → (card/coverage/network) → encounter review → orders → PA submit → deny → match → appeal (HITL) → approve → dispense → taken → refill nudge → follow-up → **share history for next visit**; **separately** submit/show a claim (and optional claim denial) so PA and claim stay distinct.
+Integration demo order: seed/reset → (payer dropdown / card / coverage confirm / symptoms / visit-cost guess / network) → encounter review → orders → PA submit → deny → match → appeal (HITL) → approve → dispense → taken → refill nudge → follow-up → **share history for next visit**; **separately** submit/show a claim (and optional claim denial) so PA and claim stay distinct.
 
 ### Git / PR conventions
 
@@ -485,7 +573,7 @@ git push -u origin stream-b/longitudinal-store
 - Letting the model make coverage or clinical decisions
 - Collapsing PA denial and claim denial into one flow
 
-(Card scan may be mocked; that is **not** a live eligibility API.)
+(Card scan and Stedi/Availity **sandboxes** may be used; neither is a live eligibility check of an arbitrary uploaded card. Production 270/271 stays out of the golden path.)
 
 ---
 

@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CareLoop** is a mocked US patient-journey demo (not a real payer/EHR platform). This repo’s running app is still **DenialShield**: an AI-powered tool that helps doctors draft prior authorization (PA) requests and helps patients fight insurance denials. FastAPI backend + vanilla JS/HTML/CSS frontend, served as a single app (no separate frontend build/dev server).
 
-Teammate overview, safety rails, and copy-pasteable setup: [`README.md`](README.md). Hackathon workstreams A–F (golden path, store, scribe, mock payer, meds, timeline): [`plan.md`](plan.md). Do not treat Provider/Patient tabs as the CareLoop UX.
+Teammate overview, safety rails, and copy-pasteable setup: [`README.md`](README.md). Hackathon owners + workstreams A–F: [`plan.md`](plan.md). Do not treat Provider/Patient tabs as the CareLoop UX.
+
+**Dave’s slice (coverage intake):** payer dropdown is the only required identity field; card photo, SBC/EOB, and typed member/group fields are optional. Extractors (Gemini vision or optional Azure `prebuilt-healthInsuranceCard.us`) draft an `InsuranceProfile`; confirm/edit is **optional**. Coverage confirmation is **mocked** (`MockEligibility.check`); do not send arbitrary card PHI to a production 270/271. Stedi/Availity sandboxes only accept canned members — optional adapter, not the golden path. Symptoms + prior-visit PDF/image are intake context for a **labeled visit/cost guess**, not a second SOAP (Sreekar owns scribe). Cost figures and “next visit” shapes are estimates, never a coverage or clinical decision. In-network list is fixture ∩ ZIP.
 
 ## Commands
 
@@ -47,4 +49,4 @@ This is a healthcare-adjacent tool generating documents intended for real insura
 1. **Watermarking** — every free-text generated document (PA, appeal, demand) is wrapped in `DRAFT_WATERMARK` by `llm.py`'s `generate()`. Don't add a code path that returns LLM output without it.
 2. **Human-in-the-loop** — the frontend never lets a user download a generated document without passing through the HITL approval modal first.
 
-CareLoop additionally: no independent clinical/coverage decisions; do not collapse PA denial vs claim denial. Full list: [`README.md`](README.md) (Safety invariants) and [`plan.md`](plan.md) §1.
+CareLoop additionally: no independent clinical/coverage decisions; do not collapse PA denial vs claim denial; Dave’s visit/cost output must stay a labeled estimate (not an approval or a bill). Full list: [`README.md`](README.md) (Safety invariants) and [`plan.md`](plan.md) (Shared thesis / Dave intake pipeline).

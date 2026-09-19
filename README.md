@@ -6,7 +6,7 @@ It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is l
 
 The code in this repo today is **DenialShield**: FastAPI + vanilla JS tools for drafting PA packets and appeal letters. CareLoop wraps that authorization seed in a golden-path thread.
 
-**Who builds what:** **Dave** (card scan → coverage, in-network clinicians, optional copay/deductible), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
+**Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
 
 ---
 
@@ -48,11 +48,11 @@ See [`plan.md`](plan.md) for inherited A–F mapping.
 
 | Owner | Builds |
 |--------|--------|
-| **Dave** | Insurance **card scan** (mock OCR OK) → coverage details; which doctors (in-network); optional copay / deductible / OOP; Coverage facts for history |
+| **Dave** | Payer **dropdown** (required) + optional typed card fields / card scan / SBC-EOB → mock coverage confirmation; symptoms + optional prior-visit PDF; visit/cost **guess**; in-network clinicians by ZIP; Coverage facts for history |
 | **Sreekar** | First visit → transcribe/SOAP/Plan → orders, mock payer + PA + step-therapy denial + policy-to-evidence + appeal (DenialShield HITL/watermark), meds/adherence/refill, claims/EOB light, follow-up; clinical/admin **history fact capture** |
 | **Vivek** | Patient-facing CareLoop workflow (basic) + SQLite/in-memory **thread** as app shell + unified timeline + **history share/export**; **Dribbble-informed polish later** |
 
-**Golden-path demo (target):** card/coverage → PCP visit → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → mock PA submit → step-therapy denial with citable policy → match policy to encounter evidence → watermarked appeal + HITL → mock approve → dispense → taken/missed + refill nudge → timeline / follow-up → share history next visit. Keep a **separate** claim (optional claim denial) so judges see two insurance moments.
+**Golden-path demo (target):** payer dropdown / card/coverage → confirm mock eligibility → symptoms + optional prior-visit docs → visit/cost guess → in-network PCP → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → mock PA submit → step-therapy denial with citable policy → match policy to encounter evidence → watermarked appeal + HITL → mock approve → dispense → taken/missed + refill nudge → timeline / follow-up → share history next visit. Keep a **separate** claim (optional claim denial) so judges see two insurance moments.
 
 ---
 
@@ -160,7 +160,7 @@ Pick an **owner**; original letters **A–F** still name the slices. Coordinate 
 
 | Owner | Original streams | Isolation |
 |--------|------------------|-----------|
-| **Dave** | Eligibility/network/copay from **D**; **added** card scan, clinician finder, cost-share UI, Coverage | Curl coverage/network once added; fixtures OK |
+| **Dave** | Eligibility/network/copay from **D**; **added** card scan + manual payer inputs, optional HITL, clinician finder, cost-share UI, reason-for-visit, visit/cost guess, Coverage | Curl coverage/network once added; fixtures + dropdown OK; no live 270/271 on the golden path |
 | **Sreekar** | **A** Authorization, **C** scribe, **D** mock payer (PA half), **E** meds; claims + follow-up assigned here | Provider/Patient tabs + letter curls; then payer/meds curls |
 | **Vivek** | **B** store, **F** timeline; **added** history share/export; Dribbble later | Curl `thread`/`reset`; static fixture until B lands |
 
