@@ -8,7 +8,7 @@ Read this before changing the running app. Setup commands also live in [`README.
 
 | Work | Where |
 |------|--------|
-| Vivek patient shell (☰ Today / History / Medicines / Tests / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
+| Vivek patient shell (☰ Today / History / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
 | Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
 | Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **this branch** (`confirm` always sends Jane identity) |
 | Demo key slots on Profile (Stedi / Gemini / Groq / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
@@ -31,7 +31,7 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 
 After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
-1. **☰** Today · History (My visits | For the clinic) · Medicines · Tests · Insurance · Profile · Log out
+1. **☰** Today · History (My visits | For the clinic) · Upcoming visits · Prescriptions · Test records · Insurance · Profile · Log out
 2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with **Aetna / Jane Doe** coverage seeded.
 3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
 
@@ -100,7 +100,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
 - Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
 
-**Sreekar Stream C (visit-day from Upcoming visits):** booking steps 1–3 end at **Save request**, which confirms the appointment. **Upcoming visits** (sidebar, under History) lists those confirmed visits. Opening one starts visit-day: check-in (warn if now is not within 15 minutes of the booked slot) → record / upload / optional Demo conversation → summary → costs. No boilerplate transcript until Demo is toggled. Audio goes to `POST /api/careloop/scribe/transcribe` (2-minute cap). Demo conversation drafts SOAP with `use_seeded: true` and keeps sample cost numbers; live audio drafts with `use_seeded: false`. Step 6 calls `POST /api/careloop/scribe/summarize` (Sumy). On Vercel, NLTK corpora go to `/tmp/nltk_data`. Step 1 can also record a short reason (same STT, 2 minutes). `frontend/js/scribe.js` is still not loaded. The seeded visit note is Maya Chen / Dr. Patel; the logged-in patient remains Jane Doe.
+**Sreekar Stream C (visit-day from Upcoming visits):** booking steps 1–3 end at **Save request**, which confirms the appointment. **Upcoming visits** (sidebar, under History) lists those confirmed visits. Opening one starts visit-day: check-in (warn if now is not within 15 minutes of the booked slot) → record / upload / optional Demo conversation → summary → costs → plan. Finishing the plan opens a follow-up summary of medicines to take/buy and tests to complete, with **Update Prescriptions and Test records**. Those tabs are filled from the visit plan (or the seeded metformin / semaglutide / HbA1c fallback). Test records can open past PDFs/pictures or save a lab appointment as a potential test. No boilerplate transcript until Demo is toggled. Audio goes to `POST /api/careloop/scribe/transcribe` (2-minute cap). Demo conversation drafts SOAP with `use_seeded: true` and keeps sample cost numbers; live audio drafts with `use_seeded: false`. Step 6 calls `POST /api/careloop/scribe/summarize` (Sumy). On Vercel, NLTK corpora go to `/tmp/nltk_data`. Step 1 can also record a short reason (same STT, 2 minutes). `frontend/js/scribe.js` is still not loaded. The seeded visit note is Maya Chen / Dr. Patel; the logged-in patient remains Jane Doe.
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. Live login is **`jane` / `demo`**.
 

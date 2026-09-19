@@ -12,3 +12,8 @@ a.link svg{width:15px}
 #visit-audio{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .visit-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;position:relative;z-index:1}
 .hero .visit-hero-actions .btn{margin-top:0}
+#test-attach-file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+dialog:has(.test-preview){max-width:720px}
+.test-preview{margin:12px 0;max-height:60vh;overflow:auto}
+.test-preview-img{display:block;width:100%;border-radius:8px;background:#fff}
+.test-preview-frame{display:block;width:100%;min-height:420px;border:0;border-radius:8px;background:#fff}
