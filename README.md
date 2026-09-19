@@ -29,6 +29,8 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Navigate to **http://localhost:8080**
 
+Hackathon split (CareLoop golden-path journey, mocked payer, workstreams, safety rails): see **[plan.md](plan.md)**.
+
 ---
 
 ## Features
