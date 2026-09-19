@@ -4,7 +4,7 @@ Hackathon product: **one mocked US patient journey** so context survives coverag
 
 It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. Drafts are for a human to review; the app never files, faxes, e-prescribes, or calls a live insurer.
 
-The code in this repo today is **DenialShield**: FastAPI + vanilla JS tools for drafting PA packets and appeal letters. CareLoop wraps that authorization seed in a golden-path thread.
+The running app is **CareLoop** (coverage intake behind mock login). Old DenialShield PA/appeal forms are not product tabs; **Insurance Claims Management** is a Coming soon placeholder. Dummy logins: [`AGENTS.md`](AGENTS.md).
 
 **Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
 
@@ -40,7 +40,7 @@ Two **disconnected**, stateless form tabs. No accounts, no database, no timeline
 | HITL approve-before-download | `frontend/js/app.js` |
 | Draft watermark | `backend/llm.py` + `DRAFT_WATERMARK` |
 
-Provider / Patient Advocate tabs **stay**. They are **not** the CareLoop UX.
+Provider / Patient Advocate letter UIs are **not in the nav**. Use **Insurance Claims Management** (Coming soon). Dummy credentials: [`AGENTS.md`](AGENTS.md).
 
 ### Greenfield (three owners; original A–F still apply)
 
@@ -71,6 +71,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 
 ```
 .
+├── AGENTS.md               # Dummy logins + what the running app is (for agents)
 ├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
 ├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
 ├── backend/
@@ -85,9 +86,10 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 │   ├── css/style.css
 │   └── js/
 │       ├── api.js          # Named fetch methods per endpoint
-│       ├── app.js          # Tabs, toast, HITL modal, download
-│       ├── provider.js     # Provider module
-│       └── patient.js      # Patient advocate module
+│       ├── app.js          # Login, CareLoop + claims tabs, HITL
+│       ├── careloop.js     # Coverage intake wizard
+│       ├── provider.js     # Parked DenialShield PA forms (not in nav)
+│       └── patient.js      # Parked DenialShield appeal forms (not in nav)
 ├── requirements.txt
 └── .env.example
 ```
@@ -160,8 +162,8 @@ Pick an **owner**; original letters **A–F** still name the slices. Coordinate 
 
 | Owner | Original streams | Isolation |
 |--------|------------------|-----------|
-| **Dave** | Eligibility/network/copay from **D**; **added** card scan + manual payer inputs, optional HITL, clinician finder, cost-share UI, reason-for-visit, visit/cost guess, Coverage | Curl coverage/network once added; fixtures + dropdown OK; no live 270/271 on the golden path |
-| **Sreekar** | **A** Authorization, **C** scribe, **D** mock payer (PA half), **E** meds; claims + follow-up assigned here | Provider/Patient tabs + letter curls; then payer/meds curls |
+| **Dave** | Eligibility/network/copay from **D**; **added** card scan + wizard + mock login; CareLoop is the app UX | Curl coverage after login; see [`AGENTS.md`](AGENTS.md) |
+| **Sreekar** | **A** Authorization, **C** scribe, **D** mock payer (PA half), **E** meds; claims later via Coming soon tab | Letter curls still exist; do not add Provider/Advocate nav tabs |
 | **Vivek** | **B** store, **F** timeline; **added** history share/export; Dribbble later | Curl `thread`/`reset`; static fixture until B lands |
 
 **Suggested order:** B first (or a frozen JSON schema) → A **and** Dave coverage in parallel → C then D for the insurance half → E after approve/dispense (or a seeded dispensed state) → F can prototype against a static thread, then bind to B → history share as a demo beat → Dribbble polish last.

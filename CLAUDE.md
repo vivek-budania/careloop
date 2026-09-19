@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**CareLoop** is a mocked US patient-journey demo (not a real payer/EHR platform). This repo’s running app is still **DenialShield**: an AI-powered tool that helps doctors draft prior authorization (PA) requests and helps patients fight insurance denials. FastAPI backend + vanilla JS/HTML/CSS frontend, served as a single app (no separate frontend build/dev server).
+**CareLoop** is the running web app: a mocked US patient-journey demo (not a real payer/EHR platform). FastAPI + vanilla JS/HTML/CSS, one process.
 
-Teammate overview, safety rails, and copy-pasteable setup: [`README.md`](README.md). Hackathon owners + workstreams A–F: [`plan.md`](plan.md). Do not treat Provider/Patient tabs as the CareLoop UX.
+Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**: [`AGENTS.md`](AGENTS.md). Owner split: [`plan.md`](plan.md).
 
-**Dave’s slice (coverage intake):** mock login first (`maya` / `demo` for the patient path). Payer dropdown is the only required identity field; card photo, SBC/EOB, and typed member/group fields are optional. Wizard shows **one step at a time**. Extractors (Gemini vision or optional Azure `prebuilt-healthInsuranceCard.us`) draft an `InsuranceProfile`; confirm/edit is **optional**. Coverage confirmation is **mocked** (`MockEligibility.check`); do not send arbitrary card PHI to a production 270/271. Stedi/Availity sandboxes only accept canned members — optional adapter, not the golden path. Symptoms + prior-visit PDF/image are intake context for a **labeled visit/cost guess**, not a second SOAP (Sreekar owns scribe). Cost figures and “next visit” shapes are estimates, never a coverage or clinical decision. In-network list is fixture ∩ ZIP. Provider and Patient Advocate tabs are DenialShield (Sreekar); hide them from the patient role.
+**Product UX:** after mock login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
+
+**Dave’s slice:** mock login (password `demo`; see AGENTS.md). Payer dropdown is the only required identity field. Wizard is one step at a time. Coverage is mocked. Visit/cost output is a labeled estimate. In-network list is fixture ∩ ZIP. No live 270/271 on the golden path.
 
 ## Commands
 
@@ -39,8 +41,9 @@ Request flow for all AI-generated documents (PA letters, appeals, demand letters
 **Frontend** (`frontend/`) is a single-page vanilla JS app with no framework/bundler — files are loaded directly as `<script>` tags.
 
 - `js/api.js` — `API` object: single fetch wrapper (`request()`) plus one named method per backend endpoint. Any new backend endpoint should get a corresponding method here rather than calling `fetch` directly from feature code.
-- `js/app.js` — `App` object: tab navigation between the Provider/Patient modules, toast notifications, and the **HITL (human-in-the-loop) approval modal** (`requestApproval()` returns a `Promise<boolean>`). Every generated document must route through `App.requestApproval()` before `App.downloadDocument()` — this is the enforced "I've Reviewed — Approve" gate; do not add a download path that bypasses it.
-- `js/provider.js` / `js/patient.js` — the two modules (`Provider`, `Patient` objects), each self-contained with its own `init()`, called from `app.js`'s `DOMContentLoaded` handler. Provider handles ICD-10/CPT autocomplete (debounced search against `/api/codes/*`) + risk scoring + PA generation. Patient handles denial letter parsing + appeal/demand letter generation.
+- `js/app.js` — login, tab nav (**CareLoop** + **Insurance Claims Management**), toast, HITL modal if letters are generated. Every generated document must still go through `App.requestApproval()` before download.
+- `js/careloop.js` — paginated coverage intake.
+- `js/provider.js` / `js/patient.js` — leftover DenialShield modules; **not in the nav**.
 
 ## Safety invariants
 

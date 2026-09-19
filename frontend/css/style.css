@@ -1293,10 +1293,22 @@ a:hover { color: var(--accent-blue); }
   width: 100%;
 }
 
-.cl-pager {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: var(--space-lg);
+.coming-soon {
+  padding: var(--space-lg) 0;
+}
+
+.coming-soon-banner {
+  display: inline-block;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  background: var(--accent-purple-glow);
+  color: var(--text-accent);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
 }
 
 [hidden] {

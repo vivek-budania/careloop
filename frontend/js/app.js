@@ -3,7 +3,7 @@
  */
 
 const App = {
-  currentModule: 'provider',
+  currentModule: 'careloop',
   user: null,
 
   init() {
@@ -98,9 +98,7 @@ const App = {
     });
     document.querySelectorAll('.module-view').forEach((view) => view.classList.remove('active'));
 
-    const home = allowed.includes('careloop') ? 'careloop'
-      : allowed.includes('provider') ? 'provider'
-      : allowed[0];
+    const home = allowed.includes('careloop') ? 'careloop' : allowed[0];
     if (home) this.switchModule(home);
   },
 

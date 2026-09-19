@@ -15,10 +15,10 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 _sessions: dict[str, dict[str, Any]] = {}
 
 ROLE_TABS = {
-    "patient": ["careloop"],
-    "clinician": ["provider", "careloop"],
-    "advocate": ["patient"],
-    "demo": ["provider", "patient", "careloop"],
+    "patient": ["careloop", "claims"],
+    "clinician": ["careloop", "claims"],
+    "advocate": ["careloop", "claims"],
+    "demo": ["careloop", "claims"],
 }
 
 

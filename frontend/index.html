@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="AI-powered Denial Decoding & Appeal Engine — fight insurance denials for doctors and patients.">
-  <title>DenialShield — Insurance Denial Decoding & Appeal Engine</title>
+  <meta name="description" content="CareLoop — mocked US patient coverage journey (demo).">
+  <title>CareLoop</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -41,18 +41,15 @@
     <nav class="top-nav" id="top-nav">
       <div class="nav-brand">
         <div class="nav-brand-icon">🛡️</div>
-        <div class="nav-brand-text">Denial<span>Shield</span></div>
+        <div class="nav-brand-text">Care<span>Loop</span></div>
       </div>
 
       <div class="nav-tabs" id="nav-tabs">
-        <button class="nav-tab" data-module="provider" data-roles="clinician,demo" id="tab-provider">
-          🩺 Provider
+        <button class="nav-tab" data-module="careloop" id="tab-careloop">
+          CareLoop
         </button>
-        <button class="nav-tab" data-module="patient" data-roles="advocate,demo" id="tab-patient">
-          👤 Patient Advocate
-        </button>
-        <button class="nav-tab" data-module="careloop" data-roles="patient,clinician,demo" id="tab-careloop">
-          🔁 CareLoop
+        <button class="nav-tab" data-module="claims" id="tab-claims">
+          Insurance Claims Management
         </button>
       </div>
 
@@ -63,8 +60,33 @@
       </div>
     </nav>
 
-    <!-- ═══════════════ PROVIDER MODULE ═══════════════ -->
-    <div class="module-view active" id="module-provider">
+    <!-- ═══════════════ CARELOOP (the product) ═══════════════ -->
+    <!-- Provider/Patient letter forms stay in the DOM unused; they are not nav tabs. -->
+
+    <!-- ═══════════════ INSURANCE CLAIMS MANAGEMENT (coming soon) ═══════════════ -->
+    <div class="module-view" id="module-claims">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon purple">📁</div>
+            <h2>Insurance Claims Management</h2>
+          </div>
+          <span class="card-badge">Coming soon</span>
+        </div>
+        <div class="coming-soon">
+          <p class="coming-soon-banner">Coming soon</p>
+          <p class="form-hint">
+            Prior-auth letters, denial parsing, and appeals used to live in separate
+            Provider / Patient Advocate tools. CareLoop is the app now. This tab is
+            a placeholder for a later claims-management workspace. It is not a live
+            claims portal and does not file, fax, or appeal anything.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PROVIDER MODULE (parked; not in nav) ═══════════════ -->
+    <div class="module-view" id="module-provider">
 
       <div class="section-grid">
         <!-- Left: PA Request Form -->
