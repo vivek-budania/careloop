@@ -22,5 +22,11 @@
     "description": "HbA1c laboratory test",
     "allowed": 45,
     "setting": "lab"
+  },
+  "72148": {
+    "code": "72148",
+    "description": "MRI lumbar spine without contrast",
+    "allowed": 890,
+    "setting": "imaging"
   }
 }

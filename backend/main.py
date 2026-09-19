@@ -147,6 +147,7 @@ class CoverageVisitGuessRequest(BaseModel):
 class ScribeDraftRequest(BaseModel):
     transcript: str = ""
     use_seeded: bool = True  # golden-path fixture SOAP; set false to call LLM
+    demo_id: Optional[int] = None
 
 
 class ScribeApproveRequest(BaseModel):
@@ -574,9 +575,23 @@ def careloop_network(
 # ---------------------------------------------------------------------------
 
 @app.get("/api/careloop/scribe/fixture")
-def scribe_fixture(_user: dict = Depends(careloop_auth.require_user)):
-    """Return the mock PCP visit transcript (Maya Chen golden path)."""
+def scribe_fixture(
+    demo: Optional[int] = None,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Return a demo visit transcript. demo=1|2|3 or the Maya Chen golden path."""
+    if demo:
+        row = careloop_scribe.load_demo(demo)
+        if not row:
+            raise HTTPException(status_code=404, detail="Unknown demo transcript.")
+        return row
     return careloop_scribe.load_fixture()
+
+
+@app.get("/api/careloop/scribe/demos")
+def scribe_demos(_user: dict = Depends(careloop_auth.require_user)):
+    """Demo 1–3 transcripts for visit-day recording."""
+    return {"demos": careloop_scribe.list_demo_summaries()}
 
 
 @app.post("/api/careloop/scribe/transcribe")
@@ -616,6 +631,7 @@ def scribe_draft(
         encounter = careloop_scribe.build_encounter_draft(
             transcript=transcript,
             use_seeded=True,
+            demo_id=req.demo_id,
         )
         return {"encounter": encounter}
 

@@ -12,6 +12,13 @@ a.link svg{width:15px}
 #visit-audio{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .visit-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;position:relative;z-index:1}
 .hero .visit-hero-actions .btn{margin-top:0}
+.visit-row-wrap{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.visit-row-wrap .visit-row{border-bottom:0;flex:1;min-width:0}
+.visit-delete{color:var(--muted);flex-shrink:0}
+.visit-delete:hover{color:var(--coral)}
+.zip-search{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:18px 0 8px}
+.zip-search .field{margin:0;flex:1;min-width:140px}
+.demo-picks{display:flex;flex-wrap:wrap;gap:8px}
 #test-attach-file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 dialog:has(.test-preview){max-width:720px}
 .test-preview{margin:12px 0;max-height:60vh;overflow:auto}
