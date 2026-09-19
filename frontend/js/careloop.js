@@ -5,6 +5,7 @@
  */
 const CareLoop = {
   THREAD_KEY: 'careloop-patient-thread-v2',
+  COVERAGE_KEY: 'careloop-coverage-v1',
   GOLDEN_PAYER: 'Aetna',
   view: 'Today',
   historyTab: 'visits',
@@ -154,6 +155,32 @@ const CareLoop = {
     return this.thread;
   },
 
+  persistCoverage() {
+    try {
+      localStorage.setItem(this.COVERAGE_KEY, JSON.stringify(this.coverageSnap || {}));
+    } catch (err) {
+      /* private mode */
+    }
+  },
+
+  loadPersistedCoverage() {
+    try {
+      const raw = localStorage.getItem(this.COVERAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  rememberCoverage(snap) {
+    if (snap && typeof snap === 'object') {
+      this.coverageSnap = snap;
+      if (snap.visit_cost_estimate) this.costEstimate = snap.visit_cost_estimate;
+      this.persistCoverage();
+    }
+    return this.coverageSnap;
+  },
+
   coverageOnFile() {
     return Boolean(this.coverageSnap && this.coverageSnap.profile);
   },
@@ -234,12 +261,19 @@ const CareLoop = {
 
   envRows() {
     const env = this.demoEnv || {};
+    const session = env.session || {};
     const stedi = env.stedi || {};
     const gemini = env.gemini || {};
     const groq = env.groq || {};
     const xai = env.xai || {};
     const vercel = env.vercel || {};
     return [
+      {
+        name: 'Signed session',
+        tag: session.signed ? 'loaded' : 'not set',
+        tagType: session.signed ? '' : 'peach',
+        detail: session.message || 'Mock login uses a signed token so Vercel workers share the same session.',
+      },
       {
         name: 'Stedi eligibility',
         tag: stedi.test_mode ? 'loaded' : (stedi.configured ? 'blocked' : 'not set'),
@@ -397,14 +431,19 @@ const CareLoop = {
 
   async refreshCoverage() {
     try {
-      this.coverageSnap = await API.getCoverage();
+      const snap = await API.getCoverage();
+      if (snap && snap.profile) {
+        this.rememberCoverage(snap);
+      } else {
+        this.coverageSnap = this.loadPersistedCoverage() || snap || { profile: null, eligibility: null };
+      }
       if (this.coverageSnap?.profile?.zip) {
         this.thread.patient.zip = this.coverageSnap.profile.zip;
         this.saveThread();
       }
       this.costEstimate = this.coverageSnap.visit_cost_estimate || this.costEstimate;
     } catch (err) {
-      this.coverageSnap = { profile: null, eligibility: null };
+      this.coverageSnap = this.loadPersistedCoverage() || { profile: null, eligibility: null };
     }
   },
 
@@ -425,7 +464,7 @@ const CareLoop = {
       this.thread = this.seedThread('first');
       this.saveThread();
       await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
-      this.coverageSnap = { profile: null, eligibility: null };
+      this.rememberCoverage({ profile: null, eligibility: null });
       this.costEstimate = null;
       this.scribeFixture = null;
       this.encounter = null;
@@ -444,9 +483,11 @@ const CareLoop = {
           payer_name: this.GOLDEN_PAYER,
           image_note: 'fixture:returning-seed',
         });
-        this.coverageSnap = await this.confirmFromProfile(snap.profile);
+        this.rememberCoverage(await this.confirmFromProfile(snap.profile));
       } else if (!this.eligibilityOnFile()) {
-        this.coverageSnap = await this.confirmFromProfile(this.coverageSnap.profile);
+        this.rememberCoverage(await this.confirmFromProfile(this.coverageSnap.profile));
+      } else {
+        this.persistCoverage();
       }
       this.view = 'Today';
     }
@@ -461,6 +502,12 @@ const CareLoop = {
     }
     API.setToken('');
     App.user = null;
+    try {
+      localStorage.removeItem(this.COVERAGE_KEY);
+    } catch (err) {
+      /* ignore */
+    }
+    this.coverageSnap = { profile: null, eligibility: null };
     this.view = 'Today';
     this.renderLogin();
   },
@@ -830,12 +877,12 @@ const CareLoop = {
         date_of_birth: dob,
         zip: String(d.get('zip') || '').trim(),
       });
-      this.coverageSnap = await this.confirmFromProfile({
+      this.rememberCoverage(await this.confirmFromProfile({
         payer_name: payer,
         member_id: String(d.get('member') || '').trim(),
         member_name: String(d.get('member_name') || '').trim(),
         date_of_birth: dob,
-      });
+      }));
       if (this.coverageSnap.profile?.zip) {
         this.thread.patient.zip = this.coverageSnap.profile.zip;
         this.saveThread();
@@ -882,7 +929,7 @@ const CareLoop = {
         symptoms: j.symptoms,
         use_fixture_prior_visit: Boolean(j.prior),
       });
-      this.coverageSnap = await API.guessVisitCost({ symptoms: j.symptoms });
+      this.rememberCoverage(await API.guessVisitCost({ symptoms: j.symptoms }));
       this.costEstimate = this.coverageSnap.visit_cost_estimate;
     } catch (err) {
       this.costEstimate = null;
@@ -1054,10 +1101,10 @@ const CareLoop = {
         break;
       case 'sample-card':
         try {
-          this.coverageSnap = await API.scanCoverage({
+          this.rememberCoverage(await API.scanCoverage({
             payer_name: this.GOLDEN_PAYER,
             image_note: 'fixture:front-of-card',
-          });
+          }));
           await this.loadPayers();
           this.insuranceMode = 'sample';
           this.render();
@@ -1080,7 +1127,7 @@ const CareLoop = {
           }
           const form = document.getElementById('insurance-form');
           const payer = form ? String(new FormData(form).get('payer') || '').trim() : this.GOLDEN_PAYER;
-          this.coverageSnap = await API.scanCoverage({
+          this.rememberCoverage(await API.scanCoverage({
             payer_name: payer,
             card_image_b64: card ? card.b64 : '',
             card_mime: card ? card.mime : '',
@@ -1088,7 +1135,7 @@ const CareLoop = {
             sbc_image_b64: sbc ? sbc.b64 : '',
             sbc_mime: sbc ? sbc.mime : '',
             sbc_filename: sbc ? sbc.filename : '',
-          });
+          }));
           await this.loadPayers();
           this.insuranceMode = 'sample';
           this.render();
@@ -1100,7 +1147,7 @@ const CareLoop = {
         break;
       case 'refresh-eligibility':
         try {
-          this.coverageSnap = await this.confirmFromProfile();
+          this.rememberCoverage(await this.confirmFromProfile());
           this.render();
           this.toast(this.coverageSource() === 'sandbox'
             ? 'Sandbox eligibility refreshed.'
@@ -1180,7 +1227,7 @@ const CareLoop = {
             payer_name: this.GOLDEN_PAYER,
             image_note: 'fixture:reset',
           });
-          this.coverageSnap = await this.confirmFromProfile(snap.profile);
+          this.rememberCoverage(await this.confirmFromProfile(snap.profile));
           this.closeModal();
           this.navigate('Today');
           this.toast('Sample record restored');

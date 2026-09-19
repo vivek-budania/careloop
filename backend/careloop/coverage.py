@@ -7,6 +7,9 @@ AETNA12345 is the canned sandbox member.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import math
 import os
@@ -28,7 +31,10 @@ ZIP_COORDS = {
     "10016": (40.7450, -73.9780),
 }
 
-_state: dict[str, Any] = {}
+_states: dict[str, dict[str, Any]] = {}
+_active_user = "_default"
+_COOKIE_KEYS = ("profile", "eligibility", "intake", "source")
+_DEMO_SECRET = "careloop-demo-session"
 
 
 def _has_word(blob: str, words: tuple[str, ...]) -> bool:
@@ -99,16 +105,69 @@ def _empty_state() -> dict:
     }
 
 
+def _secret() -> bytes:
+    raw = (os.getenv("SESSION_SECRET") or _DEMO_SECRET).strip()
+    return raw.encode("utf-8")
+
+
+def _b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _unb64(text: str) -> bytes:
+    pad = "=" * (-len(text) % 4)
+    return base64.urlsafe_b64decode(text + pad)
+
+
+def bind_user(username: Optional[str], cookie: Optional[str] = None) -> None:
+    """Select this username's snapshot. Cookie wins so Vercel workers agree."""
+    global _active_user
+    _active_user = (username or "_default").strip().lower() or "_default"
+    if cookie:
+        imported = decode_state_cookie(cookie)
+        if imported:
+            _states[_active_user] = imported
+            return
+    if _active_user not in _states:
+        _states[_active_user] = _empty_state()
+
+
+def encode_state_cookie() -> str:
+    snap = snapshot()
+    body = {key: snap.get(key) for key in _COOKIE_KEYS}
+    raw = json.dumps(body, separators=(",", ":")).encode("utf-8")
+    sig = hmac.new(_secret(), raw, hashlib.sha256).digest()
+    return f"v1.{_b64(raw)}.{_b64(sig)}"
+
+
+def decode_state_cookie(token: Optional[str]) -> Optional[dict]:
+    if not token or not token.startswith("v1."):
+        return None
+    try:
+        _ver, raw_b64, sig_b64 = token.split(".", 2)
+        raw = _unb64(raw_b64)
+        expected = hmac.new(_secret(), raw, hashlib.sha256).digest()
+        if not hmac.compare_digest(_unb64(sig_b64), expected):
+            return None
+        data = json.loads(raw.decode("utf-8"))
+        state = _empty_state()
+        for key in _COOKIE_KEYS:
+            if key in data:
+                state[key] = data[key]
+        return state
+    except Exception:
+        return None
+
+
 def reset() -> dict:
-    global _state
-    _state = _empty_state()
+    _states[_active_user] = _empty_state()
     return snapshot()
 
 
 def snapshot() -> dict:
-    if not _state:
-        reset()
-    return deepcopy(_state)
+    if _active_user not in _states:
+        _states[_active_user] = _empty_state()
+    return deepcopy(_states[_active_user])
 
 
 def list_payers() -> list[dict]:
@@ -164,9 +223,9 @@ def _profile_from_payer(payer: dict, overrides: Optional[dict] = None) -> dict:
 
 
 def _ensure_state() -> dict:
-    if not _state:
-        reset()
-    return _state
+    if _active_user not in _states:
+        _states[_active_user] = _empty_state()
+    return _states[_active_user]
 
 
 def save_profile(

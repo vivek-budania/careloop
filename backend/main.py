@@ -157,6 +157,46 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+
+def require_coverage_user(
+    request: Request,
+    user: dict = Depends(careloop_auth.require_user),
+):
+    careloop_coverage.bind_user(user["username"], request.cookies.get("careloop_coverage"))
+    return user
+
+
+def _set_session_cookies(
+    response: JSONResponse,
+    request: Request,
+    token: Optional[str] = None,
+) -> JSONResponse:
+    secure = careloop_auth.cookie_secure(request)
+    if token is not None:
+        response.set_cookie(
+            "careloop_token",
+            token,
+            httponly=False,
+            samesite="lax",
+            secure=secure,
+            max_age=60 * 60 * 12,
+            path="/",
+        )
+    response.set_cookie(
+        "careloop_coverage",
+        careloop_coverage.encode_state_cookie(),
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        max_age=60 * 60 * 12,
+        path="/",
+    )
+    return response
+
+
+def coverage_json(payload: dict, request: Request) -> JSONResponse:
+    return _set_session_cookies(JSONResponse(payload), request)
+
 # ---------------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------------
@@ -349,20 +389,13 @@ def careloop_auth_accounts():
 
 
 @app.post("/api/careloop/login")
-def careloop_login(req: LoginRequest):
+def careloop_login(req: LoginRequest, request: Request):
     try:
         result = careloop_auth.login(req.username, req.password)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    response = JSONResponse(result)
-    response.set_cookie(
-        "careloop_token",
-        result["token"],
-        httponly=False,
-        samesite="lax",
-        max_age=60 * 60 * 12,
-    )
-    return response
+    careloop_coverage.bind_user(result["user"]["username"])
+    return _set_session_cookies(JSONResponse(result), request, result["token"])
 
 
 @app.post("/api/careloop/logout")
@@ -374,7 +407,8 @@ def careloop_logout(request: Request, authorization: Optional[str] = Header(defa
         token = request.cookies.get("careloop_token")
     careloop_auth.logout(token)
     response = JSONResponse({"ok": True})
-    response.delete_cookie("careloop_token")
+    response.delete_cookie("careloop_token", path="/")
+    response.delete_cookie("careloop_coverage", path="/")
     return response
 
 
@@ -394,9 +428,9 @@ def careloop_payers(_user: dict = Depends(careloop_auth.require_user)):
 
 
 @app.get("/api/careloop/coverage")
-def careloop_get_coverage(_user: dict = Depends(careloop_auth.require_user)):
-    """Current in-memory coverage snapshot for this demo process."""
-    return careloop_coverage.snapshot()
+def careloop_get_coverage(request: Request, _user: dict = Depends(require_coverage_user)):
+    """Coverage snapshot for this signed-in demo user (cookie-backed on Vercel)."""
+    return coverage_json(careloop_coverage.snapshot(), request)
 
 
 @app.get("/api/careloop/demo-env")
@@ -406,25 +440,29 @@ def careloop_demo_env(_user: dict = Depends(careloop_auth.require_user)):
 
 
 @app.post("/api/careloop/coverage/reset")
-def careloop_reset_coverage(_user: dict = Depends(careloop_auth.require_user)):
-    return careloop_coverage.reset()
+def careloop_reset_coverage(request: Request, _user: dict = Depends(require_coverage_user)):
+    return coverage_json(careloop_coverage.reset(), request)
 
 
 @app.post("/api/careloop/coverage")
 def careloop_save_coverage(
     req: CoverageProfileRequest,
-    _user: dict = Depends(careloop_auth.require_user),
+    request: Request,
+    _user: dict = Depends(require_coverage_user),
 ):
     try:
-        return careloop_coverage.save_profile(
-            payer_name=req.payer_name,
-            member_name=req.member_name,
-            member_id=req.member_id,
-            group_number=req.group_number,
-            date_of_birth=req.date_of_birth,
-            zip_code=req.zip,
-            plan_type=req.plan_type,
-            supporting_docs=req.supporting_docs,
+        return coverage_json(
+            careloop_coverage.save_profile(
+                payer_name=req.payer_name,
+                member_name=req.member_name,
+                member_id=req.member_id,
+                group_number=req.group_number,
+                date_of_birth=req.date_of_birth,
+                zip_code=req.zip,
+                plan_type=req.plan_type,
+                supporting_docs=req.supporting_docs,
+            ),
+            request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -433,19 +471,23 @@ def careloop_save_coverage(
 @app.post("/api/careloop/coverage/scan")
 def careloop_scan_coverage(
     req: CoverageScanRequest,
-    _user: dict = Depends(careloop_auth.require_user),
+    request: Request,
+    _user: dict = Depends(require_coverage_user),
 ):
     try:
-        return careloop_coverage.scan_card(
-            payer_name=req.payer_name,
-            image_note=req.image_note,
-            sbc_note=req.sbc_note,
-            card_image_b64=req.card_image_b64,
-            card_mime=req.card_mime,
-            card_filename=req.card_filename,
-            sbc_image_b64=req.sbc_image_b64,
-            sbc_mime=req.sbc_mime,
-            sbc_filename=req.sbc_filename,
+        return coverage_json(
+            careloop_coverage.scan_card(
+                payer_name=req.payer_name,
+                image_note=req.image_note,
+                sbc_note=req.sbc_note,
+                card_image_b64=req.card_image_b64,
+                card_mime=req.card_mime,
+                card_filename=req.card_filename,
+                sbc_image_b64=req.sbc_image_b64,
+                sbc_mime=req.sbc_mime,
+                sbc_filename=req.sbc_filename,
+            ),
+            request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -454,14 +496,18 @@ def careloop_scan_coverage(
 @app.post("/api/careloop/coverage/confirm")
 def careloop_confirm_coverage(
     req: CoverageConfirmRequest,
-    _user: dict = Depends(careloop_auth.require_user),
+    request: Request,
+    _user: dict = Depends(require_coverage_user),
 ):
     try:
-        return careloop_coverage.confirm_coverage(
-            payer_name=req.payer_name,
-            member_id=req.member_id,
-            member_name=req.member_name,
-            date_of_birth=req.date_of_birth,
+        return coverage_json(
+            careloop_coverage.confirm_coverage(
+                payer_name=req.payer_name,
+                member_id=req.member_id,
+                member_name=req.member_name,
+                date_of_birth=req.date_of_birth,
+            ),
+            request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -470,25 +516,33 @@ def careloop_confirm_coverage(
 @app.post("/api/careloop/coverage/intake")
 def careloop_coverage_intake(
     req: CoverageIntakeRequest,
-    _user: dict = Depends(careloop_auth.require_user),
+    request: Request,
+    _user: dict = Depends(require_coverage_user),
 ):
-    return careloop_coverage.save_intake(
-        symptoms=req.symptoms,
-        prior_visit_note=req.prior_visit_note,
-        prior_visit_filename=req.prior_visit_filename,
-        use_fixture_prior_visit=req.use_fixture_prior_visit,
+    return coverage_json(
+        careloop_coverage.save_intake(
+            symptoms=req.symptoms,
+            prior_visit_note=req.prior_visit_note,
+            prior_visit_filename=req.prior_visit_filename,
+            use_fixture_prior_visit=req.use_fixture_prior_visit,
+        ),
+        request,
     )
 
 
 @app.post("/api/careloop/coverage/visit-guess")
 def careloop_visit_guess(
     req: CoverageVisitGuessRequest,
-    _user: dict = Depends(careloop_auth.require_user),
+    request: Request,
+    _user: dict = Depends(require_coverage_user),
 ):
     try:
-        return careloop_coverage.visit_guess(
-            symptoms=req.symptoms,
-            prior_visit_note=req.prior_visit_note,
+        return coverage_json(
+            careloop_coverage.visit_guess(
+                symptoms=req.symptoms,
+                prior_visit_note=req.prior_visit_note,
+            ),
+            request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -496,11 +550,15 @@ def careloop_visit_guess(
 
 @app.get("/api/careloop/network")
 def careloop_network(
+    request: Request,
     specialty: str = "",
     zip: str = "",
-    _user: dict = Depends(careloop_auth.require_user),
+    _user: dict = Depends(require_coverage_user),
 ):
-    return careloop_coverage.search_network(specialty=specialty, zip_code=zip)
+    return coverage_json(
+        careloop_coverage.search_network(specialty=specialty, zip_code=zip),
+        request,
+    )
 
 
 # ---------------------------------------------------------------------------

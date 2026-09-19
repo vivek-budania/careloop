@@ -39,7 +39,7 @@ Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire
 
 ## Dummy credentials (mock login)
 
-Not production auth. No HIPAA. Passwords are plaintext in `backend/data/mock_users.json`. Sessions are in-memory (lost on server restart).
+Not production auth. No HIPAA. Passwords are plaintext in `backend/data/mock_users.json`. Login is a **signed token** (username + expiry), not a server-side session map — required on Vercel because each request can hit a new worker. Coverage snapshot travels in a signed `careloop_coverage` cookie plus browser `localStorage`. Optional `SESSION_SECRET` rotates the signature.
 
 **Password for every account: `demo`**
 
@@ -101,7 +101,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. `maya` still logs in (alias of Jane Doe).
 
-Coverage state is **in-memory** until Vivek’s thread store exists. Visit/meds/history UI state is local until that store lands.
+Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s thread store exists. Visit/meds/history UI state is local until that store lands.
 
 ## Safety (do not weaken)
 
