@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CareLoop mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520;9..144,560&family=Source+Sans+3:wght@400;600;650;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="phone-stage">
+  <p class="phone-caption" id="caption">
+    <a href="index.html">All screens</a>
+    <span id="cap-name">Login</span>
+    <a href="#" id="prev">Prev</a>
+    <a href="#" id="next">Next</a>
+  </p>
+
+  <div class="phone" id="phone">
+    <!-- 01 Login -->
+    <section class="screen" id="s01" data-title="Login">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="scroll">
+        <div class="login-hero">
+          <div class="mark">C</div>
+          <h2>CareLoop</h2>
+          <p>Your visit, one thread</p>
+        </div>
+        <p class="banner">Visual prototype · fictional patient Maya Chen · not a medical record</p>
+        <div class="field">
+          <label>Email</label>
+          <input value="maya.chen@example.com" readonly>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" value="password" readonly>
+        </div>
+        <p class="lede" style="font-size:13px">Demo account for the hackathon golden path. CareLoop drafts and organizes — a clinician reviews.</p>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s02">Continue (first visit)</a>
+        <a class="btn btn-ghost" href="#s19">I’m returning</a>
+      </div>
+    </section>
+
+    <!-- 02 Insurance hub -->
+    <section class="screen hidden" id="s02" data-title="Insurance hub" data-step="1">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18" aria-label="Menu">☰</a>
+        <h1>Insurance</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <p class="eyebrow">First visit · build your record</p>
+        <h2 class="screen-title">Add your insurance</h2>
+        <p class="lede">Two ways to start. We’ll use this to suggest in-network clinics. This is not a coverage decision.</p>
+        <a class="card choice" href="#s03">
+          <h3>Photo of insurance card</h3>
+          <p>Take a picture of the front (and back if needed) or upload from your camera roll.</p>
+          <div class="meta"><span class="pill">Photo or upload</span></div>
+        </a>
+        <a class="card choice" href="#s04">
+          <h3>Enter plan details</h3>
+          <p>Company, group number, member ID, and subscriber name — typed by you.</p>
+        </a>
+      </div>
+      <div class="foot">
+        <a class="btn btn-ghost" href="#s19">Skip for now · go to Today</a>
+      </div>
+    </section>
+
+    <!-- 03 Scan -->
+    <section class="screen hidden" id="s03" data-title="Card photo / scan" data-step="1">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s02">←</a>
+        <h1>Scan card</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <p class="banner">Hold the card in the frame. Mock OCR will fill member fields for review — you confirm before anything is saved.</p>
+        <div class="viewfinder">
+          <div class="corners"></div>
+          <div class="ins-card">
+            <div class="brand">Horizon Health · PPO</div>
+            <div>Member<br><strong>MAYA CHEN</strong></div>
+            <div class="meta" style="color:#d7efe9;margin-top:10px">
+              <span>ID MCH-889120</span>
+              <span>GRP GH-4421</span>
+            </div>
+          </div>
+        </div>
+        <p class="lede" style="text-align:center;font-size:13px">Front of card · 1 of 2</p>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s05">Capture for review</a>
+        <a class="btn btn-ghost" href="#s04">Upload from photos</a>
+      </div>
+    </section>
+
+    <!-- 04 Manual -->
+    <section class="screen hidden" id="s04" data-title="Insurance details" data-step="1">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s02">←</a>
+        <h1>Plan details</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <p class="banner mint">Check these against your card. CareLoop does not determine eligibility — a mock payer will estimate later.</p>
+        <div class="field"><label>Insurance company</label><input value="Horizon Health" readonly></div>
+        <div class="field"><label>Plan type</label><input value="PPO" readonly></div>
+        <div class="field"><label>Group number</label><input value="GH-4421" readonly></div>
+        <div class="field"><label>Member ID</label><input value="MCH-889120" readonly></div>
+        <div class="field"><label>Subscriber name</label><input value="Maya Chen" readonly></div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s05">Save for review</a>
+      </div>
+    </section>
+
+    <!-- 05 Symptoms -->
+    <section class="screen hidden" id="s05" data-title="Issues / symptoms" data-step="2">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Visit</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 1 of 8</div>
+        <div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">What’s going on?</h2>
+        <p class="lede">Share what you want the clinic to know. CareLoop does not diagnose. A clinician reviews.</p>
+        <div class="chips">
+          <span class="chip on">Fatigue</span>
+          <span class="chip on">Thirst</span>
+          <span class="chip on">Frequent urination</span>
+          <span class="chip">Blurry vision</span>
+          <span class="chip">Headache</span>
+          <span class="chip">Other</span>
+        </div>
+        <div class="field">
+          <label>In your words</label>
+          <textarea readonly>Energy has been low for about 2 months. Very thirsty. Already taking metformin as prescribed.</textarea>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s06">Continue</a>
+      </div>
+    </section>
+
+    <!-- 06 Doctors -->
+    <section class="screen hidden" id="s06" data-title="Doctor suggestions" data-step="3">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Clinicians</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 2 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">Suggested for you</h2>
+        <p class="lede">Mock in-network PCP list from your plan directory. Availability is estimated — you still book with the clinic.</p>
+        <a class="card choice" href="#s07">
+          <div class="row">
+            <div class="doc-avatar">PR</div>
+            <div>
+              <h3>Dr. Priya Raman, MD</h3>
+              <p>Family medicine · 0.8 mi · Lakeside Clinic</p>
+              <div class="meta"><span class="pill">Est. in-network</span><span>Thu 10:30 open</span></div>
+            </div>
+          </div>
+        </a>
+        <div class="card">
+          <div class="row">
+            <div class="doc-avatar">JO</div>
+            <div>
+              <h3>Dr. James Okonkwo, MD</h3>
+              <p>Internal medicine · 1.4 mi</p>
+              <div class="meta"><span class="pill">Est. in-network</span><span>Fri 2:00</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div class="doc-avatar">EV</div>
+            <div>
+              <h3>Dr. Elena Vasquez, DO</h3>
+              <p>Family medicine · 2.1 mi</p>
+              <div class="meta"><span class="pill neutral">Confirm network</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 Appointment -->
+    <section class="screen hidden" id="s07" data-title="Appointment" data-step="4">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s06">←</a>
+        <h1>Book visit</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 3 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <p class="eyebrow">Dr. Priya Raman · Lakeside Clinic</p>
+        <h2 class="screen-title">Request a time</h2>
+        <p class="lede">Prototype booking only. The clinic confirms the slot. You-pay vs plan estimates come after SOAP — not a coverage determination.</p>
+        <div class="week">
+          <div class="day">M<b>21</b></div>
+          <div class="day">T<b>22</b></div>
+          <div class="day">W<b>23</b></div>
+          <div class="day on">T<b>24</b></div>
+          <div class="day">F<b>25</b></div>
+          <div class="day">S<b>26</b></div>
+          <div class="day">S<b>27</b></div>
+        </div>
+        <div class="slots">
+          <span class="slot">9:00</span>
+          <span class="slot on">10:30</span>
+          <span class="slot">1:15</span>
+          <span class="slot">3:40</span>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s08">Request Thu 10:30</a>
+      </div>
+    </section>
+
+    <!-- 08 Visit -->
+    <section class="screen hidden" id="s08" data-title="Doctor visit" data-step="5">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Check-in</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 4 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <div class="home-hero">
+          <p class="eyebrow" style="color:#d7efe9">You’re here</p>
+          <h2>Waiting room</h2>
+          <p>Dr. Raman · Thu 10:30 · Lakeside Clinic</p>
+        </div>
+        <div class="card">
+          <h3>Check-in complete</h3>
+          <p>Queue position 2. Clinic estimate ~8 minutes. When you’re called, we can start a <strong>draft</strong> transcript for the clinician to review.</p>
+        </div>
+        <div class="card">
+          <h3>What happens next</h3>
+          <p>Scribe draft → SOAP for clinician review → estimated costs (if insurance is on file) → suggested plan. Nothing becomes an order until a clinician confirms.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s09">Start draft transcript</a>
+      </div>
+    </section>
+
+    <!-- 09 Transcribing -->
+    <section class="screen hidden" id="s09" data-title="Live transcribing" data-step="6">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s08">←</a>
+        <h1>Scribe</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 5 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <p class="banner">Draft only. Clinician reviews before this becomes part of the plan. CareLoop is not recording a legal medical record in this prototype.</p>
+        <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p style="text-align:center;font-size:12px;color:var(--teal);font-weight:650;margin-bottom:12px">Listening · live draft</p>
+        <div class="card transcript">
+          <p><b>Dr. Raman:</b> How has the metformin been going?</p>
+          <p style="margin-top:8px"><b>Maya:</b> I take it twice a day. Energy still low. Thirst is worse in the afternoon.</p>
+          <p style="margin-top:8px"><b>Dr. Raman:</b> Let’s look at an HbA1c and talk through next options. Any add-on would need my review — and insurance may ask for prior auth.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s10">See draft SOAP</a>
+      </div>
+    </section>
+
+    <!-- 10 SOAP -->
+    <section class="screen hidden" id="s10" data-title="SOAP summary" data-step="7">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Visit summary</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 6 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <div class="row" style="margin-bottom:10px;align-items:center">
+          <h2 class="screen-title" style="margin:0">SOAP draft</h2>
+          <span class="pill warn">Awaiting clinician review</span>
+        </div>
+        <p class="lede">Written in plain language so you can read it. Your clinician confirms what is accurate. CareLoop does not finalize a diagnosis.</p>
+        <div class="card soap-block">
+          <h3>Subjective</h3>
+          <p>Maya reports fatigue and thirst for ~2 months. Continues metformin 1000 mg twice daily as prescribed.</p>
+        </div>
+        <div class="card soap-block">
+          <h3>Objective</h3>
+          <p>Visit vitals not entered in this prototype. Lab: HbA1c suggested (not yet drawn).</p>
+        </div>
+        <div class="card soap-block">
+          <h3>Assessment</h3>
+          <p>Type 2 diabetes follow-up — <em>draft impression for clinician review</em>. [NEEDS VERIFICATION] if labs change the picture.</p>
+        </div>
+        <div class="card soap-block">
+          <h3>Plan (proposed)</h3>
+          <p>HbA1c, continue metformin, discuss add-on therapy that may need prior authorization, 3-month follow-up. Next: estimated costs (skippable), then the suggested plan.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s22">Continue to estimated costs</a>
+      </div>
+    </section>
+
+    <!-- 22 Estimated costs -->
+    <section class="screen hidden" id="s22" data-title="Estimated costs" data-step="7">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Costs</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 7 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">Estimated costs</h2>
+        <p class="lede">Mock you-pay vs plan for the suggested lines. This is not a bill and not a coverage decision. Skip if you have no insurance on file.</p>
+        <p class="banner">Estimates only. <strong>PA may be required</strong> is a flag — not a price.</p>
+        <div class="card">
+          <div class="row">
+            <div>
+              <h3>Office visit</h3>
+              <p>Plan copay (mock)</p>
+            </div>
+            <div style="text-align:right">
+              <strong>You ~$25</strong>
+              <p class="meta" style="margin:0;justify-content:flex-end">Plan ~$25</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div>
+              <h3>HbA1c (lab)</h3>
+              <p>Typically no PA on this mock plan</p>
+            </div>
+            <div style="text-align:right">
+              <strong>You ~$0–15</strong>
+              <p class="meta" style="margin:0;justify-content:flex-end">Plan allowed (est.)</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div>
+              <h3>Add-on therapy (if prescribed)</h3>
+              <p>Not priced as covered until a PA decision — and a PA is not a claim.</p>
+            </div>
+            <span class="pill warn">PA may be required</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s11">Continue to plan</a>
+        <a class="btn btn-ghost" href="#s11">Skip estimates</a>
+      </div>
+    </section>
+
+    <!-- 11 Care plan -->
+    <section class="screen hidden" id="s11" data-title="Medications / tests / plan" data-step="8">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Care plan</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="stepper">
+        <div class="label">Visit journey · 8 of 8</div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      </div>
+      <div class="scroll">
+        <p class="banner">Suggested after clinician review. CareLoop does not prescribe, order labs, or decide coverage.</p>
+        <p class="eyebrow">Medications</p>
+        <div class="card">
+          <h3>Continue metformin 1000 mg BID</h3>
+          <p>Existing prescription. Adherence reminders can start after you confirm with the clinic.</p>
+          <div class="meta"><span class="pill">Current</span></div>
+        </div>
+        <div class="card">
+          <h3>Add-on therapy (e.g. GLP-1 class)</h3>
+          <p>Clinician may consider this if HbA1c stays high. Mock payer often requires <strong>prior authorization</strong> — that is not an approval or a denial yet.</p>
+          <div class="meta"><span class="pill warn">PA may be required</span></div>
+        </div>
+        <p class="eyebrow">Tests</p>
+        <div class="card">
+          <h3>HbA1c (lab)</h3>
+          <p>On this mock plan, this lab is typically not PA-gated. Still an estimate, not a benefit determination.</p>
+        </div>
+        <p class="eyebrow">Referrals</p>
+        <div class="card">
+          <h3>Diabetes education (suggested)</h3>
+          <p>Optional referral for the clinic to place if they agree.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s12">See follow-ups</a>
+      </div>
+    </section>
+
+    <!-- 12 Follow-ups -->
+    <section class="screen hidden" id="s12" data-title="Follow-ups">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Follow-ups</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">What to do next</h2>
+        <p class="lede">A checklist for you and the clinic — not medical advice. Waiting / who acts is spelled out.</p>
+        <div class="list-item"><span class="dot"></span><div><strong>You</strong><p>Get HbA1c drawn when the lab order is ready.</p></div></div>
+        <div class="list-item"><span class="dot amber"></span><div><strong>Clinic</strong><p>Review SOAP and confirm the plan before orders go out.</p></div></div>
+        <div class="list-item"><span class="dot amber"></span><div><strong>Insurance (if add-on Rx)</strong><p>Prior auth is a separate step from any later claim. Status will show as draft → submitted → decision.</p></div></div>
+        <div class="list-item"><span class="dot"></span><div><strong>You + clinic</strong><p>Follow-up visit in about 3 months — Dec 2026 (suggested).</p></div></div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s19">Go to Today</a>
+      </div>
+    </section>
+
+    <!-- 13 Medicines (doses + list + refill) -->
+    <section class="screen hidden" id="s13" data-title="Medicines">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Medicines</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">Medicines</h2>
+        <p class="lede">Today’s doses, the list (how often), and refill. You mark taken or missed. CareLoop does not change the dose or e-prescribe.</p>
+        <p class="eyebrow">Today</p>
+        <div class="card">
+          <div class="row">
+            <div>
+              <h3>Metformin 1000 mg</h3>
+              <p>8:00 AM · with breakfast</p>
+            </div>
+            <span class="pill">Taken</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div>
+              <h3>Metformin 1000 mg</h3>
+              <p>8:00 PM · with dinner</p>
+            </div>
+            <span class="pill warn">Upcoming</span>
+          </div>
+        </div>
+        <p class="eyebrow">List &amp; sig</p>
+        <div class="card">
+          <h3>Metformin 1000 mg</h3>
+          <p>Twice daily · 8:00 AM and 8:00 PM · with food. Patient-reported current Rx.</p>
+        </div>
+        <p class="eyebrow">Refill</p>
+        <div class="card">
+          <h3>Metformin 1000 mg tablets</h3>
+          <p>~12 days remaining on the mock fill. Ask your clinic or pharmacy. PA approval (if an add-on is prescribed later) is not a paid claim.</p>
+          <div class="meta"><span class="pill warn">Refill reminder</span></div>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s14">Mark evening taken</a>
+        <a class="btn btn-ghost" href="#s14">Draft refill request for clinic</a>
+      </div>
+    </section>
+
+    <!-- 14 Refill follow-up (from Medicines, not a ☰ item) -->
+    <section class="screen hidden" id="s14" data-title="Refill follow-up">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s13">←</a>
+        <h1>Refill</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">Draft refill request</h2>
+        <p class="lede">A nudge when days-supply is low. CareLoop does not e-prescribe or call a pharmacy. This is not an ☰ destination — it lives under Medicines.</p>
+        <div class="card">
+          <h3>Metformin 1000 mg tablets</h3>
+          <p>~12 days remaining. Clinic or pharmacy still has to fill.</p>
+          <div class="meta"><span class="pill warn">Refill reminder</span></div>
+        </div>
+        <div class="card">
+          <h3>Add-on Rx (if prescribed later)</h3>
+          <p>If a PA-required medicine is approved and dispensed in the demo, it appears under Medicines. Approval of PA is not the same as a paid claim.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s13">Send draft to clinic (mock)</a>
+        <a class="btn btn-ghost" href="#s13">Back to Medicines</a>
+      </div>
+    </section>
+
+    <!-- 15 History list -->
+    <section class="screen hidden" id="s15" data-title="History list">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>History</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <div class="seg">
+          <a class="seg-btn on" href="#s15">My visits</a>
+          <a class="seg-btn" href="#s17">For the clinic</a>
+        </div>
+        <h2 class="screen-title">My visits</h2>
+        <p class="lede">Past visits and why you went. New visits append here. Medicines, tests, and insurance have their own ☰ homes.</p>
+        <a class="card choice" href="#s16">
+          <h3>Sep 24, 2026 · Dr. Raman</h3>
+          <p>Reason: fatigue, thirst, diabetes follow-up (patient-reported).</p>
+          <div class="meta"><span class="pill warn">Clinician review</span></div>
+        </a>
+        <div class="card">
+          <h3>No earlier visits on this demo thread</h3>
+          <p>Repeat visits from Today will stack as more rows.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 16 History detail -->
+    <section class="screen hidden" id="s16" data-title="History detail">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s15">←</a>
+        <h1>Visit breakup</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <p class="eyebrow">Sep 24, 2026 · Lakeside Clinic</p>
+        <h2 class="screen-title">What happened</h2>
+        <div class="card">
+          <h3>Waiting</h3>
+          <p>SOAP and plan still need clinician confirmation before orders are treated as placed.</p>
+        </div>
+        <div class="card">
+          <h3>Who acts</h3>
+          <p>Clinician: review draft. You: labs when released. Payer: only if an add-on Rx PA is submitted later.</p>
+        </div>
+        <div class="card soap-block">
+          <h3>Evidence on this visit</h3>
+          <p>Symptoms you entered, draft transcript, metformin duration you reported, coverage snapshot (Horizon PPO). No fabricated labs.</p>
+        </div>
+        <div class="card">
+          <h3>Not the same thing</h3>
+          <p>A future <strong>prior auth</strong> decision is not a <strong>claim</strong> payment. Both can appear on this thread as separate events.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s17">Add to clinic packet</a>
+      </div>
+    </section>
+
+    <!-- 17 Share -->
+    <section class="screen hidden" id="s17" data-title="Share history packet">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>History</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <div class="seg">
+          <a class="seg-btn" href="#s15">My visits</a>
+          <a class="seg-btn on" href="#s17">For the clinic</a>
+        </div>
+        <h2 class="screen-title">For the clinic</h2>
+        <p class="lede">Doctor-facing packet for the next visit. You choose what to include. This is a record view, not an appeal letter — letter downloads still need human review.</p>
+        <div class="card">
+          <label class="check"><input type="checkbox" checked disabled> Coverage snapshot (Horizon PPO)</label>
+          <label class="check"><input type="checkbox" checked disabled> Visit SOAP draft + review status</label>
+          <label class="check"><input type="checkbox" checked disabled> Medications &amp; refill status</label>
+          <label class="check"><input type="checkbox" checked disabled> Tests (HbA1c pending)</label>
+          <label class="check"><input type="checkbox" disabled> Authorization / claim events (none yet)</label>
+        </div>
+        <p class="banner mint">Export as PDF / markdown fixture in the demo. Fictional data only.</p>
+      </div>
+      <div class="foot">
+        <a class="btn btn-primary" href="#s15">Create packet (mock)</a>
+      </div>
+    </section>
+
+    <!-- 18 Menu -->
+    <section class="screen hidden" id="s18" data-title="Menu">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s19">☰</a>
+        <h1>Today</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <div class="home-hero">
+          <h2>Good afternoon, Maya</h2>
+          <p>Continue your visit when you’re ready.</p>
+        </div>
+        <div class="card"><h3>Visit in progress</h3><p>Insurance added · next: symptoms</p></div>
+      </div>
+      <div class="menu-scrim"></div>
+      <aside class="drawer">
+        <div class="who">
+          <strong>Maya Chen</strong>
+          <span>Horizon Health PPO · demo</span>
+        </div>
+        <a class="nav-link on" href="#s19"><span class="nav-ico">⌂</span> Today</a>
+        <a class="nav-link" href="#s15"><span class="nav-ico">☰</span> History</a>
+        <a class="nav-link" href="#s13"><span class="nav-ico">💊</span> Medicines</a>
+        <a class="nav-link" href="#s23"><span class="nav-ico">◻</span> Tests</a>
+        <a class="nav-link" href="#s20"><span class="nav-ico">▣</span> Insurance</a>
+        <a class="nav-link" href="#s21"><span class="nav-ico">☺</span> Profile</a>
+        <div class="drawer-foot">
+          <a class="nav-link" href="#s01">Log out</a>
+          <p>Visit path (symptoms → plan) is Continue from Today — not listed here.</p>
+        </div>
+      </aside>
+    </section>
+
+    <!-- 19 Home -->
+    <section class="screen hidden" id="s19" data-title="Today / Home">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Today</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <div class="home-hero">
+          <h2>Good afternoon, Maya</h2>
+          <p>One thread. Repeat visits start from here; ☰ is History, Medicines, Tests, Insurance, Profile.</p>
+        </div>
+        <a class="card choice" href="#s05">
+          <h3>Continue visit</h3>
+          <p>Insurance is on file (mock). Journey: symptoms → doctors → book → visit → SOAP → costs → plan.</p>
+          <div class="meta"><span class="pill">Not in the menu</span></div>
+        </a>
+        <a class="card choice" href="#s13">
+          <h3>Evening metformin</h3>
+          <p>Due 8:00 PM · mark taken or missed (Medicines)</p>
+        </a>
+        <a class="card choice" href="#s15">
+          <h3>History</h3>
+          <p>My visits · For the clinic packet</p>
+        </a>
+        <a class="card choice" href="#s20">
+          <h3>Insurance</h3>
+          <p>Horizon PPO · est. active · card on file</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- 20 Insurance (standing) -->
+    <section class="screen hidden" id="s20" data-title="Insurance">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Insurance</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <p class="banner">Mock eligibility from the plan on file. Estimates only — CareLoop does not decide coverage.</p>
+        <div class="card">
+          <h3>Card on file</h3>
+          <p>Horizon Health PPO · front image stub in the scan flow. Update if the card changed.</p>
+        </div>
+        <div class="card">
+          <h3>Horizon Health PPO</h3>
+          <p>Member Maya Chen · ID MCH-889120 · Group GH-4421</p>
+          <div class="meta"><span class="pill">Est. active</span></div>
+        </div>
+        <div class="card">
+          <h3>Cost share (estimated)</h3>
+          <p>Office visit copay ~$25. Deductible / OOP not verified in this prototype.</p>
+        </div>
+        <div class="card">
+          <h3>Two insurance moments</h3>
+          <p><strong>Prior auth</strong> happens before a planned drug/service is covered. A <strong>claim</strong> happens at billing or dispensing. They stay separate on your history.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-ghost" href="#s02">Update card or details</a>
+      </div>
+    </section>
+
+    <!-- 21 Profile extra -->
+    <section class="screen hidden" id="s21" data-title="Profile">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Profile</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">Maya Chen</h2>
+        <p class="lede">Fictional demo patient. General details only — medicines, tests, and insurance live in the menu.</p>
+        <div class="card"><h3>Preferred name</h3><p>Maya Chen</p></div>
+        <div class="card"><h3>Email</h3><p>maya.chen@example.com</p></div>
+        <div class="card"><h3>Phone (demo)</h3><p>(555) 014-2206</p></div>
+        <div class="card"><h3>App</h3><p>CareLoop visual prototype. Provider/Patient Advocate tabs in DenialShield are not this UX. Log out from the ☰ footer.</p></div>
+      </div>
+    </section>
+
+    <!-- 23 Tests -->
+    <section class="screen hidden" id="s23" data-title="Tests">
+      <div class="status-bar"><span>9:41</span><span class="icons">●●●  LTE  84%</span></div>
+      <div class="topbar">
+        <a class="icon-btn" href="#s18">☰</a>
+        <h1>Tests</h1>
+        <div class="avatar">MC</div>
+      </div>
+      <div class="scroll">
+        <h2 class="screen-title">Tests</h2>
+        <p class="lede">Summaries and documents from the thread. CareLoop does not interpret results or decide what to order.</p>
+        <p class="eyebrow">Summaries</p>
+        <div class="card">
+          <h3>HbA1c</h3>
+          <p>Suggested at the Sep 24 visit. Ordered (mock). Result not in yet.</p>
+          <div class="meta"><span class="pill">Pending</span></div>
+        </div>
+        <p class="eyebrow">Documents</p>
+        <div class="card">
+          <h3>Lab requisition (stub)</h3>
+          <p>PDF fixture for the clinic packet. Not a real lab order.</p>
+        </div>
+        <div class="card">
+          <h3>Result PDF</h3>
+          <p>Empty until a mock result is seeded. No fabricated values.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

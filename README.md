@@ -6,7 +6,7 @@ It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is l
 
 The code in this repo today is **DenialShield**: FastAPI + vanilla JS tools for drafting PA packets and appeal letters. CareLoop wraps that authorization seed in a golden-path thread.
 
-**Who builds what:** **Dave** (card scan → coverage, in-network clinicians, optional copay/deductible), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
+**Who builds what:** **Dave** (card scan → coverage, in-network clinicians, optional copay/deductible), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**. Screen-by-screen patient path (what they see / do / go to): **[`workflow.md`](workflow.md)**.
 
 ---
 
@@ -72,6 +72,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 ```
 .
 ├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
+├── workflow.md             # Patient-facing screen flow (teammate map; pairs with frontend/mockups/)
 ├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
 ├── backend/
 │   ├── main.py             # All routes; mounts static; serves index.html
@@ -134,6 +135,8 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
 Open **http://localhost:8080**
+
+Patient-facing **visual mockups** (not the live product): **http://localhost:8080/mockups/**. Text walkthrough of the same screens: **[`workflow.md`](workflow.md)**.
 
 Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require Gemini.
 
