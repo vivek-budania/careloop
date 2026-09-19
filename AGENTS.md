@@ -4,20 +4,21 @@ Read this before changing the running app. Setup commands also live in [`README.
 
 ## Owner progress (for other agents)
 
-**Dave (coverage / card / network / cost).** PR #4 is **merged** to `main` (`7dac6f2`) but GitHub merged an older branch tip (`6508cb2`). The Stedi / Jane Doe commits landed **after** that merge and are **not** on `main` yet — they ride this follow-on branch.
+**Dave (coverage / card / network / cost).** Combined with Vivek’s patient shell on this branch.
 
 | Work | Where |
 |------|--------|
-| Mock login, 6-step CareLoop wizard, Claims Coming soon (no Provider/Advocate nav) | **main** (PR #4) |
-| Jane Doe / Aetna `AETNA12345` / Stedi sandbox `STEDI_API_KEY` at container launch | **this branch** (missed PR #4 merge) |
+| Vivek patient shell (☰ Today / History / Medicines / Tests / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
+| Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
+| Gemini vision card/SBC on Insurance only | **this branch** |
+| Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
-| Image readability (Gemini vision card/SBC → InsuranceProfile) | **this branch, in progress** |
 
-Do not rebuild the wizard or Stedi adapter. Fixture “Load sample card” stays the no-key path. Do not invent copays. Tag unreadable OCR fields `[NEEDS VERIFICATION]`. No letter watermark on JSON extract.
+Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample card stays the no-key path. Do not invent copays. Tag unreadable OCR fields `[NEEDS VERIFICATION]`. No letter watermark on JSON extract.
 
-**Vivek:** patient mockups at `/mockups/`. Thread/history store is **not** bound yet — do not assume Dave’s coverage snapshot is persisted. Do not restore Provider/Advocate tabs.
+**Vivek:** design lead. IA, copy, ivory/sage chrome, hamburger, first-time vs returning login, skippable costs after SOAP. Do not fight those.
 
-**Sreekar:** PA/parse/appeal/demand APIs still exist; they are **not** in the nav. Claims tab is Coming soon. Do not collapse PA denial vs claim denial.
+**Sreekar:** PA/parse/appeal/demand APIs still exist at `/letters`. Claims is Coming soon on Insurance. Do not collapse PA denial vs claim denial. Scribe rebase onto the SOAP step, not the old wizard.
 
 ---
 
@@ -25,12 +26,13 @@ Do not rebuild the wizard or Stedi adapter. Fixture “Load sample card” stays
 
 **CareLoop is the entire web app.** It is a mocked US patient-journey demo (coverage intake first). It is **not** a real payer, PBM, EHR, or claims platform.
 
-After login the user sees two tabs:
+After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
-1. **CareLoop** — the product. Paginated coverage intake (identity → optional review → mock eligibility → symptoms → visit/cost guess → in-network clinicians).
-2. **Insurance Claims Management** — **Coming soon** placeholder. Provider and Patient Advocate letter UIs are **not** in the nav. Do not treat those old DenialShield forms as the demo.
+1. **☰** Today · History (My visits | For the clinic) · Medicines · Tests · Insurance · Profile · Log out
+2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with **Aetna / Jane Doe** coverage seeded.
+3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
 
-Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist in the backend for later claims work. Do not wire a download path that skips HITL/watermark if you turn them back on.
+Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire a download path that skips HITL/watermark. History packet `.md` is a record export, not a letter.
 
 ## Dummy credentials (mock login)
 
@@ -38,15 +40,15 @@ Not production auth. No HIPAA. Passwords are plaintext in `backend/data/mock_use
 
 **Password for every account: `demo`**
 
-Demo members are remapped to Stedi's canned sandbox subscribers. Golden path: **`jane` / `demo`**, pick **Aetna**, load sample card.
+Golden path: **`jane` / `demo`** → **I’m returning** (seeds Aetna Jane Doe) or **Start my first visit** (insurance hub, sample card = same fixture).
 
 | Username | Name | Role | After login |
 |----------|------|------|-------------|
-| `jane` | Jane Doe | patient | CareLoop + Claims (coming soon) |
-| `maya` | Jane Doe | patient | same two tabs (alias for jane) |
-| `priya` | Dr. Priya Shah | clinician | same two tabs |
-| `advocate` | Alex Rivera | advocate | same two tabs |
-| `demo` | Jane Doe | demo | same two tabs |
+| `jane` | Jane Doe | patient | patient shell |
+| `maya` | Jane Doe | patient | same (alias) |
+| `priya` | Dr. Priya Shah | clinician | same |
+| `advocate` | Alex Rivera | advocate | same |
+| `demo` | Jane Doe | demo | same |
 
 ```bash
 curl -s -X POST http://localhost:8080/api/careloop/login \
@@ -68,32 +70,32 @@ pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open http://localhost:8080 → log in as `jane` / `demo` → CareLoop wizard. Pick **Aetna** (preselected) → Load sample card (Jane Doe / AETNA12345 / 2004-04-04) → confirm coverage.
+Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning** or **Start my first visit**.
 
-**Image readability:** inject `GEMINI_API_KEY` at launch, upload a card/SBC, click **Read uploaded images**. Without that key, use **Load sample card**. JSON extract is not watermarked. Never invent a copay that is not printed.
+**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (Gemini vision) lives on this Insurance flow only — not in the hamburger. Without `GEMINI_API_KEY`, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed.
 
-**Where the Stedi key goes:** `STEDI_API_KEY` on the **process/container at launch**. Do not bake it into the image, commit it, or paste it in chat. A laptop `.env` is a fallback; `load_dotenv(override=False)` so the container env always wins. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, step 3 still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500, OON $1000, INN OOP $7000 remaining $7000).
+**Where the Stedi key goes:** `STEDI_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake the key into the image, commit it, or paste it in chat. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500).
 
-**Vercel:** Cursor/cloud-agent env does not reach Vercel. Put `STEDI_API_KEY` (and `GEMINI_API_KEY`) in the Vercel project Environment Variables, then Redeploy. Entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub.
+**Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub.
 
-## CareLoop wizard (Dave)
+## CareLoop patient UI + Dave coverage
 
-One step on screen at a time (`frontend/js/careloop.js`).
+Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/network still use Dave’s APIs:
 
-1. Insurance identity — **payer dropdown required**; optional typed fields / **Read uploaded images** (Gemini vision) / **Load sample card** (fixture)
-2. Optional review — skip allowed
-3. Confirm coverage — Stedi sandbox 270/271 when `STEDI_API_KEY` is a test key and the member matches a canned subscriber; otherwise mock active/inactive + copay/deductible
-4. Reason for visit — symptoms + optional prior-visit PDF/image (filename) or sample note
-5. Visit/cost **guess** — labeled estimate, not a bill or coverage decision
-6. In-network clinicians — fixture list ∩ ZIP distance
+- Payer dropdown + sample card + confirm: `listPayers` / `scanCoverage` / `saveCoverage` / `confirmCoverage`
+- DOB is required on save. Stedi uses it on the canned Jane Doe member.
+- Optional Gemini read: `scanCoverage` with `card_image_b64` / `sbc_image_b64` (Insurance form only)
+- Symptoms intake: `saveCoverageIntake` (returns `suggested_specialty`)
+- Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
+- Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
 
-Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. `maya` still logs in (alias of Jane Doe).
+Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. `maya` still logs in (alias of Jane Doe).
 
-Coverage state is **in-memory** until Vivek’s thread store exists.
+Coverage state is **in-memory** until Vivek’s thread store exists. Visit/meds/history UI state is local until that store lands.
 
 ## Safety (do not weaken)
 
-- No independent clinical or coverage decisions. Cost output is a guess.
+- No independent clinical or coverage decisions. Cost output is a guess. Specialty is a directory filter, not a diagnosis.
 - Do not collapse **PA denial** (before care is authorized) vs **claim denial** (after billing).
 - Drafts only — no file/fax/eRx/live insurer.
 - If generating letters: `DRAFT_WATERMARK` + HITL approve-before-download.
@@ -101,14 +103,15 @@ Coverage state is **in-memory** until Vivek’s thread store exists.
 ## Files that matter for this slice
 
 - `backend/careloop/auth.py` — mock login
-- `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network
+- `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network/specialty suggestion
 - `backend/careloop/extract.py` — Gemini vision card/SBC → InsuranceProfile (no watermark)
 - `backend/careloop/stedi.py` — optional sandbox 270/271 (`STEDI_API_KEY` at launch)
 - `.env.example` — documents `STEDI_API_KEY` and `GEMINI_API_KEY` (inject at launch; do not commit secrets)
 - `backend/data/mock_users.json` — dummy accounts (Jane Doe / `jane`)
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`
-- `frontend/index.html` — login, CareLoop wizard, claims coming-soon tab
-- `.env.example` — documents `STEDI_API_KEY` (inject at launch; do not commit the secret)
+- `frontend/index.html` — patient shell
+- `frontend/letters.html` — PA/appeal HITL (not in ☰)
+- `pyproject.toml` — Vercel FastAPI entrypoint
 
-`frontend/js/provider.js` and `frontend/js/patient.js` are leftover DenialShield modules; they are not product tabs.
+`frontend/js/provider.js` and `frontend/js/patient.js` power `/letters`; they are not the CareLoop hamburger.

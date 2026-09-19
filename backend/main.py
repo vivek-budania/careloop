@@ -125,6 +125,7 @@ class CoverageScanRequest(BaseModel):
 class CoverageConfirmRequest(BaseModel):
     payer_name: str = ""
     member_id: str = ""
+    date_of_birth: str = ""
 
 
 class CoverageIntakeRequest(BaseModel):
@@ -440,6 +441,7 @@ def careloop_confirm_coverage(
         return careloop_coverage.confirm_coverage(
             payer_name=req.payer_name,
             member_id=req.member_id,
+            date_of_birth=req.date_of_birth,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -497,3 +499,8 @@ if os.path.isdir(FRONTEND_DIR):
     @app.get("/")
     def serve_frontend():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+    @app.get("/letters")
+    def serve_letters():
+        """Secondary DenialShield PA / appeal surface. Not the CareLoop patient UX."""
+        return FileResponse(os.path.join(FRONTEND_DIR, "letters.html"))

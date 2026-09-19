@@ -56,6 +56,37 @@ def _prior_visit_fixture() -> dict:
     return _load_json("mock_prior_visit.json")
 
 
+def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
+    """Directory filter from visit reason. Not a diagnosis or coverage decision."""
+    blob = f"{symptoms} {prior_visit_note}".lower()
+    if _has_word(
+        blob,
+        (
+            "diabetes",
+            "a1c",
+            "hba1c",
+            "metformin",
+            "glp",
+            "insulin",
+            "thirst",
+            "endocrin",
+        ),
+    ):
+        return {
+            "code": "endocrinology",
+            "label": "Endocrinology",
+            "reason": (
+                "Visit reason looks like a diabetes follow-up. "
+                "Suggestion only — not a diagnosis."
+            ),
+        }
+    return {
+        "code": "pcp",
+        "label": "Primary care",
+        "reason": "No specialty keywords matched. Defaulting to primary care.",
+    }
+
+
 def _empty_state() -> dict:
     return {
         "profile": None,
@@ -359,7 +390,11 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
     }
 
 
-def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
+def confirm_coverage(
+    payer_name: str = "",
+    member_id: str = "",
+    date_of_birth: str = "",
+) -> dict:
     state = _ensure_state()
     profile = state.get("profile")
     if payer_name:
@@ -378,6 +413,8 @@ def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
             }}
         if member_id:
             profile["member_id"] = member_id
+        if date_of_birth:
+            profile["date_of_birth"] = date_of_birth
         state["profile"] = profile
     if not profile:
         raise ValueError("Save or scan a card first (payer dropdown is required).")
@@ -418,9 +455,16 @@ def save_intake(
                 prior.update(_prior_visit_fixture())
                 prior["filename"] = prior_visit_filename
                 prior["source"] = "fixture"
+    suggestion = guess_specialty(
+        symptoms,
+        (prior or {}).get("summary") or (prior or {}).get("user_note") or "",
+    )
     state["intake"] = {
         "symptoms": symptoms.strip(),
         "prior_visit": prior,
+        "suggested_specialty": suggestion["code"],
+        "suggested_specialty_label": suggestion["label"],
+        "suggested_specialty_reason": suggestion["reason"],
     }
     return snapshot()
 
@@ -518,9 +562,15 @@ def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
         estimate["warnings"].append(
             "At least one visit type was inferred from symptoms. A clinician should confirm."
         )
+    suggestion = guess_specialty(symptoms, prior_text)
+    estimate["suggested_specialty"] = suggestion["code"]
+    estimate["suggested_specialty_label"] = suggestion["label"]
     state["visit_cost_estimate"] = estimate
-    if symptoms and not intake.get("symptoms"):
-        state["intake"] = {**intake, "symptoms": symptoms}
+    merged_intake = {**intake, "symptoms": symptoms or intake.get("symptoms") or ""}
+    merged_intake["suggested_specialty"] = suggestion["code"]
+    merged_intake["suggested_specialty_label"] = suggestion["label"]
+    merged_intake["suggested_specialty_reason"] = suggestion["reason"]
+    state["intake"] = merged_intake
     return snapshot()
 
 
@@ -547,7 +597,8 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     zip_code = zip_code or profile.get("zip") or "94110"
     origin, zip_fallback = _coords_for_zip(zip_code)
     payer_name = (profile.get("payer_name") or "").strip()
-    spec = (specialty or "pcp").strip().lower()
+    intake = state.get("intake") or {}
+    spec = (specialty or intake.get("suggested_specialty") or "pcp").strip().lower()
 
     results = []
     for doc in _network():
@@ -572,6 +623,11 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     payload = {
         "zip": zip_code,
         "specialty": spec,
+        "specialty_label": next(
+            (row["specialty_label"] for row in results if row["specialty"] == spec),
+            "Primary care" if spec == "pcp" else spec,
+        ),
+        "suggested_from_visit": bool(intake.get("suggested_specialty")),
         "zip_fallback_used": zip_fallback,
         "source": "fixture",
         "disclaimer": (
