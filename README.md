@@ -92,6 +92,8 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 │       ├── provider.js     # Parked DenialShield PA forms (not in nav)
 │       └── patient.js      # Parked DenialShield appeal forms (not in nav)
 ├── requirements.txt
+├── pyproject.toml          # Vercel FastAPI entrypoint: backend.main:app
+├── vercel.json             # Function maxDuration for backend/main.py
 └── .env.example
 ```
 
@@ -137,6 +139,12 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
 Open **http://localhost:8080**
+
+### Vercel (optional demo host)
+
+Vercel detects FastAPI but needs an explicit entrypoint because `backend/main.py` is not a default filename location. [`pyproject.toml`](pyproject.toml) sets `tool.vercel.entrypoint = "backend.main:app"`. `backend/__init__.py` already exists so that import works. Keep serving `/` as the SPA — do not add a JSON `{"status": ...}` root route.
+
+In the Vercel project: Settings → Environment Variables → `GEMINI_API_KEY` (letters) and optional `STEDI_API_KEY` (**test_** sandbox key only). Apply to Production and Preview, then Redeploy. Cursor/cloud-agent env is not Vercel env. Do not commit keys.
 
 Patient-facing **visual mockups** (not the live product): **http://localhost:8080/mockups/**. Text walkthrough of the same screens: **[`workflow.md`](workflow.md)**.
 

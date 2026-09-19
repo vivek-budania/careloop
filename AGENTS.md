@@ -45,6 +45,23 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open http://localhost:8080 → log in → CareLoop wizard. Optional later: `STEDI_API_KEY` (sandbox 270/271; fixture members will not match). Gemini/Azure are for OCR later; this slice does not OCR.
 
+## Vercel
+
+Vercel finds `app = FastAPI(...)` in `backend/main.py`, which is not a default entrypoint. Do **not** move `main.py` and do **not** replace `/` with a JSON stub — that route serves `frontend/index.html`.
+
+Repo already has `backend/__init__.py`. Point Vercel at the app with [`pyproject.toml`](pyproject.toml):
+
+```toml
+[tool.vercel]
+entrypoint = "backend.main:app"
+```
+
+After this is on the branch Vercel deploys, the project should redeploy. Local run is unchanged: `python3 -m uvicorn backend.main:app --reload --port 8080`.
+
+**Keys:** add `STEDI_API_KEY` and `GEMINI_API_KEY` in the **Vercel** dashboard (Project Settings → Environment Variables), then Redeploy. A Cursor/cloud-agent env var does not ship to Vercel. Never paste keys in git or chat. Coverage on this `main` slice is mock-first; a Stedi test key is optional.
+
+**Serverless caveat:** login and coverage snapshots are in-memory. A cold start logs the demo user out. That is expected until Vivek’s thread store exists.
+
 ## CareLoop wizard (Dave)
 
 One step on screen at a time (`frontend/js/careloop.js`).
