@@ -2,6 +2,25 @@
 
 Read this before changing the running app. Setup commands also live in [`README.md`](README.md) and [`CLAUDE.md`](CLAUDE.md). Hackathon owner split: [`plan.md`](plan.md).
 
+## Owner progress (for other agents)
+
+**Dave (coverage / card / network / cost).** PR #4 is **merged** to `main` (`7dac6f2`) but GitHub merged an older branch tip (`6508cb2`). The Stedi / Jane Doe commits landed **after** that merge and are **not** on `main` yet — they ride this follow-on branch.
+
+| Work | Where |
+|------|--------|
+| Mock login, 6-step CareLoop wizard, Claims Coming soon (no Provider/Advocate nav) | **main** (PR #4) |
+| Jane Doe / Aetna `AETNA12345` / Stedi sandbox `STEDI_API_KEY` at container launch | **this branch** (missed PR #4 merge) |
+| Coverage snapshot | **in-memory** until Vivek’s thread store |
+| Image readability (Gemini vision card/SBC → InsuranceProfile) | **this branch, in progress** |
+
+Do not rebuild the wizard or Stedi adapter. Fixture “Load sample card” stays the no-key path. Do not invent copays. Tag unreadable OCR fields `[NEEDS VERIFICATION]`. No letter watermark on JSON extract.
+
+**Vivek:** patient mockups at `/mockups/`. Thread/history store is **not** bound yet — do not assume Dave’s coverage snapshot is persisted. Do not restore Provider/Advocate tabs.
+
+**Sreekar:** PA/parse/appeal/demand APIs still exist; they are **not** in the nav. Claims tab is Coming soon. Do not collapse PA denial vs claim denial.
+
+---
+
 ## What the product is
 
 **CareLoop is the entire web app.** It is a mocked US patient-journey demo (coverage intake first). It is **not** a real payer, PBM, EHR, or claims platform.
@@ -49,7 +68,9 @@ pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open http://localhost:8080 → log in as `jane` / `demo` → CareLoop wizard. Pick **Aetna** (preselected) → Load sample card (Jane Doe / AETNA12345 / 2004-04-04) → confirm coverage. Gemini/Azure are for OCR later; this slice does not OCR.
+Open http://localhost:8080 → log in as `jane` / `demo` → CareLoop wizard. Pick **Aetna** (preselected) → Load sample card (Jane Doe / AETNA12345 / 2004-04-04) → confirm coverage.
+
+**Image readability:** inject `GEMINI_API_KEY` at launch, upload a card/SBC, click **Read uploaded images**. Without that key, use **Load sample card**. JSON extract is not watermarked. Never invent a copay that is not printed.
 
 **Where the Stedi key goes:** `STEDI_API_KEY` on the **process/container at launch**. Do not bake it into the image, commit it, or paste it in chat. A laptop `.env` is a fallback; `load_dotenv(override=False)` so the container env always wins. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, step 3 still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500, OON $1000, INN OOP $7000 remaining $7000).
 
@@ -57,7 +78,7 @@ Open http://localhost:8080 → log in as `jane` / `demo` → CareLoop wizard. Pi
 
 One step on screen at a time (`frontend/js/careloop.js`).
 
-1. Insurance identity — **payer dropdown required**; optional typed fields / sample card / filename-only uploads
+1. Insurance identity — **payer dropdown required**; optional typed fields / **Read uploaded images** (Gemini vision) / **Load sample card** (fixture)
 2. Optional review — skip allowed
 3. Confirm coverage — Stedi sandbox 270/271 when `STEDI_API_KEY` is a test key and the member matches a canned subscriber; otherwise mock active/inactive + copay/deductible
 4. Reason for visit — symptoms + optional prior-visit PDF/image (filename) or sample note
@@ -79,7 +100,9 @@ Coverage state is **in-memory** until Vivek’s thread store exists.
 
 - `backend/careloop/auth.py` — mock login
 - `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network
-- `backend/careloop/stedi.py` — optional sandbox 270/271 (test key from local `.env`)
+- `backend/careloop/extract.py` — Gemini vision card/SBC → InsuranceProfile (no watermark)
+- `backend/careloop/stedi.py` — optional sandbox 270/271 (`STEDI_API_KEY` at launch)
+- `.env.example` — documents `STEDI_API_KEY` and `GEMINI_API_KEY` (inject at launch; do not commit secrets)
 - `backend/data/mock_users.json` — dummy accounts (Jane Doe / `jane`)
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`

@@ -103,3 +103,30 @@ STRICT RULES:
 2. Use null for any field where the information is not found — NEVER guess.
 3. Return ONLY valid JSON, no additional text.
 4. Preserve exact wording for key_quotes."""
+
+CARD_EXTRACT_PROMPT = """You are reading a US health insurance card and/or an SBC/EOB image or PDF.
+
+Return ONLY a JSON object with these fields:
+{
+  "payer_name": "insurer name as printed, or empty string",
+  "member_name": "subscriber name as printed, or empty string",
+  "member_id": "member / ID / subscriber number as printed, or empty string",
+  "group_number": "group number as printed, or empty string",
+  "date_of_birth": "YYYY-MM-DD if a DOB is printed, else empty string",
+  "zip": "ZIP if printed, else empty string",
+  "plan_type": "HMO, PPO, EPO, POS, or empty string",
+  "rx_bin": "Rx BIN if printed, else empty string",
+  "rx_pcn": "Rx PCN if printed, else empty string",
+  "rx_group": "Rx group if printed, else empty string",
+  "printed_copay_pcp": "number or null — only if a PCP/office copay is printed",
+  "printed_copay_specialist": "number or null — only if a specialist copay is printed",
+  "unreadable": ["short names of fields you could not read"],
+  "warnings": ["any [NEEDS VERIFICATION] notes"]
+}
+
+ZERO HALLUCINATION:
+1. Copy only characters you can actually see. Never invent a member ID, group number, copay, or payer.
+2. If a field is blurry, cropped, or absent, return empty string or null and list it in unreadable. Add [NEEDS VERIFICATION] to warnings.
+3. Do not infer copays from typical plan designs. If no copay is printed, leave printed_copay_* null.
+4. Do not use outside knowledge of a payer's real benefits.
+5. Return JSON only."""

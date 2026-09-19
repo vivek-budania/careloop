@@ -1,8 +1,8 @@
 """Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
 
-No Gemini. Live 270/271 is optional: inject STEDI_API_KEY (Stedi *test* key)
-as a container env var at launch. Aetna + Jane Doe / AETNA12345 is the canned
-sandbox member.
+Optional Gemini vision on uploaded card/SBC (GEMINI_API_KEY at launch).
+Optional Stedi sandbox 270/271 (STEDI_API_KEY at launch). Aetna + Jane Doe /
+AETNA12345 is the canned sandbox member.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import re
 from copy import deepcopy
 from typing import Any, Optional
 
+from backend.careloop import extract as careloop_extract
 from backend.careloop import stedi as careloop_stedi
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -190,9 +191,26 @@ def scan_card(
     payer_name: str = "",
     image_note: str = "",
     sbc_note: str = "",
+    card_image_b64: str = "",
+    card_mime: str = "",
+    card_filename: str = "",
+    sbc_image_b64: str = "",
+    sbc_mime: str = "",
+    sbc_filename: str = "",
 ) -> dict:
-    """Fixture scan. Does not OCR. image_note/sbc_note are recorded only."""
-    payer = _find_payer(payer_name) or _find_payer("Mock Payer")
+    """Fixture scan, or Gemini vision when an image/PDF is attached."""
+    if card_image_b64 or sbc_image_b64:
+        return _scan_uploaded(
+            payer_name=payer_name,
+            card_image_b64=card_image_b64,
+            card_mime=card_mime,
+            card_filename=card_filename,
+            sbc_image_b64=sbc_image_b64,
+            sbc_mime=sbc_mime,
+            sbc_filename=sbc_filename,
+        )
+
+    payer = _find_payer(payer_name) or _find_payer("Aetna") or _find_payer("Mock Payer")
     if not payer:
         raise ValueError("Unknown payer.")
     profile = _profile_from_payer(payer)
@@ -206,6 +224,95 @@ def scan_card(
     profile["warnings"] = [
         "Card fields came from a fixture, not live OCR. Confirm or edit before relying on them."
     ]
+    state = _ensure_state()
+    state["profile"] = profile
+    state["eligibility"] = None
+    state["visit_cost_estimate"] = None
+    return snapshot()
+
+
+def _match_payer_name(extracted_name: str) -> Optional[dict]:
+    if not extracted_name:
+        return None
+    hit = _find_payer(extracted_name)
+    if hit:
+        return hit
+    needle = extracted_name.strip().lower()
+    for payer in _payers():
+        name = payer["name"].lower()
+        if needle in name or name in needle:
+            return payer
+    return None
+
+
+def _scan_uploaded(
+    *,
+    payer_name: str,
+    card_image_b64: str,
+    card_mime: str,
+    card_filename: str,
+    sbc_image_b64: str,
+    sbc_mime: str,
+    sbc_filename: str,
+) -> dict:
+    card = (
+        careloop_extract.decode_upload(card_image_b64, card_mime, card_filename)
+        if card_image_b64
+        else None
+    )
+    sbc = (
+        careloop_extract.decode_upload(sbc_image_b64, sbc_mime, sbc_filename)
+        if sbc_image_b64
+        else None
+    )
+    extracted = careloop_extract.extract_documents(card=card, sbc=sbc)
+
+    selected = _find_payer(payer_name)
+    ocr_payer = _match_payer_name(extracted.get("payer_name") or "")
+    warnings = list(extracted.get("warnings") or [])
+    if selected and ocr_payer and selected["id"] != ocr_payer["id"]:
+        warnings.append(
+            f"[NEEDS VERIFICATION] Upload looks like {ocr_payer['name']}, "
+            f"but the dropdown is {selected['name']}. Dropdown kept."
+        )
+    payer = selected or ocr_payer
+    if not payer:
+        raise ValueError(
+            "Could not match a payer from the upload. Pick an insurance company "
+            "from the dropdown, then read the images again."
+        )
+
+    profile = _profile_from_payer(payer)
+    for key in (
+        "member_name",
+        "member_id",
+        "group_number",
+        "date_of_birth",
+        "zip",
+        "plan_type",
+        "rx_bin",
+        "rx_pcn",
+        "rx_group",
+    ):
+        value = extracted.get(key)
+        if value:
+            profile[key] = value
+    profile["scan_source"] = "gemini-vision"
+    profile["printed_copay_pcp"] = extracted.get("printed_copay_pcp")
+    profile["printed_copay_specialist"] = extracted.get("printed_copay_specialist")
+    docs = []
+    if card:
+        docs.append({"kind": "card", "note": f"upload:{card.get('filename')}"})
+    if sbc:
+        docs.append({"kind": "sbc", "note": f"upload:{sbc.get('filename')}"})
+    profile["supporting_docs"] = docs
+    profile["warnings"] = warnings
+    profile["unreadable"] = extracted.get("unreadable") or []
+    if extracted.get("printed_copay_pcp") is not None or extracted.get("printed_copay_specialist") is not None:
+        profile["warnings"].append(
+            "Printed copays were copied from the upload only. They are not a coverage determination."
+        )
+
     state = _ensure_state()
     state["profile"] = profile
     state["eligibility"] = None

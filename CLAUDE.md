@@ -10,7 +10,7 @@ Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**
 
 **Product UX:** after mock login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
 
-**Dave’s slice:** mock login (password `demo`; see AGENTS.md). Payer dropdown is the only required identity field. Wizard is one step at a time. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch (or a laptop `.env`) and the member is a canned sandbox subscriber (Aetna Jane Doe / AETNA12345). Visit/cost output is a labeled estimate. In-network list is fixture ∩ ZIP. Never paste API keys in chat or commit `.env`.
+**Dave’s slice:** mock login (password `demo`; see AGENTS.md). Payer dropdown is the only required identity field. Wizard is one step at a time. Optional Gemini vision (`GEMINI_API_KEY` at launch) reads uploaded card/SBC JSON — no letter watermark, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
 ## Commands
 

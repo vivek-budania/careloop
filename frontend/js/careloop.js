@@ -6,6 +6,7 @@ const CareLoop = {
   step: 1,
   totalSteps: 6,
   payersLoaded: false,
+  lastProfile: null,
 
   init() {
     this.bind();
@@ -15,6 +16,7 @@ const CareLoop = {
   bind() {
     document.getElementById('cl-btn-save').addEventListener('click', () => this.saveIdentity());
     document.getElementById('cl-btn-scan').addEventListener('click', () => this.scanFixture());
+    document.getElementById('cl-btn-read').addEventListener('click', () => this.readUploads());
     document.getElementById('cl-btn-confirm').addEventListener('click', () => this.confirmCoverage());
     document.getElementById('cl-btn-intake').addEventListener('click', () => this.saveIntakeAndGuess());
     document.getElementById('cl-btn-network').addEventListener('click', () => this.findClinicians());
@@ -23,6 +25,7 @@ const CareLoop = {
   },
 
   resetUi() {
+    this.lastProfile = null;
     this.showStep(1);
     const status = document.getElementById('cl-identity-status');
     if (status) status.textContent = '';
@@ -88,6 +91,33 @@ const CareLoop = {
     return file ? `${prefix}:${file.name}` : '';
   },
 
+  readBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.readAsDataURL(file);
+    });
+  },
+
+  async filePayload(inputId) {
+    const input = document.getElementById(inputId);
+    const file = input && input.files && input.files[0];
+    if (!file) return null;
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error(`${file.name} is larger than 8MB.`);
+    }
+    return {
+      filename: file.name,
+      mime: file.type || 'application/octet-stream',
+      b64: await this.readBase64(file),
+    };
+  },
+
   payerName() {
     return document.getElementById('cl-payer').value.trim();
   },
@@ -111,6 +141,7 @@ const CareLoop = {
 
   fillFormFromProfile(profile) {
     if (!profile) return;
+    this.lastProfile = profile;
     if (profile.payer_name) document.getElementById('cl-payer').value = profile.payer_name;
     document.getElementById('cl-member-name').value = profile.member_name || '';
     document.getElementById('cl-member-id').value = profile.member_id || '';
@@ -123,6 +154,8 @@ const CareLoop = {
   renderReview() {
     const box = document.getElementById('cl-review-summary');
     const p = this.identityPayload();
+    const warnings = ((this.lastProfile && this.lastProfile.warnings) || [])
+      .map((w) => `<p class="form-hint">${App.escapeHTML(w)}</p>`).join('');
     box.innerHTML = `
       <p><strong>Payer:</strong> ${App.escapeHTML(p.payer_name || '—')}</p>
       <p><strong>Member:</strong> ${App.escapeHTML(p.member_name || '—')}
@@ -130,6 +163,7 @@ const CareLoop = {
       <p><strong>DOB:</strong> ${App.escapeHTML(p.date_of_birth || '—')}
         · <strong>Group:</strong> ${App.escapeHTML(p.group_number || '—')}
         · <strong>ZIP:</strong> ${App.escapeHTML(p.zip || '—')}</p>
+      ${warnings}
     `;
   },
 
@@ -188,6 +222,34 @@ const CareLoop = {
       document.getElementById('cl-identity-status').textContent =
         'Fixture card loaded. Fields are mocked, not OCR’d.';
       App.notify('Sample card loaded.', 'success');
+    } catch (err) {
+      App.notify(err.message, 'error');
+    }
+  },
+
+  async readUploads() {
+    try {
+      const card = await this.filePayload('cl-card-file');
+      const sbc = await this.filePayload('cl-sbc-file');
+      if (!card && !sbc) {
+        App.notify('Choose a card or SBC file first, or use Load sample card.', 'error');
+        return;
+      }
+      const snap = await API.scanCoverage({
+        payer_name: this.payerName(),
+        card_image_b64: card ? card.b64 : '',
+        card_mime: card ? card.mime : '',
+        card_filename: card ? card.filename : '',
+        sbc_image_b64: sbc ? sbc.b64 : '',
+        sbc_mime: sbc ? sbc.mime : '',
+        sbc_filename: sbc ? sbc.filename : '',
+      });
+      this.fillFormFromProfile(snap.profile);
+      const unread = (snap.profile.unreadable || []).join(', ');
+      document.getElementById('cl-identity-status').textContent = unread
+        ? `Read upload. Check: ${unread}.`
+        : `Read ${snap.profile.scan_source || 'upload'}. Confirm fields before continuing.`;
+      App.notify('Upload read. Confirm fields on the next step.', 'success');
     } catch (err) {
       App.notify(err.message, 'error');
     }

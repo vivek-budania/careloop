@@ -421,19 +421,24 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="cl-card-file">Card image (optional, filename only)</label>
+              <label class="form-label" for="cl-card-file">Card image (optional)</label>
               <input type="file" class="form-input" id="cl-card-file" accept="image/*,.pdf">
             </div>
             <div class="form-group">
-              <label class="form-label" for="cl-sbc-file">SBC / EOB (optional, filename only)</label>
+              <label class="form-label" for="cl-sbc-file">SBC / EOB (optional)</label>
               <input type="file" class="form-input" id="cl-sbc-file" accept="image/*,.pdf">
             </div>
           </div>
 
           <div class="btn-group">
             <button class="btn btn-secondary" id="cl-btn-scan" type="button">Load sample card</button>
+            <button class="btn btn-secondary" id="cl-btn-read" type="button">Read uploaded images</button>
             <button class="btn btn-primary" id="cl-btn-save" type="button">Save identity</button>
           </div>
+          <p class="form-hint">
+            Load sample card uses the Jane Doe fixture (no OCR key).
+            Read uploaded images needs <code>GEMINI_API_KEY</code> at launch and does not invent missing fields.
+          </p>
           <p class="form-hint" id="cl-identity-status"></p>
         </div>
       </div>
@@ -447,7 +452,7 @@
             </div>
             <span class="card-badge">Skip allowed</span>
           </div>
-          <p class="form-hint">Check the saved fields. Go back to edit, or continue without confirming.</p>
+          <p class="form-hint">Check the saved fields, including anything tagged [NEEDS VERIFICATION]. Go back to edit, or continue without confirming.</p>
           <div class="coverage-result" id="cl-review-summary"></div>
         </div>
       </div>

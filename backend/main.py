@@ -114,6 +114,12 @@ class CoverageScanRequest(BaseModel):
     payer_name: str = ""
     image_note: str = "fixture:front-of-card"
     sbc_note: str = ""
+    card_image_b64: str = ""
+    card_mime: str = ""
+    card_filename: str = ""
+    sbc_image_b64: str = ""
+    sbc_mime: str = ""
+    sbc_filename: str = ""
 
 
 class CoverageConfirmRequest(BaseModel):
@@ -414,6 +420,12 @@ def careloop_scan_coverage(
             payer_name=req.payer_name,
             image_note=req.image_note,
             sbc_note=req.sbc_note,
+            card_image_b64=req.card_image_b64,
+            card_mime=req.card_mime,
+            card_filename=req.card_filename,
+            sbc_image_b64=req.sbc_image_b64,
+            sbc_mime=req.sbc_mime,
+            sbc_filename=req.sbc_filename,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
