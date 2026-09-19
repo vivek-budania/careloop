@@ -334,9 +334,18 @@ def flatten_eligibility(payload: dict, payer: dict, profile: dict) -> dict:
     }
 
 
+def _stedi_dob(raw: str) -> str:
+    """Stedi JSON eligibility wants YYYY-MM-DD. Accept YYYYMMDD too."""
+    dob = (raw or "").strip()
+    digits = "".join(ch for ch in dob if ch.isdigit())
+    if len(digits) == 8:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+    return dob
+
+
 def _request_body(payer: dict, profile: dict) -> dict:
     first, last = _split_name(profile.get("member_name") or "")
-    dob = (profile.get("date_of_birth") or "").strip()
+    dob = _stedi_dob(profile.get("date_of_birth") or "")
     return {
         "payerId": payer.get("stedi_payer_id") or "60054",
         "provider": {
@@ -354,34 +363,55 @@ def _request_body(payer: dict, profile: dict) -> dict:
     }
 
 
+def _subscriber_meta(payer: dict, profile: dict) -> tuple[Optional[dict], Optional[dict]]:
+    """JSON 270 body plus a secret-free copy of who we would send."""
+    if not payer.get("stedi_payer_id"):
+        return None, None
+    body = _request_body(payer, profile)
+    person = ((body.get("subscriber") or {}).get("name") or {}).get("person") or {}
+    subscriber = {
+        "firstName": person.get("firstName") or "",
+        "lastName": person.get("lastName") or "",
+        "memberId": (body.get("subscriber") or {}).get("memberId") or "",
+        "dateOfBirth": (body.get("subscriber") or {}).get("dateOfBirth") or "",
+        "payerId": body.get("payerId") or "",
+    }
+    return body, subscriber
+
+
 def check_eligibility(payer: dict, profile: dict) -> dict:
     """Call Stedi when a test key is present. Never send production traffic."""
     meta = status()
+    body, subscriber = _subscriber_meta(payer, profile)
+
+    def result(**kwargs: Any) -> dict:
+        out = {"vendor": "stedi", **kwargs}
+        if subscriber:
+            out["subscriber"] = subscriber
+        return out
+
     if not meta["configured"]:
-        return {
-            "attempted": False,
-            "used": False,
-            "vendor": "stedi",
-            "message": meta["message"],
-        }
+        return result(attempted=False, used=False, message=meta["message"])
     if not meta["test_mode"]:
-        return {
-            "attempted": False,
-            "used": False,
-            "vendor": "stedi",
-            "message": meta["message"],
-        }
-    if not payer.get("stedi_payer_id"):
-        return {
-            "attempted": False,
-            "used": False,
-            "vendor": "stedi",
-            "message": (
+        return result(attempted=False, used=False, message=meta["message"])
+    if not body:
+        return result(
+            attempted=False,
+            used=False,
+            message=(
                 f"{payer.get('name')} has no Stedi payer ID. Coverage used the mock plan."
             ),
-        }
+        )
+    if not subscriber or not subscriber["memberId"] or not subscriber["dateOfBirth"]:
+        return result(
+            attempted=False,
+            used=False,
+            message=(
+                "Member ID and date of birth are required for a Stedi 270. "
+                "Mock eligibility used."
+            ),
+        )
 
-    body = _request_body(payer, profile)
     encoded = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         STEDI_ELIGIBILITY_URL,
@@ -400,35 +430,32 @@ def check_eligibility(payer: dict, profile: dict) -> dict:
         parsed = json.loads(raw) if raw else {}
         parsed.pop("x12", None)
         eligibility = flatten_eligibility(parsed, payer, profile)
-        return {
-            "attempted": True,
-            "used": True,
-            "vendor": "stedi",
-            "http_status": http_status,
-            "message": (
+        return result(
+            attempted=True,
+            used=True,
+            http_status=http_status,
+            message=(
                 "Stedi sandbox 271 flattened into this coverage card "
                 f"(check {eligibility.get('stedi_check_id') or 'ok'})."
             ),
-            "eligibility": eligibility,
-        }
+            eligibility=eligibility,
+        )
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "http_status": exc.code,
-            "message": (
+        return result(
+            attempted=True,
+            used=False,
+            http_status=exc.code,
+            message=(
                 "Stedi rejected this member. Test keys only accept canned "
                 "sandbox subscribers (Aetna Jane Doe / AETNA12345). "
                 "Mock eligibility used."
             ),
-            "error": detail,
-        }
+            error=detail,
+        )
     except Exception as exc:
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "message": f"Stedi call failed ({exc}). Mock eligibility used.",
-        }
+        return result(
+            attempted=True,
+            used=False,
+            message=f"Stedi call failed ({exc}). Mock eligibility used.",
+        )

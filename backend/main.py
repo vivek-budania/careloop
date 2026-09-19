@@ -27,7 +27,7 @@ from backend.prompts import (
     DENIAL_PARSE_PROMPT,
 )
 from backend.risk_engine import calculate_risk_score
-from backend.config import NATIONAL_APPEAL_STATS
+from backend.config import NATIONAL_APPEAL_STATS, demo_env_status
 from backend.careloop import coverage as careloop_coverage
 from backend.careloop import auth as careloop_auth
 
@@ -125,6 +125,7 @@ class CoverageScanRequest(BaseModel):
 class CoverageConfirmRequest(BaseModel):
     payer_name: str = ""
     member_id: str = ""
+    member_name: str = ""
     date_of_birth: str = ""
 
 
@@ -386,6 +387,12 @@ def careloop_get_coverage(_user: dict = Depends(careloop_auth.require_user)):
     return careloop_coverage.snapshot()
 
 
+@app.get("/api/careloop/demo-env")
+def careloop_demo_env(_user: dict = Depends(careloop_auth.require_user)):
+    """Which demo keys are loaded. Never returns secret values."""
+    return demo_env_status()
+
+
 @app.post("/api/careloop/coverage/reset")
 def careloop_reset_coverage(_user: dict = Depends(careloop_auth.require_user)):
     return careloop_coverage.reset()
@@ -441,6 +448,7 @@ def careloop_confirm_coverage(
         return careloop_coverage.confirm_coverage(
             payer_name=req.payer_name,
             member_id=req.member_id,
+            member_name=req.member_name,
             date_of_birth=req.date_of_birth,
         )
     except ValueError as e:

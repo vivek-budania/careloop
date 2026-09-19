@@ -18,6 +18,56 @@ STEDI_API_KEY = os.getenv("STEDI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
 
+
+def _key_loaded(value: str) -> bool:
+    raw = (value or "").strip()
+    return bool(raw) and raw not in (
+        "your_api_key_here",
+        "your_key_here",
+        "your_stedi_key_here",
+    )
+
+
+def demo_env_status() -> dict:
+    """Which demo keys are loaded. Never returns secret values."""
+    from backend.careloop import stedi as careloop_stedi
+
+    gemini_on = _key_loaded(GEMINI_API_KEY)
+    groq_on = _key_loaded(GROQ_API_KEY)
+    return {
+        "stedi": careloop_stedi.status(),
+        "gemini": {
+            "configured": gemini_on,
+            "used_for": "Insurance card/SBC read + /letters drafts",
+            "message": (
+                "GEMINI_API_KEY is loaded. Insurance can read an uploaded card/SBC. "
+                "Letter drafts at /letters still need human review."
+            ) if gemini_on else (
+                "GEMINI_API_KEY is not set. Use the Jane Doe sample card. "
+                "Letter drafts at /letters need this key. "
+                "Add it on the host or in Vercel, then Redeploy."
+            ),
+        },
+        "groq": {
+            "configured": groq_on,
+            "used_for": "Optional letter fallback",
+            "message": (
+                "GROQ_API_KEY is loaded as a Gemini fallback."
+                if groq_on
+                else "GROQ_API_KEY is optional. Add it the same way when you have it."
+            ),
+        },
+        "vercel": {
+            "entrypoint": "backend.main:app",
+            "message": (
+                "Vercel reads STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY "
+                "from Project Settings → Environment Variables (Production + Preview), "
+                "then Redeploy. Cursor/cloud-agent env does not reach Vercel. "
+                "Do not replace / with a JSON stub."
+            ),
+        },
+    }
+
 # Safety watermark stamped on every generated document
 DRAFT_WATERMARK = (
     "⚠️ AI-DRAFTED DOCUMENT — NOT YET REVIEWED BY A LICENSED PROFESSIONAL. "

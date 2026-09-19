@@ -119,6 +119,10 @@ const API = {
     return this.get('/api/careloop/coverage');
   },
 
+  demoEnv() {
+    return this.get('/api/careloop/demo-env');
+  },
+
   resetCoverage() {
     return this.post('/api/careloop/coverage/reset', {});
   },

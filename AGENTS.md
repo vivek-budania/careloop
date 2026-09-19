@@ -10,6 +10,8 @@ Read this before changing the running app. Setup commands also live in [`README.
 |------|--------|
 | Vivek patient shell (☰ Today / History / Medicines / Tests / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
 | Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
+| Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **this branch** (`confirm` always sends Jane identity) |
+| Demo key slots on Profile (Stedi / Gemini / Groq / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
 | Gemini vision card/SBC on Insurance only | **this branch** |
 | Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
@@ -63,28 +65,33 @@ Use the returned `token` as `Authorization: Bearer <token>` on `/api/careloop/*`
 ```bash
 cp .env.example .env
 # GEMINI_API_KEY is not required for mock coverage/login
-# For a live Stedi sandbox 271, inject the test key at launch (preferred):
+# Demo key slots (inject at launch; extra keys later the same way):
 #   STEDI_API_KEY=test_… python3 -m uvicorn backend.main:app --port 8080
-# Laptop fallback: STEDI_API_KEY in gitignored .env. Never paste it in chat/GitHub.
+#   GEMINI_API_KEY=…     # Insurance OCR + /letters
+#   GROQ_API_KEY=…       # optional letter fallback
+# Laptop fallback: gitignored .env. Never paste keys in chat/GitHub.
+# Vercel: Project Settings → Environment Variables → same names, then Redeploy.
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
 Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning** or **Start my first visit**.
 
-**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (Gemini vision) lives on this Insurance flow only — not in the hamburger. Without `GEMINI_API_KEY`, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed.
+**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (Gemini vision) lives on this Insurance flow only — not in the hamburger. Without `GEMINI_API_KEY`, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
 
-**Where the Stedi key goes:** `STEDI_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake the key into the image, commit it, or paste it in chat. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500).
+**Where the keys go:** `STEDI_API_KEY`, `GEMINI_API_KEY`, and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
 
-**Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub.
+**Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub. Fold extra keys into the same Vercel env list as they arrive.
 
 ## CareLoop patient UI + Dave coverage
 
 Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/network still use Dave’s APIs:
 
 - Payer dropdown + sample card + confirm: `listPayers` / `scanCoverage` / `saveCoverage` / `confirmCoverage`
+- Confirm always sends member name, member ID, and DOB. Blanks on a Stedi payer are filled from that payer’s canned fixture so Jane Doe / `AETNA12345` / `2004-04-04` can match.
 - DOB is required on save. Stedi uses it on the canned Jane Doe member.
 - Optional Gemini read: `scanCoverage` with `card_image_b64` / `sbc_image_b64` (Insurance form only)
+- Demo key slots: `demoEnv` → Profile (and Insurance eligibility notice)
 - Symptoms intake: `saveCoverageIntake` (returns `suggested_specialty`)
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
 - Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
@@ -106,7 +113,8 @@ Coverage state is **in-memory** until Vivek’s thread store exists. Visit/meds/
 - `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network/specialty suggestion
 - `backend/careloop/extract.py` — Gemini vision card/SBC → InsuranceProfile (no watermark)
 - `backend/careloop/stedi.py` — optional sandbox 270/271 (`STEDI_API_KEY` at launch)
-- `.env.example` — documents `STEDI_API_KEY` and `GEMINI_API_KEY` (inject at launch; do not commit secrets)
+- `backend/config.py` — `demo_env_status()` (Stedi / Gemini / Groq / Vercel; no secret values)
+- `.env.example` — documents the same key slots (inject at launch; do not commit secrets)
 - `backend/data/mock_users.json` — dummy accounts (Jane Doe / `jane`)
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`

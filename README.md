@@ -129,13 +129,14 @@ Commands match [`plan.md`](plan.md) and [`CLAUDE.md`](CLAUDE.md).
 ```bash
 cp .env.example .env
 # Edit .env (do not use `echo > .env` — that wipes other keys):
-#   GEMINI_API_KEY=your_key_here          # free: https://aistudio.google.com/apikey
-#   STEDI_API_KEY=test_your_sandbox_key   # optional; prefer injecting at launch
+#   GEMINI_API_KEY=your_key_here          # Insurance OCR + /letters
+#   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
+#   GROQ_API_KEY=                         # optional letter fallback; add when you have it
 ```
 
-Optional Groq fallback (used by `backend/llm.py` if Gemini fails): add `GROQ_API_KEY` to `.env`. Not required if Gemini works.
+Same names on the **process/container at launch** or in **Vercel → Project Settings → Environment Variables** (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
 
-Optional Stedi sandbox eligibility: set `STEDI_API_KEY` (a **test_** key from the Stedi portal) on the **container/process at launch**. Dummy logins and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md). Do not bake the key into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
+The patient shell **Profile** page lists whether each slot is loaded (never the secret). Extra keys can be added the same way. Dummy logins and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md).
 
 ### 3. Install and run (API + frontend, one process)
 

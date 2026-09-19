@@ -15,6 +15,7 @@ const CareLoop = {
   clinicians: [],
   costEstimate: null,
   coverageSnap: { profile: null, eligibility: null },
+  demoEnv: null,
   thread: null,
   clickBound: false,
 
@@ -181,6 +182,104 @@ const CareLoop = {
     return (c && c.source) || 'mock';
   },
 
+  confirmFromProfile(profile) {
+    const p = profile || this.coverageSnap.profile || {};
+    return API.confirmCoverage({
+      payer_name: p.payer_name || this.GOLDEN_PAYER,
+      member_id: p.member_id || '',
+      member_name: p.member_name || '',
+      date_of_birth: p.date_of_birth || '',
+    });
+  },
+
+  eligibilityNote() {
+    const e = this.coverageSnap.eligibility || {};
+    const live = e.live_api || {};
+    const stedi = this.coverageSnap.stedi || (this.demoEnv && this.demoEnv.stedi) || {};
+    const sub = live.subscriber || {};
+    const who = [sub.firstName, sub.lastName, sub.memberId, sub.dateOfBirth]
+      .filter(Boolean)
+      .join(' · ');
+    let note;
+    if (e.source === 'stedi') {
+      note = live.message || stedi.message || 'Sandbox 271 from Stedi. Estimates only — not a coverage decision.';
+    } else if (stedi.test_mode) {
+      note = live.message || 'A Stedi test key is loaded. Refresh coverage if this card still shows mock numbers.';
+    } else {
+      note = (
+        'Jane Doe matches Stedi’s canned Aetna member. Add STEDI_API_KEY on this host '
+        + 'or in Vercel (then Redeploy) to run a live sandbox 271. Until then, matching mock numbers are shown.'
+      );
+    }
+    if (who) note += ` Checked ${who}.`;
+    if (e.status && e.status !== 'active') {
+      note += ' This sample plan is inactive. Do not rely on in-network estimates.';
+    }
+    return note;
+  },
+
+  setupNotice() {
+    const gemini = (this.demoEnv && this.demoEnv.gemini) || {};
+    const ocr = gemini.configured
+      ? 'Read uploaded images is available on this form. It copies printed fields only and does not invent missing copays.'
+      : 'Read uploaded images needs GEMINI_API_KEY on this host or in Vercel. Use the sample card until then.';
+    return (
+      'Demo eligibility only. This does not verify real coverage or decide benefits. '
+      + `Estimates are not a bill. ${ocr}`
+    );
+  },
+
+  envRows() {
+    const env = this.demoEnv || {};
+    const stedi = env.stedi || {};
+    const gemini = env.gemini || {};
+    const groq = env.groq || {};
+    const vercel = env.vercel || {};
+    return [
+      {
+        name: 'Stedi eligibility',
+        tag: stedi.test_mode ? 'loaded' : (stedi.configured ? 'blocked' : 'not set'),
+        tagType: stedi.test_mode ? '' : 'peach',
+        detail: stedi.message || 'STEDI_API_KEY is not loaded on this host yet.',
+      },
+      {
+        name: 'Gemini OCR + letters',
+        tag: gemini.configured ? 'loaded' : 'not set',
+        tagType: gemini.configured ? '' : 'peach',
+        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet.',
+      },
+      {
+        name: 'Groq fallback',
+        tag: groq.configured ? 'loaded' : 'optional',
+        tagType: groq.configured ? '' : 'gray',
+        detail: groq.message || 'Add GROQ_API_KEY the same way when you have it.',
+      },
+      {
+        name: 'Vercel',
+        tag: 'slots',
+        tagType: 'gray',
+        detail: vercel.message || (
+          'Add STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY in Vercel Project Settings, then Redeploy.'
+        ),
+      },
+    ];
+  },
+
+  envPanel() {
+    const list = this.envRows().map((row) => (
+      `<div class="task-row"><div style="flex:1"><div class="row" style="justify-content:space-between;gap:12px"><h3>${this.esc(row.name)}</h3>${this.tag(row.tag, row.tagType)}</div><small>${this.esc(row.detail)}</small></div></div>`
+    )).join('');
+    return `<div class="rule"></div><h3>Demo keys on this host</h3><p style="font-size:12px;margin:10px 0 16px">Values stay in process or Vercel env. This page only shows whether a slot is loaded. Extra keys can be added the same way.</p>${list}`;
+  },
+
+  async loadDemoEnv() {
+    try {
+      this.demoEnv = await API.demoEnv();
+    } catch (err) {
+      this.demoEnv = null;
+    }
+  },
+
   readBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -275,7 +374,7 @@ const CareLoop = {
     }
     try {
       App.user = await API.me();
-      await this.refreshCoverage();
+      await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       if (this.thread.patient && App.user?.name) {
         this.thread.patient.name = this.thread.patient.name || App.user.name;
       }
@@ -315,7 +414,7 @@ const CareLoop = {
     if (mode === 'first') {
       this.thread = this.seedThread('first');
       this.saveThread();
-      await API.resetCoverage();
+      await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
       this.coverageSnap = { profile: null, eligibility: null };
       this.costEstimate = null;
       this.insuranceMode = 'hub';
@@ -326,21 +425,15 @@ const CareLoop = {
       if (!this.thread.visits) this.thread = this.seedThread('returning');
       this.thread.patient.name = result.user.name || this.thread.patient.name;
       this.saveThread();
-      await this.refreshCoverage();
+      await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       if (!this.coverageOnFile()) {
         const snap = await API.scanCoverage({
           payer_name: this.GOLDEN_PAYER,
           image_note: 'fixture:returning-seed',
         });
-        this.coverageSnap = await API.confirmCoverage({
-          payer_name: snap.profile.payer_name,
-          member_id: snap.profile.member_id,
-        });
+        this.coverageSnap = await this.confirmFromProfile(snap.profile);
       } else if (!this.eligibilityOnFile()) {
-        this.coverageSnap = await API.confirmCoverage({
-          payer_name: this.coverageSnap.profile.payer_name,
-          member_id: this.coverageSnap.profile.member_id,
-        });
+        this.coverageSnap = await this.confirmFromProfile(this.coverageSnap.profile);
       }
       this.view = 'Today';
     }
@@ -415,7 +508,7 @@ const CareLoop = {
         .map((row) => `<option value="${this.esc(row.name)}" ${selected === row.name ? 'selected' : ''}>${this.esc(row.name)} (${this.esc(row.plan_type)})</option>`)
         .join('');
       const warnings = (p.warnings || []).map((w) => `<p class="mt" style="font-size:12px">${this.esc(w)}</p>`).join('');
-      content = `<h2>${sample ? 'Review your sample card.' : 'A few plan details.'}</h2><p>${sample ? 'These fields come from the Jane Doe Aetna fixture. Date of birth is required so eligibility can match the sandbox member. You can edit them before saving.' : 'Insurance company and date of birth are required. Use fictional details for this demo.'}</p><form id="insurance-form"><label class="field">Insurance company<select name="payer" required><option value="">Select an insurer</option>${options}</select></label><label class="field">Member name (optional)<input name="member_name" value="${this.esc(p.member_name || this.thread.patient.name)}"></label><div class="split"><label class="field">Member ID (optional)<input name="member" value="${this.esc(p.member_id || '')}"></label><label class="field">Group number (optional)<input name="group" value="${this.esc(p.group_number || '')}"></label></div><label class="field">Date of birth<input type="date" name="dob" value="${this.esc(p.date_of_birth || '')}" required></label><label class="field">ZIP code<input name="zip" value="${this.esc(p.zip || this.thread.patient.zip || '94110')}" pattern="[0-9]{5}" maxlength="5"></label><div class="split"><label class="field">Card image (optional)<input type="file" id="card-file" accept="image/*,.pdf"></label><label class="field">SBC / EOB (optional)<input type="file" id="sbc-file" accept="image/*,.pdf"></label></div><p class="mt" style="font-size:12px" id="ocr-status"></p>${warnings}<div class="notice">Demo eligibility only. This does not verify real coverage or decide benefits. Estimates are not a bill. Read uploaded images needs a Gemini key at launch and does not invent missing fields.</div><div class="actions">${this.btn('Back', 'insurance-hub', 'secondary')}<div class="row">${this.btn('Read uploaded images', 'read-images', 'secondary')}<button class="btn" type="submit">Save &amp; review coverage ${this.icon('arrow')}</button></div></div></form>`;
+      content = `<h2>${sample ? 'Review your sample card.' : 'A few plan details.'}</h2><p>${sample ? 'These fields come from the Jane Doe Aetna fixture. Date of birth is required so eligibility can match the sandbox member. You can edit them before saving.' : 'Insurance company and date of birth are required. Use fictional details for this demo.'}</p><form id="insurance-form"><label class="field">Insurance company<select name="payer" required><option value="">Select an insurer</option>${options}</select></label><label class="field">Member name (optional)<input name="member_name" value="${this.esc(p.member_name || this.thread.patient.name)}"></label><div class="split"><label class="field">Member ID (optional)<input name="member" value="${this.esc(p.member_id || '')}"></label><label class="field">Group number (optional)<input name="group" value="${this.esc(p.group_number || '')}"></label></div><label class="field">Date of birth<input type="date" name="dob" value="${this.esc(p.date_of_birth || '')}" required></label><label class="field">ZIP code<input name="zip" value="${this.esc(p.zip || this.thread.patient.zip || '94110')}" pattern="[0-9]{5}" maxlength="5"></label><div class="split"><label class="field">Card image (optional)<input type="file" id="card-file" accept="image/*,.pdf"></label><label class="field">SBC / EOB (optional)<input type="file" id="sbc-file" accept="image/*,.pdf"></label></div><p class="mt" style="font-size:12px" id="ocr-status"></p>${warnings}<div class="notice">${this.esc(this.setupNotice())}</div><div class="actions">${this.btn('Back', 'insurance-hub', 'secondary')}<div class="row">${this.btn('Read uploaded images', 'read-images', 'secondary')}<button class="btn" type="submit">Save &amp; review coverage ${this.icon('arrow')}</button></div></div></form>`;
     }
     return `<div class="narrow">${this.head(this.insuranceReturn ? 'Update your insurance.' : 'Let’s bring your care together.', 'Insurance is a starting point. Your story is what connects it all.')}<section class="card journey-panel">${content}</section></div>`;
   },
@@ -576,15 +669,15 @@ const CareLoop = {
   insurance() {
     const c = this.coverageLabel();
     if (!c) {
-      return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates. Skipping insurance skips the estimated-costs step on the visit.</p>${this.btn('Add insurance', 'update-insurance')}</section></div>`;
+      return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates. Skipping insurance skips the estimated-costs step on the visit.</p><div class="notice">Sample card is Jane Doe / Aetna / AETNA12345 — Stedi’s canned sandbox member. Demo key slots live under Profile.</div>${this.btn('Add insurance', 'update-insurance')}</section></div>`;
     }
     const e = this.coverageSnap.eligibility || {};
-    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.thread.patient.name)}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(`${c.status} · ${this.coverageSource()}`, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>${this.coverageSource()} remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'demo plan')}</small></div></div><div class="notice">${c.status === 'active' ? (e.disclaimer || 'Estimates from a demo fixture. Real benefits have not been checked.') : 'This sample plan is inactive. Do not rely on in-network estimates.'}</div><div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><h3>Two different insurance moments</h3><p class="mt" style="font-size:12px">Prior authorization happens before certain care is covered. A claim happens during or after billing. An approved authorization does not mean a claim has been paid.</p><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon · no claims are submitted in this demo</small></div></div><p class="mt" style="font-size:11px">PA / appeal letter drafts (watermark + human review) remain on a secondary surface, not in this hamburger.</p><a class="link" href="/letters">Open letter drafts ${this.icon('arrow')}</a></section></div>`;
+    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.thread.patient.name)}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(`${c.status} · ${this.coverageSource()}`, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>${this.coverageSource()} remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'demo plan')}</small></div></div><div class="notice">${this.esc(this.eligibilityNote())}</div>${e.disclaimer ? `<p class="mt" style="font-size:12px">${this.esc(e.disclaimer)}</p>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage snapshot', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><h3>Two different insurance moments</h3><p class="mt" style="font-size:12px">Prior authorization happens before certain care is covered. A claim happens during or after billing. An approved authorization does not mean a claim has been paid.</p><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon · no claims are submitted in this demo</small></div></div><p class="mt" style="font-size:11px">PA / appeal letter drafts (watermark + human review) remain on a secondary surface, not in this hamburger.</p><a class="link" href="/letters">Open letter drafts ${this.icon('arrow')}</a></section></div>`;
   },
 
   profile() {
     const p = this.thread.patient;
-    return `<div class="narrow">${this.head('A space that’s yours.', 'General details for your fictional patient profile.')}<section class="card journey-panel"><div class="row"><div class="avatar">${this.esc(this.initials(p.name))}</div><div><h2>${this.esc(p.name)}</h2><small>Fictional demo patient${App.user ? ` · signed in as ${this.esc(App.user.username)}` : ''}</small></div></div><div class="rule"></div><form id="profile-form"><label class="field">Display name<input name="name" value="${this.esc(p.name)}" required maxlength="60"></label><label class="field">Demo email<input type="email" name="email" value="${this.esc(p.email)}" required></label><label class="field">ZIP code<input name="zip" pattern="[0-9]{5}" value="${this.esc(p.zip)}" required></label><button class="btn" type="submit">Save profile</button></form><div class="rule"></div><h3>Ready for another walkthrough?</h3><p style="font-size:12px;margin:10px 0 20px">Reset only this demo’s saved visits, doses, and insurance to the sample record.</p>${this.btn('Reset demo data', 'reset', 'secondary')}</section></div>`;
+    return `<div class="narrow">${this.head('A space that’s yours.', 'General details for your fictional patient profile.')}<section class="card journey-panel"><div class="row"><div class="avatar">${this.esc(this.initials(p.name))}</div><div><h2>${this.esc(p.name)}</h2><small>Fictional demo patient${App.user ? ` · signed in as ${this.esc(App.user.username)}` : ''}</small></div></div><div class="rule"></div><form id="profile-form"><label class="field">Display name<input name="name" value="${this.esc(p.name)}" required maxlength="60"></label><label class="field">Demo email<input type="email" name="email" value="${this.esc(p.email)}" required></label><label class="field">ZIP code<input name="zip" pattern="[0-9]{5}" value="${this.esc(p.zip)}" required></label><button class="btn" type="submit">Save profile</button></form>${this.envPanel()}<div class="rule"></div><h3>Ready for another walkthrough?</h3><p style="font-size:12px;margin:10px 0 20px">Reset only this demo’s saved visits, doses, and insurance to the sample record.</p>${this.btn('Reset demo data', 'reset', 'secondary')}</section></div>`;
   },
 
   render() {
@@ -667,9 +760,10 @@ const CareLoop = {
         date_of_birth: dob,
         zip: String(d.get('zip') || '').trim(),
       });
-      this.coverageSnap = await API.confirmCoverage({
+      this.coverageSnap = await this.confirmFromProfile({
         payer_name: payer,
         member_id: String(d.get('member') || '').trim(),
+        member_name: String(d.get('member_name') || '').trim(),
         date_of_birth: dob,
       });
       if (this.coverageSnap.profile?.zip) {
@@ -932,6 +1026,17 @@ const CareLoop = {
           this.toast(err.message);
         }
         break;
+      case 'refresh-eligibility':
+        try {
+          this.coverageSnap = await this.confirmFromProfile();
+          this.render();
+          this.toast(this.coverageSource() === 'sandbox'
+            ? 'Sandbox eligibility refreshed.'
+            : 'Mock coverage refreshed. Add STEDI_API_KEY to run a live 271.');
+        } catch (err) {
+          this.toast(err.message);
+        }
+        break;
       case 'skip-insurance':
         this.navigate('Today');
         break;
@@ -1003,10 +1108,7 @@ const CareLoop = {
             payer_name: this.GOLDEN_PAYER,
             image_note: 'fixture:reset',
           });
-          this.coverageSnap = await API.confirmCoverage({
-            payer_name: snap.profile.payer_name,
-            member_id: snap.profile.member_id,
-          });
+          this.coverageSnap = await this.confirmFromProfile(snap.profile);
           this.closeModal();
           this.navigate('Today');
           this.toast('Sample record restored');

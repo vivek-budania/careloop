@@ -390,10 +390,23 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
     }
 
 
+def _fill_stedi_identity(payer: dict, profile: dict) -> dict:
+    """Keep typed fields; fill blanks from the canned fixture so Stedi can match."""
+    out = dict(profile or {})
+    card = dict(payer.get("fixture_card") or {})
+    if not payer.get("stedi_payer_id"):
+        return out
+    for key in ("member_name", "member_id", "date_of_birth"):
+        if not str(out.get(key) or "").strip() and card.get(key):
+            out[key] = card[key]
+    return out
+
+
 def confirm_coverage(
     payer_name: str = "",
     member_id: str = "",
     date_of_birth: str = "",
+    member_name: str = "",
 ) -> dict:
     state = _ensure_state()
     profile = state.get("profile")
@@ -415,6 +428,8 @@ def confirm_coverage(
             profile["member_id"] = member_id
         if date_of_birth:
             profile["date_of_birth"] = date_of_birth
+        if member_name:
+            profile["member_name"] = member_name
         state["profile"] = profile
     if not profile:
         raise ValueError("Save or scan a card first (payer dropdown is required).")
@@ -422,6 +437,15 @@ def confirm_coverage(
     payer = _find_payer(profile.get("payer_name")) or _find_payer(profile.get("payer_id"))
     if not payer:
         raise ValueError("Unknown insurance company on the saved profile.")
+
+    if member_id:
+        profile["member_id"] = member_id
+    if date_of_birth:
+        profile["date_of_birth"] = date_of_birth
+    if member_name:
+        profile["member_name"] = member_name
+    profile = _fill_stedi_identity(payer, profile)
+    state["profile"] = profile
 
     live = careloop_stedi.check_eligibility(payer, profile)
     if live.get("used") and live.get("eligibility"):
