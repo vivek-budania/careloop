@@ -12,6 +12,10 @@ dependencies = [
     "python-dotenv==1.0.1",
     "pydantic==2.9.0",
     "python-multipart==0.0.12",
+    "sumy==0.11.0",
+    "nltk==3.9.1",
+    "certifi>=2024.0.0",
+    "fpdf2==2.8.3",
 ]
 
 # Vercel looks for app.py / main.py at the repo root (or under src/, app/, api/).
