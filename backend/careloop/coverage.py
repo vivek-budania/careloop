@@ -1,7 +1,8 @@
 """Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
 
-No Gemini. Live 270/271 is optional (STEDI_API_KEY) and will not match these
-fixture members — we still probe so the response shows the option exists.
+Optional Gemini vision on uploaded card/SBC (GEMINI_API_KEY at launch).
+Optional Stedi sandbox 270/271 (STEDI_API_KEY at launch). Aetna + Jane Doe /
+AETNA12345 is the canned sandbox member.
 """
 
 from __future__ import annotations
@@ -10,18 +11,13 @@ import json
 import math
 import os
 import re
-import urllib.error
-import urllib.request
 from copy import deepcopy
 from typing import Any, Optional
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+from backend.careloop import extract as careloop_extract
+from backend.careloop import stedi as careloop_stedi
 
-STEDI_ELIGIBILITY_URL = (
-    "https://healthcare.us.stedi.com/2024-04-01/change/medicalnetwork/eligibility/v3"
-)
-# Dummy Type-2 NPI that passes the Luhn check digit (not a real clinic).
-DEMO_PROVIDER_NPI = "1999999984"
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 ZIP_COORDS = {
     "94110": (37.7484, -122.4156),
@@ -60,6 +56,37 @@ def _prior_visit_fixture() -> dict:
     return _load_json("mock_prior_visit.json")
 
 
+def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
+    """Directory filter from visit reason. Not a diagnosis or coverage decision."""
+    blob = f"{symptoms} {prior_visit_note}".lower()
+    if _has_word(
+        blob,
+        (
+            "diabetes",
+            "a1c",
+            "hba1c",
+            "metformin",
+            "glp",
+            "insulin",
+            "thirst",
+            "endocrin",
+        ),
+    ):
+        return {
+            "code": "endocrinology",
+            "label": "Endocrinology",
+            "reason": (
+                "Visit reason looks like a diabetes follow-up. "
+                "Suggestion only — not a diagnosis."
+            ),
+        }
+    return {
+        "code": "pcp",
+        "label": "Primary care",
+        "reason": "No specialty keywords matched. Defaulting to primary care.",
+    }
+
+
 def _empty_state() -> dict:
     return {
         "profile": None,
@@ -68,6 +95,7 @@ def _empty_state() -> dict:
         "visit_cost_estimate": None,
         "clinicians": None,
         "source": "mock",
+        "stedi": careloop_stedi.status(),
     }
 
 
@@ -91,6 +119,7 @@ def list_payers() -> list[dict]:
             "plan_type": p["plan_type"],
             "network_name": p["network_name"],
             "active": p["active"],
+            "stedi_demo": bool(p.get("stedi_demo")),
         }
         for p in _payers()
     ]
@@ -193,9 +222,26 @@ def scan_card(
     payer_name: str = "",
     image_note: str = "",
     sbc_note: str = "",
+    card_image_b64: str = "",
+    card_mime: str = "",
+    card_filename: str = "",
+    sbc_image_b64: str = "",
+    sbc_mime: str = "",
+    sbc_filename: str = "",
 ) -> dict:
-    """Fixture scan. Does not OCR. image_note/sbc_note are recorded only."""
-    payer = _find_payer(payer_name) or _find_payer("Mock Payer")
+    """Fixture scan, or Gemini vision when an image/PDF is attached."""
+    if card_image_b64 or sbc_image_b64:
+        return _scan_uploaded(
+            payer_name=payer_name,
+            card_image_b64=card_image_b64,
+            card_mime=card_mime,
+            card_filename=card_filename,
+            sbc_image_b64=sbc_image_b64,
+            sbc_mime=sbc_mime,
+            sbc_filename=sbc_filename,
+        )
+
+    payer = _find_payer(payer_name) or _find_payer("Aetna") or _find_payer("Mock Payer")
     if not payer:
         raise ValueError("Unknown payer.")
     profile = _profile_from_payer(payer)
@@ -216,6 +262,95 @@ def scan_card(
     return snapshot()
 
 
+def _match_payer_name(extracted_name: str) -> Optional[dict]:
+    if not extracted_name:
+        return None
+    hit = _find_payer(extracted_name)
+    if hit:
+        return hit
+    needle = extracted_name.strip().lower()
+    for payer in _payers():
+        name = payer["name"].lower()
+        if needle in name or name in needle:
+            return payer
+    return None
+
+
+def _scan_uploaded(
+    *,
+    payer_name: str,
+    card_image_b64: str,
+    card_mime: str,
+    card_filename: str,
+    sbc_image_b64: str,
+    sbc_mime: str,
+    sbc_filename: str,
+) -> dict:
+    card = (
+        careloop_extract.decode_upload(card_image_b64, card_mime, card_filename)
+        if card_image_b64
+        else None
+    )
+    sbc = (
+        careloop_extract.decode_upload(sbc_image_b64, sbc_mime, sbc_filename)
+        if sbc_image_b64
+        else None
+    )
+    extracted = careloop_extract.extract_documents(card=card, sbc=sbc)
+
+    selected = _find_payer(payer_name)
+    ocr_payer = _match_payer_name(extracted.get("payer_name") or "")
+    warnings = list(extracted.get("warnings") or [])
+    if selected and ocr_payer and selected["id"] != ocr_payer["id"]:
+        warnings.append(
+            f"[NEEDS VERIFICATION] Upload looks like {ocr_payer['name']}, "
+            f"but the dropdown is {selected['name']}. Dropdown kept."
+        )
+    payer = selected or ocr_payer
+    if not payer:
+        raise ValueError(
+            "Could not match a payer from the upload. Pick an insurance company "
+            "from the dropdown, then read the images again."
+        )
+
+    profile = _profile_from_payer(payer)
+    for key in (
+        "member_name",
+        "member_id",
+        "group_number",
+        "date_of_birth",
+        "zip",
+        "plan_type",
+        "rx_bin",
+        "rx_pcn",
+        "rx_group",
+    ):
+        value = extracted.get(key)
+        if value:
+            profile[key] = value
+    profile["scan_source"] = "gemini-vision"
+    profile["printed_copay_pcp"] = extracted.get("printed_copay_pcp")
+    profile["printed_copay_specialist"] = extracted.get("printed_copay_specialist")
+    docs = []
+    if card:
+        docs.append({"kind": "card", "note": f"upload:{card.get('filename')}"})
+    if sbc:
+        docs.append({"kind": "sbc", "note": f"upload:{sbc.get('filename')}"})
+    profile["supporting_docs"] = docs
+    profile["warnings"] = warnings
+    profile["unreadable"] = extracted.get("unreadable") or []
+    if extracted.get("printed_copay_pcp") is not None or extracted.get("printed_copay_specialist") is not None:
+        profile["warnings"].append(
+            "Printed copays were copied from the upload only. They are not a coverage determination."
+        )
+
+    state = _ensure_state()
+    state["profile"] = profile
+    state["eligibility"] = None
+    state["visit_cost_estimate"] = None
+    return snapshot()
+
+
 def _mock_eligibility(payer: dict, profile: dict) -> dict:
     active = bool(payer.get("active"))
     member_id = (profile.get("member_id") or "").strip()
@@ -223,6 +358,17 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
         active = False
 
     status = "active" if active else "inactive"
+    if payer.get("stedi_demo"):
+        disclaimer = (
+            "Mock eligibility matching this payer's Stedi canned sandbox member. "
+            "Set STEDI_API_KEY on the container at launch to run a live test 270/271. "
+            "This is not a coverage determination."
+        )
+    else:
+        disclaimer = (
+            "Mock eligibility — not a live 270/271 check. "
+            "This is not a coverage determination."
+        )
     return {
         "status": status,
         "in_network": active,
@@ -235,98 +381,33 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
         "estimated_copay_er": payer.get("er_copay"),
         "deductible": payer.get("deductible"),
         "deductible_remaining": payer.get("deductible_remaining"),
+        "oon_deductible": payer.get("oon_deductible"),
         "oop_max": payer.get("oop_max"),
         "oop_remaining": payer.get("oop_remaining"),
         "coinsurance_pct": payer.get("coinsurance_pct"),
         "pa_required_rx": payer.get("pa_required_rx"),
-        "disclaimer": (
-            "Mock eligibility — not a live 270/271 check. "
-            "This is not a coverage determination."
-        ),
+        "disclaimer": disclaimer,
     }
 
 
-def _stedi_configured() -> bool:
-    key = os.getenv("STEDI_API_KEY", "").strip()
-    return bool(key) and key != "your_api_key_here"
+def _fill_stedi_identity(payer: dict, profile: dict) -> dict:
+    """Keep typed fields; fill blanks from the canned fixture so Stedi can match."""
+    out = dict(profile or {})
+    card = dict(payer.get("fixture_card") or {})
+    if not payer.get("stedi_payer_id"):
+        return out
+    for key in ("member_name", "member_id", "date_of_birth"):
+        if not str(out.get(key) or "").strip() and card.get(key):
+            out[key] = card[key]
+    return out
 
 
-def _probe_stedi(payer: dict, profile: dict) -> dict:
-    """Optional 270/271. Fixture members will not match sandbox canned data."""
-    if not _stedi_configured():
-        return {
-            "attempted": False,
-            "used": False,
-            "vendor": "stedi",
-            "message": (
-                "STEDI_API_KEY not set. Coverage used the mock plan. "
-                "A Stedi test key is optional later; sandbox only accepts "
-                "Stedi's canned members, not this fixture card."
-            ),
-        }
-
-    payload = {
-        "tradingPartnerServiceId": payer.get("stedi_payer_id") or "60054",
-        "provider": {
-            "organizationName": "CareLoop Demo Clinic",
-            "npi": DEMO_PROVIDER_NPI,
-        },
-        "subscriber": {
-            "firstName": (profile.get("member_name") or "Maya").split(" ")[0],
-            "lastName": (profile.get("member_name") or "Chen").split(" ")[-1],
-            "memberId": profile.get("member_id") or "M-1001",
-            "dateOfBirth": (profile.get("date_of_birth") or "1972-03-14").replace("-", ""),
-        },
-        "encounter": {"serviceTypeCodes": ["30"]},
-    }
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        STEDI_ELIGIBILITY_URL,
-        data=body,
-        headers={
-            "Authorization": os.getenv("STEDI_API_KEY", "").strip(),
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            raw = resp.read().decode("utf-8")
-        parsed = json.loads(raw) if raw else {}
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "http_status": 200,
-            "message": (
-                "Stedi returned a payload, but CareLoop still uses mock eligibility "
-                "for this demo unless the member is a documented sandbox subscriber."
-            ),
-            "raw_keys": list(parsed.keys())[:12],
-        }
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:400]
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "http_status": exc.code,
-            "message": (
-                "Stedi rejected this fixture member (expected). "
-                "Sandbox keys only accept canned test subscribers. Mock eligibility used."
-            ),
-            "error": detail,
-        }
-    except Exception as exc:
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "message": f"Stedi probe failed ({exc}). Mock eligibility used.",
-        }
-
-
-def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
+def confirm_coverage(
+    payer_name: str = "",
+    member_id: str = "",
+    date_of_birth: str = "",
+    member_name: str = "",
+) -> dict:
     state = _ensure_state()
     profile = state.get("profile")
     if payer_name:
@@ -345,6 +426,10 @@ def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
             }}
         if member_id:
             profile["member_id"] = member_id
+        if date_of_birth:
+            profile["date_of_birth"] = date_of_birth
+        if member_name:
+            profile["member_name"] = member_name
         state["profile"] = profile
     if not profile:
         raise ValueError("Save or scan a card first (payer dropdown is required).")
@@ -353,10 +438,25 @@ def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
     if not payer:
         raise ValueError("Unknown insurance company on the saved profile.")
 
-    eligibility = _mock_eligibility(payer, profile)
-    eligibility["live_api"] = _probe_stedi(payer, profile)
+    if member_id:
+        profile["member_id"] = member_id
+    if date_of_birth:
+        profile["date_of_birth"] = date_of_birth
+    if member_name:
+        profile["member_name"] = member_name
+    profile = _fill_stedi_identity(payer, profile)
+    state["profile"] = profile
+
+    live = careloop_stedi.check_eligibility(payer, profile)
+    if live.get("used") and live.get("eligibility"):
+        eligibility = live["eligibility"]
+        state["source"] = "stedi"
+    else:
+        eligibility = _mock_eligibility(payer, profile)
+        state["source"] = "mock"
+    eligibility["live_api"] = {k: v for k, v in live.items() if k != "eligibility"}
     state["eligibility"] = eligibility
-    state["source"] = "mock"
+    state["stedi"] = careloop_stedi.status()
     return snapshot()
 
 
@@ -379,9 +479,16 @@ def save_intake(
                 prior.update(_prior_visit_fixture())
                 prior["filename"] = prior_visit_filename
                 prior["source"] = "fixture"
+    suggestion = guess_specialty(
+        symptoms,
+        (prior or {}).get("summary") or (prior or {}).get("user_note") or "",
+    )
     state["intake"] = {
         "symptoms": symptoms.strip(),
         "prior_visit": prior,
+        "suggested_specialty": suggestion["code"],
+        "suggested_specialty_label": suggestion["label"],
+        "suggested_specialty_reason": suggestion["reason"],
     }
     return snapshot()
 
@@ -479,9 +586,15 @@ def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
         estimate["warnings"].append(
             "At least one visit type was inferred from symptoms. A clinician should confirm."
         )
+    suggestion = guess_specialty(symptoms, prior_text)
+    estimate["suggested_specialty"] = suggestion["code"]
+    estimate["suggested_specialty_label"] = suggestion["label"]
     state["visit_cost_estimate"] = estimate
-    if symptoms and not intake.get("symptoms"):
-        state["intake"] = {**intake, "symptoms": symptoms}
+    merged_intake = {**intake, "symptoms": symptoms or intake.get("symptoms") or ""}
+    merged_intake["suggested_specialty"] = suggestion["code"]
+    merged_intake["suggested_specialty_label"] = suggestion["label"]
+    merged_intake["suggested_specialty_reason"] = suggestion["reason"]
+    state["intake"] = merged_intake
     return snapshot()
 
 
@@ -508,7 +621,8 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     zip_code = zip_code or profile.get("zip") or "94110"
     origin, zip_fallback = _coords_for_zip(zip_code)
     payer_name = (profile.get("payer_name") or "").strip()
-    spec = (specialty or "pcp").strip().lower()
+    intake = state.get("intake") or {}
+    spec = (specialty or intake.get("suggested_specialty") or "pcp").strip().lower()
 
     results = []
     for doc in _network():
@@ -533,6 +647,11 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     payload = {
         "zip": zip_code,
         "specialty": spec,
+        "specialty_label": next(
+            (row["specialty_label"] for row in results if row["specialty"] == spec),
+            "Primary care" if spec == "pcp" else spec,
+        ),
+        "suggested_from_visit": bool(intake.get("suggested_specialty")),
         "zip_fallback_used": zip_fallback,
         "source": "fixture",
         "disclaimer": (

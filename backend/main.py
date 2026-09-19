@@ -28,7 +28,7 @@ from backend.prompts import (
     SCRIBE_SYSTEM_PROMPT,
 )
 from backend.risk_engine import calculate_risk_score
-from backend.config import NATIONAL_APPEAL_STATS
+from backend.config import NATIONAL_APPEAL_STATS, demo_env_status
 from backend.careloop import coverage as careloop_coverage
 from backend.careloop import auth as careloop_auth
 from backend.careloop import scribe as careloop_scribe
@@ -117,11 +117,19 @@ class CoverageScanRequest(BaseModel):
     payer_name: str = ""
     image_note: str = "fixture:front-of-card"
     sbc_note: str = ""
+    card_image_b64: str = ""
+    card_mime: str = ""
+    card_filename: str = ""
+    sbc_image_b64: str = ""
+    sbc_mime: str = ""
+    sbc_filename: str = ""
 
 
 class CoverageConfirmRequest(BaseModel):
     payer_name: str = ""
     member_id: str = ""
+    member_name: str = ""
+    date_of_birth: str = ""
 
 
 class CoverageIntakeRequest(BaseModel):
@@ -391,6 +399,12 @@ def careloop_get_coverage(_user: dict = Depends(careloop_auth.require_user)):
     return careloop_coverage.snapshot()
 
 
+@app.get("/api/careloop/demo-env")
+def careloop_demo_env(_user: dict = Depends(careloop_auth.require_user)):
+    """Which demo keys are loaded. Never returns secret values."""
+    return demo_env_status()
+
+
 @app.post("/api/careloop/coverage/reset")
 def careloop_reset_coverage(_user: dict = Depends(careloop_auth.require_user)):
     return careloop_coverage.reset()
@@ -426,6 +440,12 @@ def careloop_scan_coverage(
             payer_name=req.payer_name,
             image_note=req.image_note,
             sbc_note=req.sbc_note,
+            card_image_b64=req.card_image_b64,
+            card_mime=req.card_mime,
+            card_filename=req.card_filename,
+            sbc_image_b64=req.sbc_image_b64,
+            sbc_mime=req.sbc_mime,
+            sbc_filename=req.sbc_filename,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -440,6 +460,8 @@ def careloop_confirm_coverage(
         return careloop_coverage.confirm_coverage(
             payer_name=req.payer_name,
             member_id=req.member_id,
+            member_name=req.member_name,
+            date_of_birth=req.date_of_birth,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -474,7 +496,7 @@ def careloop_visit_guess(
 
 @app.get("/api/careloop/network")
 def careloop_network(
-    specialty: str = "pcp",
+    specialty: str = "",
     zip: str = "",
     _user: dict = Depends(careloop_auth.require_user),
 ):
@@ -580,3 +602,8 @@ if os.path.isdir(FRONTEND_DIR):
     @app.get("/")
     def serve_frontend():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+    @app.get("/letters")
+    def serve_letters():
+        """Secondary DenialShield PA / appeal surface. Not the CareLoop patient UX."""
+        return FileResponse(os.path.join(FRONTEND_DIR, "letters.html"))

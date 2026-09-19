@@ -42,7 +42,7 @@
     "lng": -122.4110,
     "phone": "415-555-0188",
     "accepting_new_patients": true,
-    "networks": ["Mock Payer", "UnitedHealthcare", "Blue Cross Blue Shield"]
+    "networks": ["Mock Payer", "Aetna", "UnitedHealthcare", "Blue Cross Blue Shield"]
   },
   {
     "npi": "1444444448",
