@@ -1,26 +1,28 @@
 # CareLoop
 
-Hackathon product: **one mocked US patient journey** so context survives visit → orders → prior auth → delivery → claim → meds → follow-up.
+Hackathon product: **one mocked US patient journey** so context survives coverage → visit → orders → prior auth → delivery → claim → meds → follow-up → **shareable history for the next visit**.
 
 It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. Drafts are for a human to review; the app never files, faxes, e-prescribes, or calls a live insurer.
 
-The code in this repo today is **DenialShield**: FastAPI + vanilla JS tools for drafting PA packets and appeal letters. CareLoop wraps that authorization seed in a golden-path thread. The working split is [`plan.md`](plan.md).
+The code in this repo today is **DenialShield**: FastAPI + vanilla JS tools for drafting PA packets and appeal letters. CareLoop wraps that authorization seed in a golden-path thread.
+
+**Who builds what:** **Dave** (card scan → coverage, in-network clinicians, optional copay/deductible), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
 
 ---
 
 ## What CareLoop is (and is not)
 
-**Thesis:** US care is a chain of handoffs. Point tools optimize one moment. The demo gap is **one patient, one data thread** — encounter evidence still available at PA, appeal, dispense, and follow-up.
+**Thesis:** US care is a chain of handoffs. Point tools optimize one moment. The demo gap is **one patient, one data thread** — encounter evidence still available at PA, appeal, dispense, follow-up, and the **next doctor visit**.
 
-**In scope for the hackathon:** a scripted golden path (PCP visit → SOAP/Plan → HbA1c + Rx → PA required → mock payer **step-therapy denial** → policy-to-evidence checklist → appeal → approve → dispense → taken/missed + refill nudge → follow-up). Mock eligibility and payer. Go deepest on **scribe + policy/evidence appeal**. Keep reminders simple. The **integrated journey** is the product.
+**In scope for the hackathon:** a scripted golden path (coverage/card → PCP visit → SOAP/Plan → HbA1c + Rx → PA required → mock payer **step-therapy denial** → policy-to-evidence checklist → appeal → approve → dispense → taken/missed + refill nudge → follow-up → **history the patient can share next visit**). Mock eligibility and payer. Go deepest on **scribe + policy/evidence appeal**. Keep reminders simple. **Patient-facing workflow first** (what happened / waiting / who acts); visual polish from Dribbble **after** that flow works. The **integrated journey** is the product.
 
-**Out of scope:** live payer/PBM PA APIs, real eligibility, eRx, claims adjudication networks, EHR/FHIR write-back, production HIPAA, verified multi-plan legal knowledge bases, ambient scribe without heavy clinician review. The brief is not operational billing, legal, or medical guidance.
+**Out of scope:** live payer/PBM PA APIs, real eligibility, eRx, claims adjudication networks, EHR/FHIR write-back, production HIPAA, verified multi-plan legal knowledge bases, ambient scribe without heavy clinician review. The brief is not operational billing, legal, or medical guidance. Full list: [`plan.md`](plan.md) (Out of scope).
 
 ---
 
 ## Already shipped vs planned
 
-Full workstreams, object sketches, curls, and suggested order live in **[`plan.md`](plan.md)**. Do not treat this README as a second plan.
+Workstreams, owner sections, object sketches, curls, and suggested order live in **[`plan.md`](plan.md)**. Do not treat this README as a second plan.
 
 ### Already here (DenialShield — keep; reuse as Authorization seed)
 
@@ -40,11 +42,17 @@ Two **disconnected**, stateless form tabs. No accounts, no database, no timeline
 
 Provider / Patient Advocate tabs **stay**. They are **not** the CareLoop UX.
 
-### Greenfield (build in workstreams A–F)
+### Greenfield (three owners; original A–F still apply)
 
-Longitudinal store (Patient, Encounter, Orders, Authorization, Claim, Medication, Follow-up), scribe/SOAP/Plan, mock eligibility + deterministic mock payer, policy-to-evidence checklist, med schedule, unified **CareLoop** timeline UI, and a **separate** claim/EOB path.
+See [`plan.md`](plan.md) for inherited A–F mapping.
 
-**Golden-path demo (target):** PCP visit → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → mock PA submit → step-therapy denial with citable policy → match policy to encounter evidence → watermarked appeal + HITL → mock approve → dispense → taken/missed + refill nudge → timeline / follow-up. Keep a **separate** claim (optional claim denial) so judges see two insurance moments.
+| Owner | Builds |
+|--------|--------|
+| **Dave** | Insurance **card scan** (mock OCR OK) → coverage details; which doctors (in-network); optional copay / deductible / OOP; Coverage facts for history |
+| **Sreekar** | First visit → transcribe/SOAP/Plan → orders, mock payer + PA + step-therapy denial + policy-to-evidence + appeal (DenialShield HITL/watermark), meds/adherence/refill, claims/EOB light, follow-up; clinical/admin **history fact capture** |
+| **Vivek** | Patient-facing CareLoop workflow (basic) + SQLite/in-memory **thread** as app shell + unified timeline + **history share/export**; **Dribbble-informed polish later** |
+
+**Golden-path demo (target):** card/coverage → PCP visit → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → mock PA submit → step-therapy denial with citable policy → match policy to encounter evidence → watermarked appeal + HITL → mock approve → dispense → taken/missed + refill nudge → timeline / follow-up → share history next visit. Keep a **separate** claim (optional claim denial) so judges see two insurance moments.
 
 ---
 
@@ -53,7 +61,7 @@ Longitudinal store (Patient, Encounter, Orders, Authorization, Claim, Medication
 Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test suite, **no** linter, **no** build step.
 
 | Layer | Technology |
-|--------|------------|
+|--------|-------------|
 | Backend | Python + FastAPI (`backend/main.py`) |
 | LLM | Gemini primary (`google-generativeai`); optional Groq fallback |
 | Frontend | Vanilla HTML/CSS/JS (`frontend/`) |
@@ -63,7 +71,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 
 ```
 .
-├── plan.md                 # Workstreams A–F; source of truth for *what to build*
+├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
 ├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
 ├── backend/
 │   ├── main.py             # All routes; mounts static; serves index.html
@@ -84,6 +92,8 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 └── .env.example
 ```
 
+Shared objects (thread contract): Patient, Encounter, Orders, Authorization, Claim, Medication, Follow-up, **Coverage**, **History** — details in [`plan.md`](plan.md).
+
 ---
 
 ## Safety invariants
@@ -101,7 +111,7 @@ Load-bearing. Do not weaken them when adding the journey.
 
 ## Setup and run
 
-Commands match [`plan.md`](plan.md) §4 and [`CLAUDE.md`](CLAUDE.md).
+Commands match [`plan.md`](plan.md) and [`CLAUDE.md`](CLAUDE.md).
 
 ### 1. Gemini API key
 
@@ -125,7 +135,7 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open **http://localhost:8080**
 
-Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder.
+Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require Gemini.
 
 ### Useful curls (Authorization core)
 
@@ -140,23 +150,20 @@ curl -s -X POST http://localhost:8080/api/risk-score \
 curl -s http://localhost:8080/api/national-stats
 ```
 
-PA / parse / appeal / demand need a real Gemini key. Example bodies are in [`plan.md`](plan.md) §4.
+PA / parse / appeal / demand need a real Gemini key. Example bodies are in [`plan.md`](plan.md) (Sreekar — Authorization curls). Isolation curls for store/coverage/history are in the same file under each owner.
 
 ---
 
 ## How to work from `plan.md`
 
-Pick a workstream; coordinate on **object shapes** first (stream **B**). One process: `uvicorn backend.main:app`. Isolate by not calling other modules, not by a second server.
+Pick an **owner**; original letters **A–F** still name the slices. Coordinate on **object shapes** first (stream **B**, Vivek). One process: `uvicorn backend.main:app`. Isolate by not calling other modules, not by a second server.
 
-| Stream | Job | Isolation |
-|--------|-----|-----------|
-| **A** Authorization | Keep existing generate/parse/risk/search + watermark/HITL. Journey **calls** these APIs. No new letter types. | Provider/Patient tabs + curls |
-| **B** Longitudinal thread | SQLite or in-memory Patient/Encounter/Orders/Authorization/Claim/Medication/Follow-up; reset/seed | Curl `thread`/`reset`; skip UI |
-| **C** Scribe / SOAP / Plan | Seeded mock PCP encounter is OK; clinician review before Plan → Orders | Depend on B seed |
-| **D** Mock payer + policy-to-evidence | First PA submit always step-therapy denies with citable policy; LLM does **not** decide coverage | Curl submit → same denial body |
-| **E** Meds | Taken/missed + refill nudge after mock approve + dispense | Fixture with `dispensed` |
-| **F** Unified timeline UX | **New CareLoop tab**; old tabs remain | Static thread fixture until B lands |
+| Owner | Original streams | Isolation |
+|--------|------------------|-----------|
+| **Dave** | Eligibility/network/copay from **D**; **added** card scan, clinician finder, cost-share UI, Coverage | Curl coverage/network once added; fixtures OK |
+| **Sreekar** | **A** Authorization, **C** scribe, **D** mock payer (PA half), **E** meds; claims + follow-up assigned here | Provider/Patient tabs + letter curls; then payer/meds curls |
+| **Vivek** | **B** store, **F** timeline; **added** history share/export; Dribbble later | Curl `thread`/`reset`; static fixture until B lands |
 
-**Suggested order:** B first (or a frozen JSON schema) → A in parallel from day one → C then D for the insurance half → E after approve/dispense (or a seeded dispensed state) → F can prototype against a static thread, then bind to B.
+**Suggested order:** B first (or a frozen JSON schema) → A **and** Dave coverage in parallel → C then D for the insurance half → E after approve/dispense (or a seeded dispensed state) → F can prototype against a static thread, then bind to B → history share as a demo beat → Dribbble polish last.
 
-**PR conventions:** one workstream per PR when possible; branch from latest `main`; describe stream letter (A–F), how to demo, and that PA vs claim were **not** collapsed. Details in [`plan.md`](plan.md) §4–5.
+**PR conventions:** one workstream per PR when possible; branch from latest `main`; describe stream letter (A–F) and/or owner, how to demo, and that PA vs claim were **not** collapsed. Details in [`plan.md`](plan.md).
