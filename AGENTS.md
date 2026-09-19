@@ -74,6 +74,8 @@ Open http://localhost:8080 → log in as `jane` / `demo` → CareLoop wizard. Pi
 
 **Where the Stedi key goes:** `STEDI_API_KEY` on the **process/container at launch**. Do not bake it into the image, commit it, or paste it in chat. A laptop `.env` is a fallback; `load_dotenv(override=False)` so the container env always wins. A `test_` key runs Stedi's canned 270/271; a production key is refused. Without a key, step 3 still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500, OON $1000, INN OOP $7000 remaining $7000).
 
+**Vercel:** Cursor/cloud-agent env does not reach Vercel. Put `STEDI_API_KEY` (and `GEMINI_API_KEY`) in the Vercel project Environment Variables, then Redeploy. Entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub.
+
 ## CareLoop wizard (Dave)
 
 One step on screen at a time (`frontend/js/careloop.js`).
