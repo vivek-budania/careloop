@@ -3,11 +3,103 @@
  */
 
 const App = {
-  currentModule: 'provider',
+  currentModule: 'careloop',
+  user: null,
 
   init() {
     this.setupNavigation();
     this.setupHITLModal();
+    this.setupAuth();
+  },
+
+  setupAuth() {
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.login();
+    });
+    document.getElementById('btn-logout').addEventListener('click', () => this.logout());
+    this.loadAccountHints();
+    this.restoreSession();
+  },
+
+  async loadAccountHints() {
+    const list = document.getElementById('login-accounts');
+    try {
+      const accounts = await API.listDemoAccounts();
+      list.innerHTML = accounts.map((a) => (
+        `<li><code>${App.escapeHTML(a.username)}</code> — ${App.escapeHTML(a.name)} (${App.escapeHTML(a.role)})</li>`
+      )).join('');
+    } catch (err) {
+      list.textContent = 'Could not load demo accounts.';
+    }
+  },
+
+  async restoreSession() {
+    if (!API.getToken()) {
+      this.showLogin();
+      return;
+    }
+    try {
+      const user = await API.me();
+      await this.enterApp(user);
+    } catch (err) {
+      API.setToken('');
+      this.showLogin();
+    }
+  },
+
+  async login() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errBox = document.getElementById('login-error');
+    errBox.textContent = '';
+    try {
+      const result = await API.login(username, password);
+      API.setToken(result.token);
+      await this.enterApp(result.user);
+    } catch (err) {
+      errBox.textContent = err.message;
+    }
+  },
+
+  async logout() {
+    try {
+      await API.logout();
+    } catch (err) {
+      // Still clear the local session.
+    }
+    API.setToken('');
+    this.user = null;
+    CareLoop.resetUi();
+    this.showLogin();
+  },
+
+  showLogin() {
+    document.getElementById('login-screen').hidden = false;
+    document.getElementById('app-shell').hidden = true;
+  },
+
+  async enterApp(user) {
+    this.user = user;
+    document.getElementById('nav-user-label').textContent = `${user.name} (${user.role})`;
+    this.applyRole(user);
+    CareLoop.resetUi();
+    await CareLoop.loadPayers();
+    document.getElementById('login-screen').hidden = true;
+    document.getElementById('app-shell').hidden = false;
+  },
+
+  applyRole(user) {
+    const allowed = user.tabs || [];
+    document.querySelectorAll('.nav-tab').forEach((tab) => {
+      const show = allowed.includes(tab.dataset.module);
+      tab.hidden = !show;
+      tab.classList.toggle('active', false);
+    });
+    document.querySelectorAll('.module-view').forEach((view) => view.classList.remove('active'));
+
+    const home = allowed.includes('careloop') ? 'careloop' : allowed[0];
+    if (home) this.switchModule(home);
   },
 
   // ─── Navigation ───────────────────────────────────────
@@ -22,15 +114,17 @@ const App = {
   },
 
   switchModule(module) {
+    const tab = document.querySelector(`[data-module="${module}"]`);
+    if (!tab || tab.hidden) return;
+
     this.currentModule = module;
 
-    // Update tabs
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`[data-module="${module}"]`).classList.add('active');
+    tab.classList.add('active');
 
-    // Update views
     document.querySelectorAll('.module-view').forEach(v => v.classList.remove('active'));
-    document.getElementById(`module-${module}`).classList.add('active');
+    const view = document.getElementById(`module-${module}`);
+    if (view) view.classList.add('active');
   },
 
   // ─── Notifications ────────────────────────────────────
@@ -183,4 +277,5 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
   Provider.init();
   Patient.init();
+  CareLoop.init();
 });

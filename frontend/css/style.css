@@ -1247,3 +1247,70 @@ a:hover { color: var(--accent-blue); }
   border-color: var(--success);
   color: white;
 }
+
+/* --- CareLoop coverage intake (functional, not a design pass) --- */
+.careloop-banner {
+  margin: 0 0 var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-glass);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.form-hint {
+  display: block;
+  margin-top: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.coverage-result {
+  margin-top: var(--space-md);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.coverage-result ul {
+  margin: var(--space-sm) 0 0;
+  padding-left: 1.2rem;
+}
+
+.coverage-result li {
+  margin-bottom: var(--space-sm);
+}
+
+.login-screen {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  margin: 48px auto;
+  padding: var(--space-md);
+}
+
+.login-card {
+  width: 100%;
+}
+
+.coming-soon {
+  padding: var(--space-lg) 0;
+}
+
+.coming-soon-banner {
+  display: inline-block;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  background: var(--accent-purple-glow);
+  color: var(--text-accent);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+[hidden] {
+  display: none !important;
+}

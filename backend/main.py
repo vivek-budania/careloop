@@ -13,10 +13,10 @@ import json
 import os
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from backend.llm import generate, generate_json
@@ -28,6 +28,8 @@ from backend.prompts import (
 )
 from backend.risk_engine import calculate_risk_score
 from backend.config import NATIONAL_APPEAL_STATS
+from backend.careloop import coverage as careloop_coverage
+from backend.careloop import auth as careloop_auth
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -95,6 +97,45 @@ class RiskScoreRequest(BaseModel):
 class GeneratedDocument(BaseModel):
     content: str
     warnings: list[str] = []
+
+
+class CoverageProfileRequest(BaseModel):
+    payer_name: str
+    member_name: str = ""
+    member_id: str = ""
+    group_number: str = ""
+    date_of_birth: str = ""
+    zip: str = ""
+    plan_type: str = ""
+    supporting_docs: list[str] = []
+
+
+class CoverageScanRequest(BaseModel):
+    payer_name: str = ""
+    image_note: str = "fixture:front-of-card"
+    sbc_note: str = ""
+
+
+class CoverageConfirmRequest(BaseModel):
+    payer_name: str = ""
+    member_id: str = ""
+
+
+class CoverageIntakeRequest(BaseModel):
+    symptoms: str = ""
+    prior_visit_note: str = ""
+    prior_visit_filename: str = ""
+    use_fixture_prior_visit: bool = False
+
+
+class CoverageVisitGuessRequest(BaseModel):
+    symptoms: str = ""
+    prior_visit_note: str = ""
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 # ---------------------------------------------------------------------------
 # API Endpoints
@@ -273,6 +314,159 @@ Please draft a complete, professional demand letter requesting all internal reco
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM generation failed: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# CareLoop auth (mock login — not production)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/careloop/auth/accounts")
+def careloop_auth_accounts():
+    """Demo usernames/roles for the login screen. Passwords are not returned."""
+    with open(os.path.join(DATA_DIR, "mock_users.json"), "r") as f:
+        users = json.load(f)
+    return [{"username": u["username"], "name": u["name"], "role": u["role"]} for u in users]
+
+
+@app.post("/api/careloop/login")
+def careloop_login(req: LoginRequest):
+    try:
+        result = careloop_auth.login(req.username, req.password)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    response = JSONResponse(result)
+    response.set_cookie(
+        "careloop_token",
+        result["token"],
+        httponly=False,
+        samesite="lax",
+        max_age=60 * 60 * 12,
+    )
+    return response
+
+
+@app.post("/api/careloop/logout")
+def careloop_logout(request: Request, authorization: Optional[str] = Header(default=None)):
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get("careloop_token")
+    careloop_auth.logout(token)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("careloop_token")
+    return response
+
+
+@app.get("/api/careloop/me")
+def careloop_me(user: dict = Depends(careloop_auth.require_user)):
+    return user
+
+
+# ---------------------------------------------------------------------------
+# CareLoop coverage (Dave) — mock identity / eligibility / visit guess / network
+# ---------------------------------------------------------------------------
+
+@app.get("/api/careloop/payers")
+def careloop_payers(_user: dict = Depends(careloop_auth.require_user)):
+    """Dropdown list of mocked insurance companies."""
+    return careloop_coverage.list_payers()
+
+
+@app.get("/api/careloop/coverage")
+def careloop_get_coverage(_user: dict = Depends(careloop_auth.require_user)):
+    """Current in-memory coverage snapshot for this demo process."""
+    return careloop_coverage.snapshot()
+
+
+@app.post("/api/careloop/coverage/reset")
+def careloop_reset_coverage(_user: dict = Depends(careloop_auth.require_user)):
+    return careloop_coverage.reset()
+
+
+@app.post("/api/careloop/coverage")
+def careloop_save_coverage(
+    req: CoverageProfileRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    try:
+        return careloop_coverage.save_profile(
+            payer_name=req.payer_name,
+            member_name=req.member_name,
+            member_id=req.member_id,
+            group_number=req.group_number,
+            date_of_birth=req.date_of_birth,
+            zip_code=req.zip,
+            plan_type=req.plan_type,
+            supporting_docs=req.supporting_docs,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/careloop/coverage/scan")
+def careloop_scan_coverage(
+    req: CoverageScanRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    try:
+        return careloop_coverage.scan_card(
+            payer_name=req.payer_name,
+            image_note=req.image_note,
+            sbc_note=req.sbc_note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/careloop/coverage/confirm")
+def careloop_confirm_coverage(
+    req: CoverageConfirmRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    try:
+        return careloop_coverage.confirm_coverage(
+            payer_name=req.payer_name,
+            member_id=req.member_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/careloop/coverage/intake")
+def careloop_coverage_intake(
+    req: CoverageIntakeRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    return careloop_coverage.save_intake(
+        symptoms=req.symptoms,
+        prior_visit_note=req.prior_visit_note,
+        prior_visit_filename=req.prior_visit_filename,
+        use_fixture_prior_visit=req.use_fixture_prior_visit,
+    )
+
+
+@app.post("/api/careloop/coverage/visit-guess")
+def careloop_visit_guess(
+    req: CoverageVisitGuessRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    try:
+        return careloop_coverage.visit_guess(
+            symptoms=req.symptoms,
+            prior_visit_note=req.prior_visit_note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/careloop/network")
+def careloop_network(
+    specialty: str = "pcp",
+    zip: str = "",
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    return careloop_coverage.search_network(specialty=specialty, zip_code=zip)
 
 
 # ---------------------------------------------------------------------------
