@@ -1,0 +1,26 @@
+{
+  "99213": {
+    "code": "99213",
+    "description": "Established office visit, low-moderate complexity",
+    "allowed": 150,
+    "setting": "office"
+  },
+  "99214": {
+    "code": "99214",
+    "description": "Established office visit, moderate complexity",
+    "allowed": 220,
+    "setting": "office"
+  },
+  "99203": {
+    "code": "99203",
+    "description": "New patient office visit, low-moderate complexity",
+    "allowed": 250,
+    "setting": "office"
+  },
+  "83036": {
+    "code": "83036",
+    "description": "HbA1c laboratory test",
+    "allowed": 45,
+    "setting": "lab"
+  }
+}

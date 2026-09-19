@@ -87,4 +87,43 @@ const API = {
   generateDemand(data) {
     return this.post('/api/generate-demand', data);
   },
+
+  listPayers() {
+    return this.get('/api/careloop/payers');
+  },
+
+  getCoverage() {
+    return this.get('/api/careloop/coverage');
+  },
+
+  resetCoverage() {
+    return this.post('/api/careloop/coverage/reset', {});
+  },
+
+  saveCoverage(data) {
+    return this.post('/api/careloop/coverage', data);
+  },
+
+  scanCoverage(data) {
+    return this.post('/api/careloop/coverage/scan', data);
+  },
+
+  confirmCoverage(data) {
+    return this.post('/api/careloop/coverage/confirm', data);
+  },
+
+  saveCoverageIntake(data) {
+    return this.post('/api/careloop/coverage/intake', data);
+  },
+
+  guessVisitCost(data) {
+    return this.post('/api/careloop/coverage/visit-guess', data);
+  },
+
+  searchNetwork(specialty, zip) {
+    const params = new URLSearchParams();
+    if (specialty) params.set('specialty', specialty);
+    if (zip) params.set('zip', zip);
+    return this.get(`/api/careloop/network?${params.toString()}`);
+  },
 };

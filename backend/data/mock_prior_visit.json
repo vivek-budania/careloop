@@ -1,0 +1,8 @@
+{
+  "source": "fixture",
+  "visit_date": "2026-03-12",
+  "clinician": "Dr. Priya Shah",
+  "summary": "PCP visit. Type 2 diabetes on metformin 1000mg BID for 12 months. HbA1c 9.1%. Continue metformin. Discuss add-on GLP-1. Follow up after labs.",
+  "problems": ["Type 2 diabetes mellitus"],
+  "medications": ["metformin 1000mg BID"]
+}

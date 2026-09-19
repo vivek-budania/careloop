@@ -183,4 +183,5 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
   Provider.init();
   Patient.init();
+  CareLoop.init();
 });

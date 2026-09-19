@@ -1247,3 +1247,36 @@ a:hover { color: var(--accent-blue); }
   border-color: var(--success);
   color: white;
 }
+
+/* --- CareLoop coverage intake (functional, not a design pass) --- */
+.careloop-banner {
+  margin: 0 0 var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-glass);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.form-hint {
+  display: block;
+  margin-top: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.coverage-result {
+  margin-top: var(--space-md);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.coverage-result ul {
+  margin: var(--space-sm) 0 0;
+  padding-left: 1.2rem;
+}
+
+.coverage-result li {
+  margin-bottom: var(--space-sm);
+}

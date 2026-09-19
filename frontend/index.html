@@ -25,6 +25,9 @@
         <button class="nav-tab" data-module="patient" id="tab-patient">
           👤 Patient Advocate
         </button>
+        <button class="nav-tab" data-module="careloop" id="tab-careloop">
+          🔁 CareLoop
+        </button>
       </div>
 
       <div class="nav-status">
@@ -311,6 +314,164 @@
       </div>
     </div>
 
+    <!-- ═══════════════ CARELOOP COVERAGE INTAKE (Dave) ═══════════════ -->
+    <div class="module-view" id="module-careloop">
+      <p class="careloop-banner">
+        Mock coverage intake. Not a live eligibility check, bill, or coverage decision.
+        Insurance company is the only required field.
+      </p>
+
+      <div class="section-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon blue">🪪</div>
+              <h2>1. Insurance identity</h2>
+            </div>
+            <span class="card-badge">Required: payer</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cl-payer">Insurance company</label>
+            <select class="form-select" id="cl-payer">
+              <option value="">Select insurance company...</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="cl-member-name">Member name (optional)</label>
+              <input type="text" class="form-input" id="cl-member-name" placeholder="Maya Chen">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cl-member-id">Member ID (optional)</label>
+              <input type="text" class="form-input" id="cl-member-id" placeholder="M-1001">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="cl-group">Group number (optional)</label>
+              <input type="text" class="form-input" id="cl-group" placeholder="GRP-4421">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cl-zip">ZIP (optional)</label>
+              <input type="text" class="form-input" id="cl-zip" placeholder="94110">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="cl-card-file">Card image (optional, filename only)</label>
+              <input type="file" class="form-input" id="cl-card-file" accept="image/*,.pdf">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cl-sbc-file">SBC / EOB (optional, filename only)</label>
+              <input type="file" class="form-input" id="cl-sbc-file" accept="image/*,.pdf">
+            </div>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-secondary" id="cl-btn-scan" type="button">Load sample card</button>
+            <button class="btn btn-primary" id="cl-btn-save" type="button">Save identity</button>
+          </div>
+          <p class="form-hint" id="cl-identity-status"></p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon cyan">✏️</div>
+              <h2>2. Optional review</h2>
+            </div>
+            <span class="card-badge">Skip allowed</span>
+          </div>
+          <p class="form-hint">Edit fields above if you want, then continue. You do not have to confirm.</p>
+          <div class="btn-group">
+            <button class="btn btn-secondary" id="cl-btn-skip-review" type="button">Skip review</button>
+            <button class="btn btn-primary" id="cl-btn-apply-review" type="button">Save edits</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon purple">✅</div>
+              <h2>3. Confirm coverage</h2>
+            </div>
+            <span class="card-badge">Mock 270/271</span>
+          </div>
+          <button class="btn btn-primary" id="cl-btn-confirm" type="button">Check coverage</button>
+          <div class="coverage-result" id="cl-eligibility"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon blue">🩺</div>
+              <h2>4. Reason for visit</h2>
+            </div>
+            <span class="card-badge">Intake, not SOAP</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cl-symptoms">Symptoms / why you need a visit</label>
+            <textarea class="form-textarea" id="cl-symptoms" rows="4" placeholder="e.g. follow-up type 2 diabetes, A1c check"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cl-prior-file">Previous visit summary (optional PDF/image)</label>
+            <input type="file" class="form-input" id="cl-prior-file" accept="image/*,.pdf">
+          </div>
+          <label class="form-hint">
+            <input type="checkbox" id="cl-prior-fixture"> Use sample prior-visit note
+          </label>
+          <div class="btn-group" style="margin-top: var(--space-md);">
+            <button class="btn btn-primary" id="cl-btn-intake" type="button">Save intake &amp; estimate cost</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon cyan">💵</div>
+              <h2>5. Next visit / cost guess</h2>
+            </div>
+            <span class="card-badge">Estimate</span>
+          </div>
+          <div class="coverage-result" id="cl-visit-guess"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon purple">📍</div>
+              <h2>6. In-network clinicians</h2>
+            </div>
+            <span class="card-badge">Fixture directory</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="cl-specialty">Specialty</label>
+              <select class="form-select" id="cl-specialty">
+                <option value="pcp">PCP</option>
+                <option value="endocrinology">Endocrinology</option>
+                <option value="any">Any</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cl-network-zip">ZIP</label>
+              <input type="text" class="form-input" id="cl-network-zip" placeholder="94110">
+            </div>
+          </div>
+          <button class="btn btn-primary" id="cl-btn-network" type="button">Find clinicians</button>
+          <div class="coverage-result" id="cl-network"></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ═══════════════ HITL APPROVAL MODAL ═══════════════ -->
@@ -340,5 +501,6 @@
   <script src="/js/app.js"></script>
   <script src="/js/provider.js"></script>
   <script src="/js/patient.js"></script>
+  <script src="/js/careloop.js"></script>
 </body>
 </html>
