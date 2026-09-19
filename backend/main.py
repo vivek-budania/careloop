@@ -476,7 +476,7 @@ def careloop_visit_guess(
 
 @app.get("/api/careloop/network")
 def careloop_network(
-    specialty: str = "pcp",
+    specialty: str = "",
     zip: str = "",
     _user: dict = Depends(careloop_auth.require_user),
 ):
