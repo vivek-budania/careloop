@@ -54,6 +54,8 @@ const CareLoop = {
     camera: 'M3 7h5l2-3h4l2 3h5v14H3V7Zm13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
     close: 'm6 6 12 12M6 18 18 6',
     mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Zm7 9a7 7 0 0 1-14 0M12 19v3',
+    eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+    'eye-off': 'M3 3l18 18M10.58 10.58a3 3 0 0 0 4.24 4.24M9.88 4.24A10.94 10.94 0 0 1 12 5c6 0 10 7 10 7a17.9 17.9 0 0 1-3.14 4.06M6.1 6.1C3.51 7.86 2 10.5 2 10.5S6 17.5 12 17.5c1.13 0 2.19-.2 3.17-.55',
   },
 
   stepNames: [
@@ -526,12 +528,30 @@ const CareLoop = {
 
   renderLogin() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and next steps in one place.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<input name="password" type="password" autocomplete="current-password" value="demo" required></label><div class="error" id="login-error" role="alert"></div><button class="btn" type="submit" name="mode" value="returning">I’m returning ${this.icon('arrow')}</button><button class="btn secondary" type="submit" name="mode" value="first">Start my first visit</button><div class="hint">Seeded demo: <strong>jane</strong> / <strong>demo</strong></div><p style="text-align:center;margin:22px 0 0;font-size:10px">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    const googleMark = '<svg viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.68 9c0-.593.102-1.17.284-1.706V4.962H.957A9.001 9.001 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.581C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/></svg>';
+    const appleMark = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><path d="M16.365 1.43c0 1.14-.462 2.216-1.215 3.016-.808.857-2.107 1.522-3.15 1.437-.135-1.086.44-2.223 1.185-3.016C13.955 1.99 15.24 1.343 16.365 1.43zM20.13 17.61c-.542 1.243-.8 1.798-1.497 2.9-.972 1.53-2.343 3.436-4.043 3.454-1.513.016-1.903-.986-3.955-.973-2.052.012-2.482 1-3.994.984-1.7-.018-2.996-1.735-3.968-3.264C.13 17.867-.55 12.5 1.316 9.14c1.13-2.037 3.147-3.325 5.325-3.34 1.646-.014 3.2 1.11 4.204 1.11 1.005 0 2.888-1.373 4.87-1.17.828.035 3.153.334 4.646 2.516-.12.075-2.775 1.62-2.747 4.83.033 3.834 3.363 5.116 3.398 5.13-.028.09-.532 1.816-1.752 3.594z"/></svg>';
+    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><h2>Hello, <strong>Welcome Back!</strong></h2><p>We’re happy to see you again — let’s stay ahead of your care.</p><div class="oauth-row"><button type="button" class="oauth-btn" data-oauth="Google">${googleMark}Google</button><button type="button" class="oauth-btn" data-oauth="Apple">${appleMark}Apple</button></div><div class="divider"><span>Or Continue With</span></div><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<div class="password-wrap"><input name="password" type="password" autocomplete="current-password" value="demo" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><div class="field-row"><button type="button" class="link forgot-link">Forgot Password?</button></div><div class="error" id="login-error" role="alert"></div><button class="btn pill full" type="submit" name="mode" value="returning">LOGIN</button><p class="signup-line">New here? <button type="submit" name="mode" value="first">Start my first visit</button></p><p class="fine-print">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
+    const form = document.getElementById('login-form');
+    const passwordInput = form.password;
+    form.querySelector('.toggle-password').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const shown = passwordInput.type === 'text';
+      passwordInput.type = shown ? 'password' : 'text';
+      btn.innerHTML = this.icon(shown ? 'eye' : 'eye-off');
+      btn.setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+    });
+    form.querySelector('.forgot-link').addEventListener('click', () => {
+      this.toast('Seeded demo: jane / demo');
+    });
+    form.querySelectorAll('.oauth-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.toast(`${btn.dataset.oauth} sign-in isn’t wired up in this demo — use the login form below.`);
+      });
+    });
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const form = e.currentTarget;
       const username = form.username.value.trim();
-      const password = form.password.value;
+      const password = passwordInput.value;
       const mode = (e.submitter && e.submitter.value) || 'returning';
       const errBox = document.getElementById('login-error');
       errBox.textContent = '';
@@ -717,6 +737,16 @@ const CareLoop = {
     const tag = live
       ? this.tag('Live transcript', '')
       : this.tag('Sample transcript', 'gray');
+    const hint = live
+      ? 'This came from Grok speech-to-text. Speaker labels are a heuristic — a clinician still reviews before anything becomes an order.'
+      : (xaiOn
+        ? 'Sample conversation (Maya Chen / Dr. Patel) until you record or upload. Jane Doe remains the logged-in patient. Keep recordings short for this demo.'
+        : 'Sample conversation (Maya Chen / Dr. Patel). Jane Doe remains the logged-in patient. Record or upload needs a valid XAI_API_KEY on this host.');
+    return `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${tag}</div><p>Record a short visit, upload audio, or keep the sample note. A clinician reviews the summary before anything becomes an order.</p>${this.recordControlsHtml()}<div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
+  },
+
+  recordControlsHtml() {
+    const live = this.liveTranscript();
     const recordLabel = this.recording
       ? `${this.icon('mic')} Stop & transcribe`
       : this.sttBusy
@@ -726,16 +756,40 @@ const CareLoop = {
     const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
     const status = this.recordStatus
       ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
-      : '';
-    const hint = live
-      ? 'This came from Grok speech-to-text. Speaker labels are a heuristic — a clinician still reviews before anything becomes an order.'
-      : (xaiOn
-        ? 'Sample conversation (Maya Chen / Dr. Patel) until you record or upload. Jane Doe remains the logged-in patient. Keep recordings short for this demo.'
-        : 'Sample conversation (Maya Chen / Dr. Patel). Jane Doe remains the logged-in patient. Record or upload needs XAI_API_KEY on this host or in Vercel.');
+      : '<div id="scribe-record-status" hidden></div>';
     const restore = live
       ? this.btn('Use sample transcript', 'use-sample-transcript', 'secondary')
       : '';
-    return `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${tag}</div><p>Record a short visit, upload audio, or keep the sample note. A clinician reviews the summary before anything becomes an order.</p><div class="visit-record">${this.btn(recordLabel, 'record-visit', recordClass, recordDisabled)}${this.btn('Upload audio', 'pick-visit-audio', 'secondary', this.sttBusy ? 'disabled' : '')}${restore}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg"></div>${status}<div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
+    return `<div class="visit-record" id="visit-record-controls">${this.btn(recordLabel, 'record-visit', recordClass, recordDisabled)}${this.btn('Upload audio', 'pick-visit-audio', 'secondary', this.sttBusy ? 'disabled' : '')}${restore}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
+  },
+
+  /** Soft-refresh record buttons/status without remounting the page (keeps MediaRecorder alive). */
+  refreshRecordUi() {
+    const row = document.getElementById('visit-record-controls') || document.querySelector('.visit-record');
+    if (!row) {
+      this.render();
+      return;
+    }
+    const html = this.recordControlsHtml();
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const nextRow = tmp.querySelector('.visit-record');
+    const nextStatus = tmp.querySelector('#scribe-record-status');
+    const oldStatus = document.getElementById('scribe-record-status');
+    row.replaceWith(nextRow);
+    if (oldStatus && nextStatus) oldStatus.replaceWith(nextStatus);
+    else if (nextStatus && nextRow.nextSibling) nextRow.after(nextStatus);
+    this.bindVisitAudio();
+  },
+
+  bindVisitAudio() {
+    const visitAudio = document.getElementById('visit-audio');
+    if (!visitAudio || visitAudio.dataset.bound === '1') return;
+    visitAudio.dataset.bound = '1';
+    visitAudio.addEventListener('change', () => {
+      const file = visitAudio.files && visitAudio.files[0];
+      if (file) this.transcribeVisitFile(file);
+    });
   },
 
   soapBody() {
@@ -874,7 +928,7 @@ const CareLoop = {
       } else {
         this.toast(err.message || 'Could not access the microphone.');
       }
-      this.render();
+      this.refreshRecordUi();
       return;
     }
 
@@ -892,7 +946,7 @@ const CareLoop = {
       this.mediaRecorder.onerror = () => {
         this.toast('Recording error. Try again.');
         this.cancelRecording();
-        this.render();
+        this.refreshRecordUi();
       };
       this.mediaRecorder.onstop = async () => {
         const mimeType = (this.mediaRecorder && this.mediaRecorder.mimeType) || mime || 'audio/webm';
@@ -904,13 +958,14 @@ const CareLoop = {
           this.discardRecording = false;
           this.sttBusy = false;
           this.recordStatus = '';
+          this.refreshRecordUi();
           return;
         }
         if (!blob.size) {
           this.sttBusy = false;
           this.recordStatus = 'No audio captured. Tap Record this visit again.';
           this.toast('Recording was empty — speak for a few seconds.');
-          this.render();
+          this.refreshRecordUi();
           return;
         }
         const file = new File([blob], `visit-recording.${ext}`, { type: mimeType });
@@ -920,13 +975,13 @@ const CareLoop = {
       this.mediaRecorder.start(250);
       this.recording = true;
       this.recordStatus = 'Listening… keep both voices near the mic, then tap Stop & transcribe.';
-      this.render();
+      this.refreshRecordUi();
       this.toast('Listening — tap Stop & transcribe when done.');
     } catch (err) {
       this.stopRecordTracks();
       this.recording = false;
       this.toast(err.message || 'Could not start the recorder.');
-      this.render();
+      this.refreshRecordUi();
     }
   },
 
@@ -935,13 +990,13 @@ const CareLoop = {
     this.recording = false;
     this.sttBusy = true;
     this.recordStatus = 'Sending the recording to Grok…';
-    this.render();
+    this.refreshRecordUi();
     try {
       if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
     } catch (err) {
       this.sttBusy = false;
       this.toast(err.message || 'Failed to stop recording.');
-      this.render();
+      this.refreshRecordUi();
     }
   },
 
@@ -976,7 +1031,7 @@ const CareLoop = {
     }
     this.sttBusy = true;
     this.recordStatus = `Grok is transcribing ${file.name}…`;
-    this.render();
+    this.refreshRecordUi();
     try {
       const result = await API.transcribeScribeAudio(file);
       const text = (result.text || '').trim();
@@ -1001,8 +1056,15 @@ const CareLoop = {
         : ((result.warnings && result.warnings[0]) || 'Transcribed. Record doctor and patient for speaker labels.');
       this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : 'Transcribed. Review the lines, then continue.');
     } catch (err) {
-      this.recordStatus = 'Transcription failed — try again or keep the sample transcript.';
-      this.toast(err.message);
+      const raw = String(err.message || '');
+      let msg = raw;
+      if (/incorrect api key|invalid api key|401/i.test(raw)) {
+        msg = 'XAI_API_KEY on this host is invalid or expired. Update the key, or use the sample transcript.';
+      } else if (/not set|XAI_API_KEY/i.test(raw) && /not set/i.test(raw)) {
+        msg = 'XAI_API_KEY is not set. Add it to .env for live STT, or keep the sample transcript.';
+      }
+      this.recordStatus = 'Transcription failed — keep the sample transcript, or fix the xAI key and retry.';
+      this.toast(msg);
     } finally {
       this.sttBusy = false;
       this.recording = false;
@@ -1144,13 +1206,7 @@ const CareLoop = {
         this.approveScribeEncounter(e.target.checked);
       });
     }
-    const visitAudio = document.getElementById('visit-audio');
-    if (visitAudio) {
-      visitAudio.addEventListener('change', () => {
-        const file = visitAudio.files && visitAudio.files[0];
-        if (file) this.transcribeVisitFile(file);
-      });
-    }
+    this.bindVisitAudio();
   },
 
   async saveInsuranceForm(form) {
