@@ -169,4 +169,41 @@ const API = {
   me() {
     return this.get('/api/careloop/me');
   },
+
+  // --- CareLoop scribe (Stream C) ---
+
+  getScribeFixture() {
+    return this.get('/api/careloop/scribe/fixture');
+  },
+
+  draftScribe(data) {
+    return this.post('/api/careloop/scribe/draft', data);
+  },
+
+  approveScribe(encounter) {
+    return this.post('/api/careloop/scribe/approve', { encounter });
+  },
+
+  async transcribeScribeAudio(file) {
+    const url = `${this.BASE_URL}/api/careloop/scribe/transcribe`;
+    const headers = {};
+    const token = this.getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const form = new FormData();
+    form.append('file', file);
+
+    const response = await fetch(url, { method: 'POST', headers, body: form });
+    if (response.status === 401) {
+      this.setToken('');
+      if (window.App && typeof App.showLogin === 'function') App.showLogin();
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      const detail = error.detail;
+      const message = Array.isArray(detail) ? detail.map((d) => d.msg || d).join('; ') : (detail || `HTTP ${response.status}`);
+      throw new Error(message);
+    }
+    return response.json();
+  },
 };

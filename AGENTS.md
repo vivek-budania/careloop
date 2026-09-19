@@ -14,13 +14,14 @@ Read this before changing the running app. Setup commands also live in [`README.
 | Demo key slots on Profile (Stedi / Gemini / Groq / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
 | Gemini vision card/SBC on Insurance only | **this branch** |
 | Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
+| Sreekar Stream C scribe APIs (fixture / draft / approve / optional Grok STT) | **main (PR #6)**; SOAP step in this shell |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
 
 Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample card stays the no-key path. Do not invent copays. Tag unreadable OCR fields `[NEEDS VERIFICATION]`. No letter watermark on JSON extract.
 
 **Vivek:** design lead. IA, copy, ivory/sage chrome, hamburger, first-time vs returning login, skippable costs after SOAP. Do not fight those.
 
-**Sreekar:** PA/parse/appeal/demand APIs still exist at `/letters`. Claims is Coming soon on Insurance. Do not collapse PA denial vs claim denial. Scribe rebase onto the SOAP step, not the old wizard.
+**Sreekar:** PA/parse/appeal/demand APIs still exist at `/letters`. Claims is Coming soon on Insurance. Do not collapse PA denial vs claim denial. Scribe lives on visit steps 5–6 (transcript → SOAP), not a second wizard.
 
 ---
 
@@ -79,7 +80,7 @@ Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning**
 
 **Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (Gemini vision) lives on this Insurance flow only — not in the hamburger. Without `GEMINI_API_KEY`, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
 
-**Where the keys go:** `STEDI_API_KEY`, `GEMINI_API_KEY`, and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
+**Where the keys go:** `STEDI_API_KEY`, `GEMINI_API_KEY`, and optional `GROQ_API_KEY` / `XAI_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
 
 **Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub. Fold extra keys into the same Vercel env list as they arrive.
 
@@ -95,6 +96,8 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 - Symptoms intake: `saveCoverageIntake` (returns `suggested_specialty`)
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
 - Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
+
+**Sreekar Stream C (visit steps 5–6, not a second wizard):** seeded transcript `GET /api/careloop/scribe/fixture` → SOAP/Plan `POST /api/careloop/scribe/draft` → clinician review `POST /api/careloop/scribe/approve` (orders; `pa_required` on GLP-1). Optional `XAI_API_KEY` for `POST /api/careloop/scribe/transcribe`. Voice UI in `frontend/js/scribe.js` is not loaded in Vivek’s shell yet — APIs are live. The seeded visit note is Maya Chen / Dr. Patel; the logged-in patient remains Jane Doe.
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. `maya` still logs in (alias of Jane Doe).
 
@@ -113,11 +116,14 @@ Coverage state is **in-memory** until Vivek’s thread store exists. Visit/meds/
 - `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network/specialty suggestion
 - `backend/careloop/extract.py` — Gemini vision card/SBC → InsuranceProfile (no watermark)
 - `backend/careloop/stedi.py` — optional sandbox 270/271 (`STEDI_API_KEY` at launch)
-- `backend/config.py` — `demo_env_status()` (Stedi / Gemini / Groq / Vercel; no secret values)
+- `backend/careloop/scribe.py` — seeded SOAP/Plan + clinician approve → orders
+- `backend/careloop/stt.py` — optional xAI Grok STT (`XAI_API_KEY`)
+- `backend/config.py` — `demo_env_status()` (Stedi / Gemini / Groq / xAI / Vercel; no secret values)
 - `.env.example` — documents the same key slots (inject at launch; do not commit secrets)
 - `backend/data/mock_users.json` — dummy accounts (Jane Doe / `jane`)
-- `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`
+- `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`, `mock_visit_transcript.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`
+- `frontend/js/scribe.js` — Stream C voice UI (not loaded in Vivek’s shell yet)
 - `frontend/index.html` — patient shell
 - `frontend/letters.html` — PA/appeal HITL (not in ☰)
 - `pyproject.toml` — Vercel FastAPI entrypoint

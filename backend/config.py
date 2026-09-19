@@ -18,6 +18,10 @@ STEDI_API_KEY = os.getenv("STEDI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
 
+# Optional xAI Grok speech-to-text for visit scribe (not Groq).
+XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+XAI_STT_URL = os.getenv("XAI_STT_URL", "https://api.x.ai/v1/stt")
+
 
 def _key_loaded(value: str) -> bool:
     raw = (value or "").strip()
@@ -34,6 +38,7 @@ def demo_env_status() -> dict:
 
     gemini_on = _key_loaded(GEMINI_API_KEY)
     groq_on = _key_loaded(GROQ_API_KEY)
+    xai_on = _key_loaded(XAI_API_KEY)
     return {
         "stedi": careloop_stedi.status(),
         "gemini": {
@@ -57,13 +62,25 @@ def demo_env_status() -> dict:
                 else "GROQ_API_KEY is optional. Add it the same way when you have it."
             ),
         },
+        "xai": {
+            "configured": xai_on,
+            "used_for": "Optional visit speech-to-text",
+            "message": (
+                "XAI_API_KEY is loaded. Visit scribe can transcribe uploaded or recorded audio."
+                if xai_on
+                else (
+                    "XAI_API_KEY is optional. Use the seeded visit transcript until you add it "
+                    "on this host or in Vercel, then Redeploy."
+                )
+            ),
+        },
         "vercel": {
             "entrypoint": "backend.main:app",
             "message": (
                 "Vercel reads STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY "
-                "from Project Settings → Environment Variables (Production + Preview), "
-                "then Redeploy. Cursor/cloud-agent env does not reach Vercel. "
-                "Do not replace / with a JSON stub."
+                "and XAI_API_KEY from Project Settings → Environment Variables "
+                "(Production + Preview), then Redeploy. Cursor/cloud-agent env does not "
+                "reach Vercel. Do not replace / with a JSON stub."
             ),
         },
     }

@@ -1,1 +1,5 @@
-"""CareLoop journey helpers. Dave owns coverage/eligibility fixtures."""
+"""CareLoop journey helpers.
+
+Dave: coverage/eligibility. Sreekar: scribe/SOAP (and later PA/payer/meds).
+Vivek: store/timeline shell.
+"""

@@ -16,6 +16,9 @@ const CareLoop = {
   costEstimate: null,
   coverageSnap: { profile: null, eligibility: null },
   demoEnv: null,
+  scribeFixture: null,
+  encounter: null,
+  orders: null,
   thread: null,
   clickBound: false,
 
@@ -234,6 +237,7 @@ const CareLoop = {
     const stedi = env.stedi || {};
     const gemini = env.gemini || {};
     const groq = env.groq || {};
+    const xai = env.xai || {};
     const vercel = env.vercel || {};
     return [
       {
@@ -253,6 +257,12 @@ const CareLoop = {
         tag: groq.configured ? 'loaded' : 'optional',
         tagType: groq.configured ? '' : 'gray',
         detail: groq.message || 'Add GROQ_API_KEY the same way when you have it.',
+      },
+      {
+        name: 'xAI visit STT',
+        tag: xai.configured ? 'loaded' : 'optional',
+        tagType: xai.configured ? '' : 'gray',
+        detail: xai.message || 'Add XAI_API_KEY the same way when you have it. Seeded transcript works without it.',
       },
       {
         name: 'Vercel',
@@ -417,6 +427,9 @@ const CareLoop = {
       await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
       this.coverageSnap = { profile: null, eligibility: null };
       this.costEstimate = null;
+      this.scribeFixture = null;
+      this.encounter = null;
+      this.orders = null;
       this.insuranceMode = 'hub';
       this.insuranceReturn = false;
       this.view = 'Setup';
@@ -596,10 +609,10 @@ const CareLoop = {
         body = `<div class="eyebrow">You’re in the right place</div><h2 class="mt">Let’s start the conversation.</h2><p>${this.esc(j.doctor)} · Sep 24 at ${this.esc(j.slot)}<br>Your insurance and visit notes are ready to bring along.</p><div class="document">${this.icon('check')}<div><h3>Demo check-in complete</h3><small>Next: sample transcript → draft summary → estimated costs (if a plan is on file) → plan</small></div></div><div class="notice green">We’ll use a fictional conversation. Your microphone stays off. Nothing is an order until a clinician confirms.</div>`;
         break;
       case 5:
-        body = `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${this.tag('Sample transcript', 'gray')}</div><p>A seeded conversation for this demo. A clinician reviews the summary.</p><div class="transcript"><p><strong>${this.esc(this.firstName().toUpperCase())} · 00:08</strong>“I’ve been feeling more tired and thirsty. I’m still taking my metformin twice a day.”</p><p><strong>DR. SHAH · 00:24</strong>“Let’s review how things have been going and discuss an HbA1c test.”</p><p><strong>${this.esc(this.firstName().toUpperCase())} · 00:41</strong>“I’d like to understand what happens next, especially with my insurance.”</p><p><strong>DR. SHAH · 01:02</strong>“We can discuss an add-on medicine after reviewing your results. It may need prior authorization — that’s separate from any later claim.”</p></div>`;
+        body = this.transcriptBody();
         break;
       case 6:
-        body = `<h2>Your visit, in plain language.</h2><p>A draft summary of the sample conversation. Nothing becomes an order without clinician review.</p>${[['S', 'What you shared', 'Fatigue and increased thirst; taking metformin twice daily.'], ['O', 'What’s on file', 'Current metformin routine. No new lab result is available in this demo.'], ['A', 'What to review', 'Diabetes follow-up. Any change in assessment needs clinician verification. [NEEDS VERIFICATION] if labs would change it.'], ['P', 'Suggested next steps', 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.']].map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${p}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis.</small>`;
+        body = this.soapBody();
         break;
       case 7:
         body = this.costBody();
@@ -613,6 +626,63 @@ const CareLoop = {
     const skip = j.step === 7 ? this.btn('Skip estimates', 'next', 'secondary') : '';
     const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? 'View sample transcript' : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
     return `<div class="narrow">${this.head('One visit. A connected story.', 'Your progress is saved as you go.')}<div class="stepper">${this.stepNames.map((_, i) => `<span class="${i < j.step ? 'done' : ''}"></span>`).join('')}</div><div class="step-label">Step ${j.step} of 8 &nbsp; / &nbsp; ${this.stepNames[j.step - 1]}</div><section class="card journey-panel">${body}<div class="actions">${this.btn(j.step === 1 ? 'Save & exit' : 'Back', 'previous', 'secondary')}<div class="row">${skip}${this.btn(nextLabel, 'next')}</div></div></section></div>`;
+  },
+
+  transcriptBody() {
+    const text = (this.scribeFixture && this.scribeFixture.transcript) || '';
+    const paras = text
+      ? text.split(/\n\n+/).map((block) => {
+        const line = block.replace(/\n/g, ' ').trim();
+        const m = line.match(/^([^:]{2,48}):\s*(.*)$/);
+        if (m) return `<p><strong>${this.esc(m[1])}</strong> “${this.esc(m[2])}”</p>`;
+        return `<p>${this.esc(line)}</p>`;
+      }).join('')
+      : `<p><strong>${this.esc(this.firstName().toUpperCase())} · 00:08</strong>“I’ve been feeling more tired and thirsty. I’m still taking my metformin twice a day.”</p><p><strong>DR. SHAH · 00:24</strong>“Let’s review how things have been going and discuss an HbA1c test.”</p><p><strong>DR. SHAH · 01:02</strong>“We can discuss an add-on medicine after reviewing your results. It may need prior authorization — that’s separate from any later claim.”</p>`;
+    return `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${this.tag('Sample transcript', 'gray')}</div><p>A seeded Stream C visit note. A clinician reviews the summary before anything becomes an order.</p><div class="transcript">${paras}</div><div class="notice">Fixture conversation (Maya Chen / Dr. Patel). Jane Doe remains the logged-in patient. Not a live recording. Optional XAI_API_KEY transcribes audio later.</div>`;
+  },
+
+  soapBody() {
+    const j = this.thread.journey || {};
+    const soap = (this.encounter && this.encounter.soap) || {};
+    const rows = [
+      ['S', 'What you shared', soap.subjective || 'Fatigue and increased thirst; taking metformin twice daily.'],
+      ['O', 'What’s on file', soap.objective || 'Current metformin routine. No new lab result is available in this demo.'],
+      ['A', 'What to review', soap.assessment || 'Diabetes follow-up. Any change in assessment needs clinician verification.'],
+      ['P', 'Suggested next steps', soap.plan_summary || 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.'],
+    ];
+    return `<h2>Your visit, in plain language.</h2><p>A draft SOAP/Plan from Sreekar’s scribe API. Nothing becomes an order without clinician review.</p>${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis. Prior authorization, if needed, is separate from any later claim.</small>`;
+  },
+
+  async loadScribeFixture() {
+    try {
+      this.scribeFixture = await API.getScribeFixture();
+    } catch (err) {
+      this.scribeFixture = null;
+      this.toast(err.message);
+    }
+  },
+
+  async draftScribeEncounter() {
+    try {
+      const transcript = (this.scribeFixture && this.scribeFixture.transcript) || '';
+      const result = await API.draftScribe({ transcript, use_seeded: true });
+      this.encounter = result.encounter || result;
+    } catch (err) {
+      this.encounter = null;
+      this.toast(err.message);
+    }
+  },
+
+  async approveScribeEncounter(reviewed) {
+    this.saveThread({ journey: { ...this.thread.journey, reviewed } });
+    if (!reviewed || !this.encounter) return;
+    try {
+      const result = await API.approveScribe(this.encounter);
+      this.encounter = result.encounter || this.encounter;
+      this.orders = result.orders || [];
+    } catch (err) {
+      this.toast(err.message);
+    }
   },
 
   costBody() {
@@ -734,7 +804,7 @@ const CareLoop = {
     const review = document.getElementById('reviewed');
     if (review) {
       review.addEventListener('change', (e) => {
-        this.saveThread({ journey: { ...this.thread.journey, reviewed: e.target.checked } });
+        this.approveScribeEncounter(e.target.checked);
       });
     }
   },
@@ -857,6 +927,8 @@ const CareLoop = {
     if (j.step === 6 && !this.eligibilityOnFile()) next = 8;
     this.saveThread({ journey: { ...this.thread.journey, step: next } });
     if (next === 2) await this.loadNetwork();
+    if (next === 5) await this.loadScribeFixture();
+    if (next === 6) await this.draftScribeEncounter();
     if (next === 7) await this.loadCostGuess();
     this.render();
     window.scrollTo(0, 0);

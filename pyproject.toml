@@ -11,6 +11,7 @@ dependencies = [
     "groq==1.2.0",
     "python-dotenv==1.0.1",
     "pydantic==2.9.0",
+    "python-multipart==0.0.12",
 ]
 
 # Vercel looks for app.py / main.py at the repo root (or under src/, app/, api/).
