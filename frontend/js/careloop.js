@@ -4,7 +4,7 @@
  */
 const CareLoop = {
   step: 1,
-  totalSteps: 6,
+  totalSteps: 8,
   payersLoaded: false,
 
   init() {
@@ -20,6 +20,8 @@ const CareLoop = {
     document.getElementById('cl-btn-network').addEventListener('click', () => this.findClinicians());
     document.getElementById('cl-btn-back').addEventListener('click', () => this.back());
     document.getElementById('cl-btn-next').addEventListener('click', () => this.next());
+    const jump = document.getElementById('cl-btn-jump-scribe');
+    if (jump) jump.addEventListener('click', () => this.showStep(7));
   },
 
   resetUi() {
@@ -41,6 +43,9 @@ const CareLoop = {
     document.getElementById('cl-btn-back').disabled = n === 1;
     document.getElementById('cl-btn-next').textContent = n === this.totalSteps ? 'Done' : 'Continue';
     if (n === 2) this.renderReview();
+    if (n === 7 && window.Scribe && typeof Scribe.onShow === 'function') {
+      Scribe.onShow();
+    }
   },
 
   back() {
@@ -76,7 +81,19 @@ const CareLoop = {
         this.findClinicians();
         return;
       }
-      App.notify('Intake complete. Choose a clinician when you are ready.', 'success');
+      if (this.step === 6) {
+        this.showStep(7);
+        return;
+      }
+      if (this.step === 7) {
+        if (!document.getElementById('scribe-transcript').value.trim()) {
+          App.notify('Load the mock visit or paste a transcript first.', 'error');
+          return;
+        }
+        this.showStep(8);
+        return;
+      }
+      App.notify('Visit documented. Orders (if approved) are ready for the PA chain next.', 'success');
     } catch (err) {
       App.notify(err.message, 'error');
     }

@@ -1,0 +1,9 @@
+{
+  "patient_name": "Maya Chen",
+  "patient_age": 54,
+  "patient_sex": "Female",
+  "visit_date": "2026-09-19",
+  "clinician": "Dr. Patel, PCP",
+  "chief_complaint": "Diabetes follow-up; elevated home glucose readings",
+  "transcript": "DR. PATEL: Hi Maya, good to see you. How have things been since your last visit?\n\nMAYA: Hi doctor. I've been taking the metformin like you said — a thousand twice a day — for about a year now. But my sugars are still high. At home I'm often in the 180s, sometimes over 200 after meals.\n\nDR. PATEL: Any side effects from metformin? GI upset?\n\nMAYA: A little at first, but it's fine now. I walk most days. Diet is okay but not perfect. No chest pain, no dizziness.\n\nDR. PATEL: Allergies?\n\nMAYA: Just penicillin — rash.\n\nDR. PATEL: Okay. Today your weight is stable, BP 128/78, heart and lungs clear. Last lab HbA1c was 9.1% three weeks ago — that's elevated. We'll repeat HbA1c today to confirm. Assessment is type 2 diabetes, not at goal on metformin alone.\n\nMAYA: What do we do next?\n\nDR. PATEL: Keep the metformin. I want to add a GLP-1 — semaglutide once weekly — because of the high A1c and weight concerns. That usually needs prior auth from your plan. We'll also order today's HbA1c. Follow up in three months, sooner if sugars worsen or you get side effects. Any questions?\n\nMAYA: Will insurance cover the new shot?\n\nDR. PATEL: We'll submit prior auth with your metformin trial and A1c documented. If they deny, we appeal with this visit note. Sound good?\n\nMAYA: Yes, thank you."
+}

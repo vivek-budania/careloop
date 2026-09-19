@@ -45,10 +45,11 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open http://localhost:8080 → log in → CareLoop wizard. Optional later: `STEDI_API_KEY` (sandbox 270/271; fixture members will not match). Gemini/Azure are for OCR later; this slice does not OCR.
 
-## CareLoop wizard (Dave)
+## CareLoop wizard
 
 One step on screen at a time (`frontend/js/careloop.js`).
 
+**Dave (1–6)**
 1. Insurance identity — **payer dropdown required**; optional typed fields / sample card / filename-only uploads
 2. Optional review — skip allowed
 3. Confirm coverage — mock active/inactive + copay/deductible (`MockEligibility.check`)
@@ -56,9 +57,15 @@ One step on screen at a time (`frontend/js/careloop.js`).
 5. Visit/cost **guess** — labeled estimate, not a bill or coverage decision
 6. In-network clinicians — fixture list ∩ ZIP distance
 
+**Sreekar Stream C (7–8)**
+7. Visit transcript — **Record** (Grok STT), upload audio, load mock Maya Chen visit, or paste
+8. SOAP / Plan review — clinician **I've Reviewed** → Orders (`pa_required` on GLP-1)
+
 Fixture golden path: Mock Payer, Maya Chen, ZIP `94110`, diabetes follow-up → about **$75** patient-owed (99214 copay $30 + HbA1c $45). **Inactive Demo Plan** returns inactive coverage.
 
-Coverage state is **in-memory** until Vivek’s thread store exists.
+Optional: `XAI_API_KEY` in `.env` for Grok speech-to-text (`POST /api/careloop/scribe/transcribe`). Coverage state is **in-memory** until Vivek’s thread store exists.
+
+Vivek’s visual phone mockups (not the live API app): http://localhost:8080/mockups/
 
 ## Safety (do not weaken)
 
