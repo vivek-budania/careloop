@@ -60,12 +60,16 @@ const CareLoop = {
     'What brings you in',
     'Find your clinician',
     'Choose a time',
-    'Your visit',
-    'Draft transcript',
+    'Check in',
+    'Visit recording',
     'Your visit summary',
     'Estimated costs',
     'Your care plan',
   ],
+  RECORD_MAX_MS: 2 * 60 * 1000,
+  recordPurpose: 'visit',
+  recordTimerId: null,
+  recordStartedAt: 0,
 
   init() {
     if (this._inited) return;
@@ -193,8 +197,11 @@ const CareLoop = {
       suggested_specialty: '',
       suggested_specialty_label: '',
       live_transcript: '',
-      transcript_source: 'fixture',
+      transcript_source: '',
       stt_meta: '',
+      checked_in: false,
+      demo_transcript: false,
+      symptoms_source: '',
     };
   },
 
@@ -233,6 +240,7 @@ const CareLoop = {
 
   clearVisitRuntime() {
     if (typeof this.cancelRecording === 'function') this.cancelRecording();
+    this.clearRecordTimer();
     this.encounter = null;
     this.orders = null;
     this.extractiveSummary = null;
@@ -727,7 +735,7 @@ const CareLoop = {
     this.saveThread({ journey: { ...found } });
     this.navigate('Journey');
     if (found.step >= 2) this.loadNetwork();
-    if (found.step >= 5) this.loadScribeFixture();
+    if (found.step >= 5 && found.demo_transcript) this.loadScribeFixture();
     if (found.step >= 6) this.draftScribeEncounter();
   },
 
@@ -765,29 +773,16 @@ const CareLoop = {
     let body = '';
     switch (j.step) {
       case 1:
-        body = `<h2>What’s on your mind?</h2><p>A little context helps your clinician start with what matters to you.</p><div class="chips">${['Fatigue', 'Increased thirst', 'Diabetes follow-up', 'Something else'].map((n) => `<button type="button" class="chip ${j.symptoms.toLowerCase().includes(n.toLowerCase()) ? 'selected' : ''}" data-symptom="${n}" aria-pressed="${j.symptoms.toLowerCase().includes(n.toLowerCase())}">${n}</button>`).join('')}</div><label class="field">In your own words<textarea id="symptoms">${this.esc(j.symptoms)}</textarea></label><div class="document">${this.icon('file')}<div><h3 style="font-size:12px">Bring your previous visit along</h3><small>${j.prior ? 'Sample note added · metformin history' : 'Optional · sample visit summary'}</small></div>${this.btn(j.prior ? 'Added ✓' : 'Add sample', 'prior-note', 'secondary')}</div><div class="notice green">This helps prepare the conversation. CareLoop does not diagnose.</div>`;
+        body = this.symptomsBody();
         break;
-      case 2: {
-        const zip = this.coverageSnap.profile?.zip || this.thread.patient.zip || '94110';
-        const list = this.clinicians.length ? this.clinicians.slice(0, 4) : [];
-        const rows = list.length
-          ? list.map((doc) => {
-            const selected = j.doctor === doc.name;
-            const inNet = doc.in_network;
-            return `<div class="doctor"><div class="avatar">${this.esc(this.initials(doc.name))}</div><div><h3>${this.esc(doc.name)}</h3><p>${this.esc(doc.specialty_label)} · ${doc.miles} mi<br>${this.esc(doc.address)}</p>${this.tag(inNet ? `In network · ${this.coverageSource()}` : 'Confirm network', inNet ? '' : 'peach')}</div>${this.btn(selected ? 'Selected ✓' : 'Choose', 'choose-doctor', selected ? '' : 'secondary', `data-npi="${this.esc(doc.npi)}"`)}</div>`;
-          }).join('')
-          : `<p>No fixture clinicians for ${this.esc(j.suggested_specialty_label || 'that specialty')} near ${this.esc(zip)}. Try another visit reason, or skip to book a sample time.</p>`;
-        const specNote = j.suggested_specialty_label
-          ? `Suggested from your visit reason: ${this.esc(j.suggested_specialty_label)}. Directory filter only — not a diagnosis.`
-          : `Mock directory near ${this.esc(zip)}. The clinic still confirms availability and network status.`;
-        body = `<h2>A familiar face. Or a fresh start.</h2><p>${specNote}</p>${rows}`;
+      case 2:
+        body = this.clinicianBody();
         break;
-      }
       case 3:
         body = `<h2>Make room for your health.</h2><p>${this.esc(j.doctor)} · ${this.esc(j.clinic || 'Clinic')}<br>Choose a sample time for Thursday, September 24, 2026.</p><div class="chips">${['9:00 AM', '10:30 AM', '2:00 PM', '3:30 PM'].map((t) => `<button type="button" class="chip ${j.slot === t ? 'selected' : ''}" data-slot="${t}">${t}</button>`).join('')}</div><div class="notice">This saves an appointment request in the demo. No clinic is contacted. Cost estimates come after SOAP, not here.</div>`;
         break;
       case 4:
-        body = `<div class="eyebrow">You’re in the right place</div><h2 class="mt">Let’s start the conversation.</h2><p>${this.esc(j.doctor)} · Sep 24 at ${this.esc(j.slot)}<br>Your insurance and visit notes are ready to bring along.</p><div class="document">${this.icon('check')}<div><h3>Demo check-in complete</h3><small>Next: record or use the sample transcript → draft summary → estimated costs (if a plan is on file) → plan</small></div></div><div class="notice green">On the next step you can record or upload a short visit, or keep the sample conversation. Nothing is an order until a clinician confirms.</div>`;
+        body = this.checkInBody();
         break;
       case 5:
         body = this.transcriptBody();
@@ -805,8 +800,99 @@ const CareLoop = {
         body = '<p>Unknown step.</p>';
     }
     const skip = j.step === 7 ? this.btn('Skip estimates', 'next', 'secondary') : '';
-    const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? 'Continue to transcript' : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
+    const nextLabel = j.step === 3 ? 'Save request' : j.step === 4 ? 'Continue to recording' : j.step === 5 ? 'See draft summary' : j.step === 6 && !this.eligibilityOnFile() ? 'Continue to plan' : j.step === 6 ? 'Continue to estimated costs' : j.step === 8 ? 'See follow-ups' : 'Continue';
     return `<div class="narrow">${this.head('One visit. A connected story.', 'Your progress is saved as you go.')}<div class="stepper">${this.stepNames.map((_, i) => `<span class="${i < j.step ? 'done' : ''}"></span>`).join('')}</div><div class="step-label">Step ${j.step} of 8 &nbsp; / &nbsp; ${this.stepNames[j.step - 1]}</div><section class="card journey-panel">${body}<div class="actions">${this.btn(j.step === 1 ? 'Save & exit' : 'Back', 'previous', 'secondary')}<div class="row">${skip}${this.btn(nextLabel, 'next')}</div></div></section></div>`;
+  },
+
+  visitZip() {
+    return this.coverageSnap.profile?.zip || this.thread.patient.zip || '94110';
+  },
+
+  audioDisclaimer() {
+    return 'Anything you record or upload is sent to Grok speech-to-text. Recordings stop at 2 minutes. This is a demo — not a clinical recording or a diagnosis.';
+  },
+
+  recordControls(purpose) {
+    const visit = purpose === 'visit';
+    const label = this.recording
+      ? `${this.icon('mic')} Stop & transcribe`
+      : this.sttBusy
+        ? 'Transcribing…'
+        : (visit ? `${this.icon('mic')} Record this visit` : `${this.icon('mic')} Record your reason`);
+    const recordClass = this.recording ? 'coral' : 'secondary';
+    const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
+    const action = visit ? 'record-visit' : 'record-symptoms';
+    const upload = visit ? 'pick-visit-audio' : 'pick-symptoms-audio';
+    const status = this.recordStatus
+      ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
+      : '';
+    return `<div class="visit-record">${this.btn(label, action, recordClass, recordDisabled)}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg"></div>${status}`;
+  },
+
+  symptomsBody() {
+    const j = this.thread.journey || {};
+    const source = j.symptoms_source === 'stt'
+      ? `<div class="notice green">Transcribed from your audio. You can edit the text before continuing.</div>`
+      : '';
+    return `<h2>What’s on your mind?</h2><p>Type a few words, or record a short sample. We transcribe what you say so your clinician can start with what matters to you.</p><div class="chips">${['Fatigue', 'Increased thirst', 'Diabetes follow-up', 'Something else'].map((n) => `<button type="button" class="chip ${j.symptoms.toLowerCase().includes(n.toLowerCase()) ? 'selected' : ''}" data-symptom="${n}" aria-pressed="${j.symptoms.toLowerCase().includes(n.toLowerCase())}">${n}</button>`).join('')}</div><label class="field">In your own words<textarea id="symptoms">${this.esc(j.symptoms)}</textarea></label>${this.recordControls('symptoms')}${source}<div class="document">${this.icon('file')}<div><h3 style="font-size:12px">Bring your previous visit along</h3><small>${j.prior ? 'Sample note added · metformin history' : 'Optional · sample visit summary'}</small></div>${this.btn(j.prior ? 'Added ✓' : 'Add sample', 'prior-note', 'secondary')}</div><div class="notice">${this.esc(this.audioDisclaimer())}</div>`;
+  },
+
+  clinicianBody() {
+    const j = this.thread.journey || {};
+    const zip = this.visitZip();
+    const spec = j.suggested_specialty_label || 'that specialty';
+    const list = this.clinicians.length ? this.clinicians.slice(0, 4) : [];
+    const rows = list.length
+      ? list.map((doc) => {
+        const selected = j.doctor === doc.name;
+        const inNet = doc.in_network;
+        return `<div class="doctor"><div class="avatar">${this.esc(this.initials(doc.name))}</div><div><h3>${this.esc(doc.name)}</h3><p>${this.esc(doc.specialty_label)} · ${doc.miles} mi<br>${this.esc(doc.address)}</p>${this.tag(inNet ? `In network · ${this.coverageSource()}` : 'Confirm network', inNet ? '' : 'peach')}</div>${this.btn(selected ? 'Selected ✓' : 'Choose', 'choose-doctor', selected ? '' : 'secondary', `data-npi="${this.esc(doc.npi)}"`)}</div>`;
+      }).join('')
+      : `<p>No demo alternatives are loaded. You can still continue and book a sample time.</p>`;
+    return `<h2>A familiar face. Or a fresh start.</h2><div class="notice">We couldn’t find nearby doctors for ZIP ${this.esc(zip)}${j.suggested_specialty_label ? ` · ${this.esc(spec)}` : ''}. The local directory search returned no matches in that area.</div><h3 class="mt">Alternatives from the demo directory</h3><p>These are sample clinicians, not a result of the ZIP search. Directory filter only — not a diagnosis. The clinic still confirms availability and network status.</p>${rows}`;
+  },
+
+  appointmentDate() {
+    const j = this.thread.journey || {};
+    const slot = String(j.slot || '10:30 AM');
+    const m = slot.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    let hours = 10;
+    let mins = 30;
+    if (m) {
+      hours = Number(m[1]);
+      mins = Number(m[2]);
+      const ap = m[3].toUpperCase();
+      if (ap === 'PM' && hours !== 12) hours += 12;
+      if (ap === 'AM' && hours === 12) hours = 0;
+    }
+    return new Date(2026, 8, 24, hours, mins, 0);
+  },
+
+  appointmentLabel() {
+    const j = this.thread.journey || {};
+    return `Thursday, September 24, 2026 at ${j.slot || '10:30 AM'}`;
+  },
+
+  withinCheckInWindow(now = new Date()) {
+    return Math.abs(now.getTime() - this.appointmentDate().getTime()) <= 15 * 60 * 1000;
+  },
+
+  usesDemoTranscript() {
+    const j = this.thread.journey || {};
+    return Boolean(j.demo_transcript) && !this.liveTranscript();
+  },
+
+  checkInBody() {
+    const j = this.thread.journey || {};
+    const booked = this.openJourneys().filter((row) => row.slot && (row.doctor || (row.step || 1) >= 3));
+    const choices = booked.length > 1
+      ? `<div class="chips">${booked.map((row) => `<button type="button" class="chip ${row.id === j.id ? 'selected' : ''}" data-checkin-visit="${this.esc(row.id)}">${this.esc(this.visitTitle(row))}</button>`).join('')}</div><p>Choose which open visit to check in for.</p>`
+      : '';
+    const onTime = this.withinCheckInWindow();
+    const warn = onTime
+      ? `<div class="notice green">You’re within 15 minutes of ${this.esc(this.appointmentLabel())}.</div>`
+      : `<div class="notice">This check-in is not within 15 minutes of the appointment (${this.esc(this.appointmentLabel())}). You can still continue in this demo. A real clinic would ask you to wait or reschedule.</div>`;
+    return `<div class="eyebrow">Visit day</div><h2 class="mt">Check in for this visit.</h2><p>${this.esc(j.doctor || 'Your clinician')} · ${this.esc(this.appointmentLabel())}<br>${this.esc(j.clinic || 'Clinic')}</p>${choices}${warn}<div class="document">${this.icon('check')}<div><h3>${j.checked_in ? 'Checked in' : 'Ready when you are'}</h3><small>${j.checked_in ? 'Next: record the visit, upload audio, or use the demo conversation.' : 'Confirm check-in to start the visit recording flow.'}</small></div></div>${this.btn(j.checked_in ? 'Checked in ✓' : 'Check in', 'check-in', j.checked_in ? '' : '')}`;
   },
 
   liveTranscript() {
@@ -814,12 +900,16 @@ const CareLoop = {
   },
 
   transcriptText() {
-    return this.liveTranscript() || (this.scribeFixture && this.scribeFixture.transcript) || '';
+    if (this.liveTranscript()) return this.liveTranscript();
+    if (this.usesDemoTranscript()) {
+      return (this.scribeFixture && this.scribeFixture.transcript) || '';
+    }
+    return '';
   },
 
   renderTranscriptParas(text) {
     if (!text) {
-      return `<p><strong>${this.esc(this.firstName().toUpperCase())} · 00:08</strong>“I’ve been feeling more tired and thirsty. I’m still taking my metformin twice a day.”</p><p><strong>DR. SHAH · 00:24</strong>“Let’s review how things have been going and discuss an HbA1c test.”</p><p><strong>DR. SHAH · 01:02</strong>“We can discuss an add-on medicine after reviewing your results. It may need prior authorization — that’s separate from any later claim.”</p>`;
+      return `<p>No conversation yet. Record or upload audio to transcribe this visit, or tap Demo conversation to use the sample.</p>`;
     }
     return text.split(/\n\n+/).map((block) => {
       const line = block.replace(/\n/g, ' ').trim();
@@ -831,30 +921,19 @@ const CareLoop = {
 
   transcriptBody() {
     const live = this.liveTranscript();
+    const demo = this.usesDemoTranscript();
     const text = this.transcriptText();
-    const xaiOn = Boolean(this.demoEnv && this.demoEnv.xai && this.demoEnv.xai.configured);
     const tag = live
       ? this.tag('Live transcript', '')
-      : this.tag('Sample transcript', 'gray');
-    const recordLabel = this.recording
-      ? `${this.icon('mic')} Stop & transcribe`
-      : this.sttBusy
-        ? 'Transcribing…'
-        : `${this.icon('mic')} Record this visit`;
-    const recordClass = this.recording ? 'coral' : 'secondary';
-    const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
-    const status = this.recordStatus
-      ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
-      : '';
+      : demo
+        ? this.tag('Demo conversation', 'gray')
+        : this.tag('No transcript yet', 'peach');
     const hint = live
       ? 'This came from Grok speech-to-text. Speaker labels are a heuristic — a clinician still reviews before anything becomes an order.'
-      : (xaiOn
-        ? 'Sample conversation (Maya Chen / Dr. Patel) until you record or upload. Jane Doe remains the logged-in patient. Keep recordings short for this demo.'
-        : 'Sample conversation (Maya Chen / Dr. Patel). Jane Doe remains the logged-in patient. Record or upload needs XAI_API_KEY on this host or in Vercel.');
-    const restore = live
-      ? this.btn('Use sample transcript', 'use-sample-transcript', 'secondary')
-      : '';
-    return `<div class="row" style="justify-content:space-between"><h2>The conversation, captured.</h2>${tag}</div><p>Record a short visit, upload audio, or keep the sample note. A clinician reviews the summary before anything becomes an order.</p><div class="visit-record">${this.btn(recordLabel, 'record-visit', recordClass, recordDisabled)}${this.btn('Upload audio', 'pick-visit-audio', 'secondary', this.sttBusy ? 'disabled' : '')}${restore}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg"></div>${status}<div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
+      : demo
+        ? 'Demo conversation selected. Draft summary and cost estimates will use the sample (boilerplate) numbers.'
+        : this.audioDisclaimer();
+    return `<div class="row" style="justify-content:space-between"><h2>Capture this visit.</h2>${tag}</div><p>Record or upload the conversation. We transcribe it and draft a summary. The sample conversation stays hidden unless you choose Demo conversation.</p>${this.recordControls('visit')}<div class="mt">${this.btn(demo ? 'Demo conversation ✓' : 'Demo conversation', 'toggle-demo-transcript', demo ? '' : 'secondary')}</div><div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
   },
 
   soapBody() {
@@ -867,11 +946,13 @@ const CareLoop = {
     const sumBlock = bullets
       ? `<div class="notice green" style="margin-bottom:22px"><strong style="display:block;margin-bottom:8px">Extractive summary (Sumy LexRank)</strong><ul style="margin:0;padding-left:18px">${bullets}</ul><small style="display:block;margin-top:10px">${this.esc(sum.note || 'Draft only — clinician must review.')}</small></div>`
       : `<div class="notice" style="margin-bottom:22px">Sumy extractive summary unavailable. SOAP/Plan below still uses the scribe draft.</div>`;
-    const intro = live && source === 'llm'
-      ? 'Sumy extractive summary plus a draft SOAP/Plan from your recording. Nothing becomes an order without clinician review.'
-      : live
-        ? 'Your recording is saved on the previous step. Sumy summarizes the transcript; SOAP may still use the sample note until Gemini can draft from it.'
-        : 'Sumy extractive summary (Python, no Grok) plus a draft SOAP/Plan from Sreekar’s scribe API. Nothing becomes an order without clinician review.';
+    const intro = this.usesDemoTranscript()
+      ? 'Demo conversation: sample SOAP/Plan and boilerplate cost estimates. Nothing becomes an order without clinician review.'
+      : live && source === 'llm'
+        ? 'Drafted from your transcribed visit. Nothing becomes an order without clinician review.'
+        : live
+          ? 'Your recording was transcribed. Sumy summarizes it; SOAP may still use the sample note until Gemini can draft from the live text.'
+          : 'Draft summary from this visit. Nothing becomes an order without clinician review.';
     const rows = [
       ['S', 'What you shared', soap.subjective || 'Fatigue and increased thirst; taking metformin twice daily.'],
       ['O', 'What’s on file', soap.objective || 'Current metformin routine. No new lab result is available in this demo.'],
@@ -892,10 +973,18 @@ const CareLoop = {
 
   async draftScribeEncounter() {
     const live = this.liveTranscript();
+    const demo = this.usesDemoTranscript();
+    if (demo && !this.scribeFixture) await this.loadScribeFixture();
     const fixture = (this.scribeFixture && this.scribeFixture.transcript) || '';
-    const transcript = live || fixture;
+    const transcript = live || (demo ? fixture : '');
+    if (!transcript) {
+      this.encounter = null;
+      this.extractiveSummary = null;
+      this.toast('Record, upload, or choose Demo conversation first.');
+      return;
+    }
     try {
-      if (live) {
+      if (live && !demo) {
         try {
           const result = await API.draftScribe({ transcript, use_seeded: false });
           this.encounter = result.encounter || result;
@@ -940,10 +1029,41 @@ const CareLoop = {
     }
   },
 
+  clearRecordTimer() {
+    if (this.recordTimerId) {
+      clearInterval(this.recordTimerId);
+      this.recordTimerId = null;
+    }
+  },
+
+  startRecordTimer() {
+    this.recordStartedAt = Date.now();
+    this.clearRecordTimer();
+    this.recordTimerId = setInterval(() => {
+      const leftMs = this.RECORD_MAX_MS - (Date.now() - this.recordStartedAt);
+      const left = Math.max(0, Math.ceil(leftMs / 1000));
+      const el = document.getElementById('scribe-record-status');
+      const label = `Listening… ${left}s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.`;
+      this.recordStatus = label;
+      if (el) {
+        const pulse = el.querySelector('.record-pulse');
+        el.textContent = '';
+        if (pulse) el.appendChild(pulse);
+        el.appendChild(document.createTextNode(label));
+      }
+      if (leftMs <= 0) {
+        this.clearRecordTimer();
+        this.toast('Reached the 2-minute limit. Transcribing…');
+        this.stopVisitRecord();
+      }
+    }, 250);
+  },
+
   cancelRecording() {
     this.discardRecording = this.recording || Boolean(this.mediaRecorder);
     this.recording = false;
     this.sttBusy = false;
+    this.clearRecordTimer();
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try { this.mediaRecorder.stop(); } catch (_) { /* ignore */ }
     }
@@ -952,7 +1072,8 @@ const CareLoop = {
     this.recordStatus = '';
   },
 
-  async toggleVisitRecord() {
+  async toggleVisitRecord(purpose) {
+    this.recordPurpose = purpose === 'symptoms' ? 'symptoms' : 'visit';
     if (this.sttBusy && !this.recording) return;
     if (this.recording) {
       this.stopVisitRecord();
@@ -1038,9 +1159,10 @@ const CareLoop = {
 
       this.mediaRecorder.start(250);
       this.recording = true;
-      this.recordStatus = 'Listening… keep both voices near the mic, then tap Stop & transcribe.';
+      this.recordStatus = 'Listening… 120s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.';
+      this.startRecordTimer();
       this.render();
-      this.toast('Listening — tap Stop & transcribe when done.');
+      this.toast('Listening — max 2 minutes. Tap Stop & transcribe when done.');
     } catch (err) {
       this.stopRecordTracks();
       this.recording = false;
@@ -1053,6 +1175,7 @@ const CareLoop = {
     if (!this.mediaRecorder || !this.recording) return;
     this.recording = false;
     this.sttBusy = true;
+    this.clearRecordTimer();
     this.recordStatus = 'Sending the recording to Grok…';
     this.render();
     try {
@@ -1069,19 +1192,35 @@ const CareLoop = {
     if (input) input.click();
   },
 
-  useSampleTranscript() {
+  async toggleDemoTranscript() {
     this.cancelRecording();
+    if (this.thread.journey?.demo_transcript && !this.liveTranscript()) {
+      this.saveThread({
+        journey: {
+          ...this.thread.journey,
+          demo_transcript: false,
+          transcript_source: '',
+          stt_meta: '',
+        },
+      });
+      this.recordStatus = '';
+      this.render();
+      this.toast('Demo conversation cleared.');
+      return;
+    }
+    await this.loadScribeFixture();
     this.saveThread({
       journey: {
         ...this.thread.journey,
+        demo_transcript: true,
         live_transcript: '',
         transcript_source: 'fixture',
-        stt_meta: '',
+        stt_meta: 'Demo conversation',
       },
     });
-    this.recordStatus = '';
+    this.recordStatus = 'Demo conversation selected. Continue to draft the sample summary.';
     this.render();
-    this.toast('Sample transcript restored.');
+    this.toast('Demo conversation selected.');
   },
 
   async transcribeVisitFile(file) {
@@ -1098,27 +1237,41 @@ const CareLoop = {
     this.render();
     try {
       const result = await API.transcribeScribeAudio(file);
-      const text = (result.text || '').trim();
-      if (!text) throw new Error('Grok returned an empty transcript.');
+      const labeled = (result.text || '').trim();
+      const plain = (result.text_plain || labeled).trim();
+      if (!labeled && !plain) throw new Error('Grok returned an empty transcript.');
       const n = result.speaker_count || 0;
       const roles = (result.speakers || [])
         .map((row) => row.label || row.role)
         .filter(Boolean)
         .join(' + ');
-      this.saveThread({
-        journey: {
-          ...this.thread.journey,
-          live_transcript: text,
-          transcript_source: 'live',
-          stt_meta: result.diarized
-            ? `Grok · ${n} voices → ${roles || 'Doctor / Patient'}`
-            : `Grok · ${n || 1} voice`,
-        },
-      });
-      this.recordStatus = result.diarized
-        ? `Ready — ${roles || 'Doctor / Patient'}. Review the lines, then see the draft summary.`
-        : ((result.warnings && result.warnings[0]) || 'Transcribed. Record doctor and patient for speaker labels.');
-      this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : 'Transcribed. Review the lines, then continue.');
+      if (this.recordPurpose === 'symptoms') {
+        this.saveThread({
+          journey: {
+            ...this.thread.journey,
+            symptoms: plain,
+            symptoms_source: 'stt',
+          },
+        });
+        this.recordStatus = 'Transcribed your reason. Edit the text if needed, then continue.';
+        this.toast('Visit reason transcribed.');
+      } else {
+        this.saveThread({
+          journey: {
+            ...this.thread.journey,
+            live_transcript: labeled || plain,
+            transcript_source: 'live',
+            demo_transcript: false,
+            stt_meta: result.diarized
+              ? `Grok · ${n} voices → ${roles || 'Doctor / Patient'}`
+              : `Grok · ${n || 1} voice`,
+          },
+        });
+        this.recordStatus = result.diarized
+          ? `Ready — ${roles || 'Doctor / Patient'}. Continue to draft the summary.`
+          : ((result.warnings && result.warnings[0]) || 'Transcribed. Continue to draft the summary.');
+        this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : 'Transcribed. Continue for a draft summary.');
+      }
     } catch (err) {
       this.recordStatus = 'Transcription failed — try again or keep the sample transcript.';
       this.toast(err.message);
@@ -1345,11 +1498,15 @@ const CareLoop = {
   async loadCostGuess() {
     const j = this.thread.journey;
     try {
+      const demo = this.usesDemoTranscript();
+      const symptoms = demo
+        ? 'Fatigue, increased thirst, and a diabetes follow-up.'
+        : j.symptoms;
       await API.saveCoverageIntake({
-        symptoms: j.symptoms,
-        use_fixture_prior_visit: Boolean(j.prior),
+        symptoms,
+        use_fixture_prior_visit: Boolean(j.prior) || demo,
       });
-      this.rememberCoverage(await API.guessVisitCost({ symptoms: j.symptoms }));
+      this.rememberCoverage(await API.guessVisitCost({ symptoms }));
       this.costEstimate = this.coverageSnap.visit_cost_estimate;
     } catch (err) {
       this.costEstimate = null;
@@ -1389,6 +1546,14 @@ const CareLoop = {
       this.toast('Choose a clinician to continue.');
       return;
     }
+    if (j.step === 4 && !j.checked_in) {
+      this.toast('Check in for this visit first.');
+      return;
+    }
+    if (j.step === 5 && !this.liveTranscript() && !this.usesDemoTranscript()) {
+      this.toast('Record, upload, or choose Demo conversation first.');
+      return;
+    }
     if (j.step === 8) {
       this.completeVisit();
       this.navigate('Followups');
@@ -1398,7 +1563,6 @@ const CareLoop = {
     if (j.step === 6 && !this.eligibilityOnFile()) next = 8;
     this.saveThread({ journey: { ...this.thread.journey, step: next } });
     if (next === 2) await this.loadNetwork();
-    if (next === 5) await this.loadScribeFixture();
     if (next === 6) await this.draftScribeEncounter();
     if (next === 7) await this.loadCostGuess();
     this.render();
@@ -1445,6 +1609,14 @@ const CareLoop = {
       }
       if (d.openVisit) {
         this.resumeOpenVisit(d.openVisit);
+        return;
+      }
+      if (d.checkinVisit) {
+        this.resumeOpenVisit(d.checkinVisit);
+        if (this.thread.journey && (this.thread.journey.step || 1) < 4) {
+          this.saveThread({ journey: { ...this.thread.journey, step: 4 } });
+          this.render();
+        }
         return;
       }
       if (d.symptom) {
@@ -1601,13 +1773,26 @@ const CareLoop = {
         this.toast('Sample prior-visit note attached');
         break;
       case 'record-visit':
-        await this.toggleVisitRecord();
+        await this.toggleVisitRecord('visit');
+        break;
+      case 'record-symptoms':
+        await this.toggleVisitRecord('symptoms');
         break;
       case 'pick-visit-audio':
+        this.recordPurpose = 'visit';
         this.pickVisitAudio();
         break;
-      case 'use-sample-transcript':
-        this.useSampleTranscript();
+      case 'pick-symptoms-audio':
+        this.recordPurpose = 'symptoms';
+        this.pickVisitAudio();
+        break;
+      case 'toggle-demo-transcript':
+        await this.toggleDemoTranscript();
+        break;
+      case 'check-in':
+        this.saveThread({ journey: { ...this.thread.journey, checked_in: true } });
+        this.render();
+        this.toast('Checked in. Continue to record the visit.');
         break;
       case 'choose-doctor': {
         const doc = this.clinicians.find((row) => row.npi === d.npi) || {};
