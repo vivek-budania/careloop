@@ -4,7 +4,7 @@ Hackathon product: **one mocked US patient journey** so context survives coverag
 
 It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. Drafts are for a human to review; the app never files, faxes, e-prescribes, or calls a live insurer.
 
-The running app is **CareLoop** (patient shell behind mock login: Today / History / Medicines / Tests / Insurance / Profile, plus an 8-step visit). Old DenialShield PA/appeal forms are a secondary page at `/letters` (watermark + HITL), not hamburger items. **Insurance Claims Management** is Coming soon on the Insurance screen. Dummy logins: [`AGENTS.md`](AGENTS.md).
+The running app is **CareLoop** (patient shell behind login: Today / History / Medicines / Tests / Insurance / Profile, plus an 8-step visit). Old DenialShield PA/appeal forms are a secondary page at `/letters` (watermark + HITL), not hamburger items. **Insurance Claims Management** is Coming soon on the Insurance screen. Demo login: **`jane` / `demo`**. Details: [`AGENTS.md`](AGENTS.md).
 
 **Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
 
@@ -40,7 +40,7 @@ Two **disconnected**, stateless form tabs. No accounts, no database, no timeline
 | HITL approve-before-download | `frontend/js/app.js` |
 | Draft watermark | `backend/llm.py` + `DRAFT_WATERMARK` |
 
-Provider / Patient Advocate letter UIs are **not in the nav**. Use **Insurance Claims Management** (Coming soon). Dummy credentials: [`AGENTS.md`](AGENTS.md).
+Provider / Patient Advocate letter UIs are **not in the nav**. Use **Insurance Claims Management** (Coming soon). Login: **`jane` / `demo`**.
 
 ### Greenfield (three owners; original A–F still apply)
 
@@ -48,7 +48,7 @@ See [`plan.md`](plan.md) for inherited A–F mapping.
 
 | Owner | Builds |
 |--------|--------|
-| **Dave** | Payer **dropdown** (required) + optional typed card fields / card scan / SBC-EOB → mock coverage confirmation; symptoms + optional prior-visit PDF; visit/cost **guess**; in-network clinicians by ZIP; Coverage facts for history. **Mock login** + **one-step wizard**. |
+| **Dave** | Payer **dropdown** (required) + optional typed card fields / card scan / SBC-EOB → mock coverage confirmation; symptoms + optional prior-visit PDF; visit/cost **guess**; in-network clinicians by ZIP; Coverage facts for history. **Login** (Supabase Auth + `profiles` when env is set) + **one-step wizard**. |
 | **Sreekar** | First visit → transcribe/SOAP/Plan → orders, mock payer + PA + step-therapy denial + policy-to-evidence + appeal (DenialShield HITL/watermark), meds/adherence/refill, claims/EOB light, follow-up; clinical/admin **history fact capture** |
 | **Vivek** | Patient-facing CareLoop workflow (basic) + SQLite/in-memory **thread** as app shell + unified timeline + **history share/export**; **Dribbble-informed polish later** |
 
@@ -71,7 +71,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 
 ```
 .
-├── AGENTS.md               # Dummy logins + what the running app is (for agents)
+├── AGENTS.md               # Demo login + what the running app is (for agents)
 ├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
 ├── workflow.md             # Patient-facing screen flow (teammate map; pairs with frontend/mockups/)
 ├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
@@ -129,15 +129,20 @@ Commands match [`plan.md`](plan.md) and [`CLAUDE.md`](CLAUDE.md).
 ```bash
 cp .env.example .env
 # Edit .env (do not use `echo > .env` — that wipes other keys):
+#   SUPABASE_URL=https://your-project.supabase.co
+#   SUPABASE_ANON_KEY=your_anon_key_here
+#   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here   # server-only; never frontend JS
 #   GEMINI_API_KEY=your_key_here          # Insurance OCR + /letters
 #   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
 #   GROQ_API_KEY=                         # optional letter fallback; add when you have it
-#   SESSION_SECRET=                       # optional; signs login tokens + coverage cookie
+#   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
 ```
 
-Same names on the **process/container at launch** or in **Vercel → Project Settings → Environment Variables** (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
+**Required on Vercel for live login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Login-only: Auth + `public.profiles`. No insurance, medicines, tests, or history tables. Never commit real keys or put `service_role` in frontend JS.
 
-The patient shell **Profile** page lists whether each slot is loaded (never the secret). Extra keys can be added the same way. Dummy logins and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md).
+Same names on the **process/container at launch** or in **Vercel**. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
+
+The patient shell **Profile** page lists whether each slot is loaded (never the secret). Extra keys can be added the same way. Demo login **`jane` / `demo`** and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md). Without the Supabase slots, the server still accepts the same mock `jane` / `demo` HMAC login.
 
 ### 3. Install and run (API + frontend, one process)
 
@@ -148,7 +153,7 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open **http://localhost:8080**
 
-Log in (`jane` / `demo`, or any account in [`AGENTS.md`](AGENTS.md)). **I’m returning** seeds **Aetna / Jane Doe** via Dave’s APIs and opens **Today**. **Start my first visit** resets coverage and opens the insurance hub (date of birth required; sample card is the Stedi canned member; skip allowed → no estimated-costs step). Visit journey is 8 steps (symptoms suggest a specialty for the clinician list → SOAP → skippable estimated costs from `POST /api/careloop/coverage/visit-guess` → plan). Letter drafts: **http://localhost:8080/letters** (approve-before-download).
+Log in as **`jane` / `demo`**. **I’m returning** seeds **Aetna / Jane Doe** via Dave’s APIs and opens **Today**. **Start my first visit** resets coverage and opens the insurance hub (date of birth required; sample card is the Stedi canned member; skip allowed → no estimated-costs step). Visit journey is 8 steps (symptoms suggest a specialty for the clinician list → SOAP → skippable estimated costs from `POST /api/careloop/coverage/visit-guess` → plan). Letter drafts: **http://localhost:8080/letters** (approve-before-download).
 
 Patient-facing **visual mockups** (static clickthrough): **http://localhost:8080/mockups/**. Text walkthrough: **[`workflow.md`](workflow.md)**.
 
@@ -177,7 +182,7 @@ Pick an **owner**; original letters **A–F** still name the slices. Coordinate 
 
 | Owner | Original streams | Isolation |
 |--------|------------------|-----------|
-| **Dave** | Eligibility/network/copay from **D**; **added** card scan + wizard + mock login; CareLoop is the app UX | Curl coverage after login; see [`AGENTS.md`](AGENTS.md) |
+| **Dave** | Eligibility/network/copay from **D**; **added** card scan + wizard + login; CareLoop is the app UX | Curl coverage after login; see [`AGENTS.md`](AGENTS.md) |
 | **Sreekar** | **A** Authorization, **C** scribe, **D** mock payer (PA half), **E** meds; claims later via Coming soon tab | Letter curls still exist; do not add Provider/Advocate nav tabs |
 | **Vivek** | **B** store, **F** timeline; **added** history share/export; Dribbble later | Curl `thread`/`reset`; static fixture until B lands |
 

@@ -387,15 +387,13 @@ Please draft a complete, professional demand letter requesting all internal reco
 
 
 # ---------------------------------------------------------------------------
-# CareLoop auth (mock login — not production)
+# CareLoop auth (Supabase Auth + profiles when env is set; mock JSON otherwise)
 # ---------------------------------------------------------------------------
 
 @app.get("/api/careloop/auth/accounts")
 def careloop_auth_accounts():
-    """Demo usernames/roles for the login screen. Passwords are not returned."""
-    with open(os.path.join(DATA_DIR, "mock_users.json"), "r") as f:
-        users = json.load(f)
-    return [{"username": u["username"], "name": u["name"], "role": u["role"]} for u in users]
+    """Usernames/roles for the login screen. Passwords are not returned."""
+    return careloop_auth.list_accounts()
 
 
 @app.post("/api/careloop/login")

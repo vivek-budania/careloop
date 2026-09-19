@@ -271,6 +271,7 @@ const CareLoop = {
   envRows() {
     const env = this.demoEnv || {};
     const session = env.session || {};
+    const supabase = env.supabase || session.supabase || {};
     const stedi = env.stedi || {};
     const gemini = env.gemini || {};
     const groq = env.groq || {};
@@ -278,10 +279,10 @@ const CareLoop = {
     const vercel = env.vercel || {};
     return [
       {
-        name: 'Signed session',
-        tag: session.signed ? 'loaded' : 'not set',
-        tagType: session.signed ? '' : 'peach',
-        detail: session.message || 'Mock login uses a signed token so Vercel workers share the same session.',
+        name: 'Supabase login',
+        tag: supabase.configured ? 'loaded' : 'not set',
+        tagType: supabase.configured ? '' : 'peach',
+        detail: supabase.message || session.message || 'Add SUPABASE_URL and keys on this host or in Vercel. Login-only; no insurance tables.',
       },
       {
         name: 'Stedi eligibility',
@@ -312,7 +313,7 @@ const CareLoop = {
         tag: 'slots',
         tagType: 'gray',
         detail: vercel.message || (
-          'Add STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY in Vercel Project Settings, then Redeploy.'
+          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
         ),
       },
     ];
@@ -525,7 +526,7 @@ const CareLoop = {
 
   renderLogin() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and next steps in one place.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<input name="password" type="password" autocomplete="current-password" value="demo" required></label><div class="error" id="login-error" role="alert"></div><button class="btn" type="submit" name="mode" value="returning">I’m returning ${this.icon('arrow')}</button><button class="btn secondary" type="submit" name="mode" value="first">Start my first visit</button><div class="hint">Password for every account is <strong>demo</strong><br>jane · maya · priya · advocate · demo</div><p style="text-align:center;margin:22px 0 0;font-size:10px">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
+    app.innerHTML = `<div class="login"><section class="login-story">${this.logo()}<h1>Your health.<br>Your story.<br><em>All together.</em></h1><p>A little less to keep track of.<br>A little more peace of mind.</p>${this.art()}<small>One connected journey. From your first visit to what’s next.</small></section><section class="login-form"><form id="login-form"><span class="eyebrow">A little clarity, every day</span><h2>Welcome to your care.</h2><p>Keep your visits, medicines, and next steps in one place.</p><label class="field">Username<input name="username" autocomplete="username" value="jane" required></label><label class="field">Password<input name="password" type="password" autocomplete="current-password" value="demo" required></label><div class="error" id="login-error" role="alert"></div><button class="btn" type="submit" name="mode" value="returning">I’m returning ${this.icon('arrow')}</button><button class="btn secondary" type="submit" name="mode" value="first">Start my first visit</button><div class="hint">Seeded demo: <strong>jane</strong> / <strong>demo</strong></div><p style="text-align:center;margin:22px 0 0;font-size:10px">Interactive demo · Fictional patient data<br>Care drafts are always for clinician review.</p></form></section></div>`;
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const form = e.currentTarget;

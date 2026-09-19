@@ -36,12 +36,14 @@ def demo_env_status() -> dict:
     """Which demo keys are loaded. Never returns secret values."""
     from backend.careloop import stedi as careloop_stedi
     from backend.careloop import auth as careloop_auth
+    from backend.careloop import supabase_auth as careloop_supabase
 
     gemini_on = _key_loaded(GEMINI_API_KEY)
     groq_on = _key_loaded(GROQ_API_KEY)
     xai_on = _key_loaded(XAI_API_KEY)
     return {
         "session": careloop_auth.session_status(),
+        "supabase": careloop_supabase.status(),
         "stedi": careloop_stedi.status(),
         "gemini": {
             "configured": gemini_on,
@@ -79,10 +81,11 @@ def demo_env_status() -> dict:
         "vercel": {
             "entrypoint": "backend.main:app",
             "message": (
-                "Vercel reads STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY, "
+                "Vercel reads SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, "
+                "STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY, "
                 "XAI_API_KEY, and SESSION_SECRET from Project Settings → Environment Variables "
                 "(Production + Preview), then Redeploy. Cursor/cloud-agent env does not "
-                "reach Vercel. Do not replace / with a JSON stub."
+                "reach Vercel. Never put service_role in frontend JS. Do not replace / with a JSON stub."
             ),
         },
     }

@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**: [`AGENTS.md`](AGENTS.md). Owner split: [`plan.md`](plan.md).
 
-**Product UX:** after mock login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
+**Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
 
-**Dave’s slice:** mock login (password `demo`; see AGENTS.md). Insurance requires payer + date of birth. Optional Gemini vision (`GEMINI_API_KEY` at launch) reads uploaded card/SBC JSON on Insurance only — no letter watermark, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Gemini / Groq / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
+**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Insurance requires payer + date of birth. Optional Gemini vision (`GEMINI_API_KEY` at launch) reads uploaded card/SBC JSON on Insurance only — no letter watermark, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Gemini / Groq / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
 ## Commands
 
