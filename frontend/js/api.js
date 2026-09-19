@@ -185,6 +185,40 @@ const API = {
     return this.post('/api/careloop/scribe/approve', { encounter });
   },
 
+  summarizeScribe(data) {
+    return this.post('/api/careloop/scribe/summarize', data);
+  },
+
+  async downloadHistoryPdf(markdown, title = 'CareLoop history packet') {
+    const url = `${this.BASE_URL}/api/careloop/history/pdf`;
+    const headers = { 'Content-Type': 'application/json' };
+    const token = this.getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ markdown, title }),
+      credentials: 'same-origin',
+    });
+    if (response.status === 401) {
+      this.setToken('');
+      if (window.App && typeof App.showLogin === 'function') App.showLogin();
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      const detail = error.detail;
+      const message = Array.isArray(detail) ? detail.map((d) => d.msg || d).join('; ') : (detail || `HTTP ${response.status}`);
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'careloop-history.pdf';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+
   async transcribeScribeAudio(file) {
     const url = `${this.BASE_URL}/api/careloop/scribe/transcribe`;
     const headers = {};
