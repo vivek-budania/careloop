@@ -6,12 +6,13 @@ Read this before changing the running app. Setup commands also live in [`README.
 
 **CareLoop is the entire web app.** It is a mocked US patient-journey demo (coverage intake first). It is **not** a real payer, PBM, EHR, or claims platform.
 
-After login the user sees two tabs:
+After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
-1. **CareLoop** — the product. Paginated coverage intake (identity → optional review → mock eligibility → symptoms → visit/cost guess → in-network clinicians).
-2. **Insurance Claims Management** — **Coming soon** placeholder. Provider and Patient Advocate letter UIs are **not** in the nav. Do not treat those old DenialShield forms as the demo.
+1. **☰** Today · History (My visits | For the clinic) · Medicines · Tests · Insurance · Profile · Log out
+2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with mock coverage seeded.
+3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
 
-Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist in the backend for later claims work. Do not wire a download path that skips HITL/watermark if you turn them back on.
+Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire a download path that skips HITL/watermark. History packet `.md` is a record export, not a letter.
 
 ## Dummy credentials (mock login)
 
@@ -43,22 +44,20 @@ pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open http://localhost:8080 → log in → CareLoop wizard. Optional later: `STEDI_API_KEY` (sandbox 270/271; fixture members will not match). Gemini/Azure are for OCR later; this slice does not OCR.
+Open http://localhost:8080 → log in (`maya` / `demo`) → **I’m returning** or **Start my first visit**. Optional later: `STEDI_API_KEY` (sandbox 270/271; fixture members will not match). Gemini is for letter drafts on `/letters`.
 
-## CareLoop wizard (Dave)
+## CareLoop patient UI + Dave coverage
 
-One step on screen at a time (`frontend/js/careloop.js`).
+Patient chrome is `frontend/js/careloop.js` (demo IA). Coverage/cost/network still use Dave’s APIs:
 
-1. Insurance identity — **payer dropdown required**; optional typed fields / sample card / filename-only uploads
-2. Optional review — skip allowed
-3. Confirm coverage — mock active/inactive + copay/deductible (`MockEligibility.check`)
-4. Reason for visit — symptoms + optional prior-visit PDF/image (filename) or sample note
-5. Visit/cost **guess** — labeled estimate, not a bill or coverage decision
-6. In-network clinicians — fixture list ∩ ZIP distance
+- Payer dropdown + sample card + confirm: `listPayers` / `scanCoverage` / `saveCoverage` / `confirmCoverage`
+- Symptoms intake: `saveCoverageIntake`
+- Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
+- Clinician list: `searchNetwork` (fixture ∩ ZIP)
 
 Fixture golden path: Mock Payer, Maya Chen, ZIP `94110`, diabetes follow-up → about **$75** patient-owed (99214 copay $30 + HbA1c $45). **Inactive Demo Plan** returns inactive coverage.
 
-Coverage state is **in-memory** until Vivek’s thread store exists.
+Coverage state is **in-memory** until Vivek’s thread store exists. Visit/meds/history UI state is local until that store lands.
 
 ## Safety (do not weaken)
 
@@ -74,6 +73,7 @@ Coverage state is **in-memory** until Vivek’s thread store exists.
 - `backend/data/mock_users.json` — dummy accounts
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`
-- `frontend/index.html` — login, CareLoop wizard, claims coming-soon tab
+- `frontend/index.html` — patient shell
+- `frontend/letters.html` — PA/appeal HITL (not in ☰)
 
-`frontend/js/provider.js` and `frontend/js/patient.js` are leftover DenialShield modules; they are not product tabs.
+`frontend/js/provider.js` and `frontend/js/patient.js` power `/letters`; they are not the CareLoop hamburger.

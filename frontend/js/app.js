@@ -1,155 +1,78 @@
 /**
- * App core — handles navigation, notifications, HITL modal, and shared utilities.
+ * App core — HITL modal, toasts, shared utilities.
+ * Patient shell lives in careloop.js. Letter drafts live at /letters.
  */
 
 const App = {
   currentModule: 'careloop',
   user: null,
+  page: document.body?.dataset?.page || 'careloop',
 
   init() {
-    this.setupNavigation();
     this.setupHITLModal();
-    this.setupAuth();
-  },
-
-  setupAuth() {
-    document.getElementById('login-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.login();
-    });
-    document.getElementById('btn-logout').addEventListener('click', () => this.logout());
-    this.loadAccountHints();
-    this.restoreSession();
-  },
-
-  async loadAccountHints() {
-    const list = document.getElementById('login-accounts');
-    try {
-      const accounts = await API.listDemoAccounts();
-      list.innerHTML = accounts.map((a) => (
-        `<li><code>${App.escapeHTML(a.username)}</code> — ${App.escapeHTML(a.name)} (${App.escapeHTML(a.role)})</li>`
-      )).join('');
-    } catch (err) {
-      list.textContent = 'Could not load demo accounts.';
-    }
-  },
-
-  async restoreSession() {
-    if (!API.getToken()) {
-      this.showLogin();
+    if (this.page === 'letters') {
+      this.setupLettersNav();
+      this.restoreLettersSession();
       return;
     }
-    try {
-      const user = await API.me();
-      await this.enterApp(user);
-    } catch (err) {
-      API.setToken('');
-      this.showLogin();
-    }
+    if (window.CareLoop) CareLoop.init();
   },
 
-  async login() {
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value;
-    const errBox = document.getElementById('login-error');
-    errBox.textContent = '';
-    try {
-      const result = await API.login(username, password);
-      API.setToken(result.token);
-      await this.enterApp(result.user);
-    } catch (err) {
-      errBox.textContent = err.message;
-    }
-  },
-
-  async logout() {
-    try {
-      await API.logout();
-    } catch (err) {
-      // Still clear the local session.
-    }
-    API.setToken('');
-    this.user = null;
-    CareLoop.resetUi();
-    this.showLogin();
-  },
-
-  showLogin() {
-    document.getElementById('login-screen').hidden = false;
-    document.getElementById('app-shell').hidden = true;
-  },
-
-  async enterApp(user) {
-    this.user = user;
-    document.getElementById('nav-user-label').textContent = `${user.name} (${user.role})`;
-    this.applyRole(user);
-    CareLoop.resetUi();
-    await CareLoop.loadPayers();
-    document.getElementById('login-screen').hidden = true;
-    document.getElementById('app-shell').hidden = false;
-  },
-
-  applyRole(user) {
-    const allowed = user.tabs || [];
-    document.querySelectorAll('.nav-tab').forEach((tab) => {
-      const show = allowed.includes(tab.dataset.module);
-      tab.hidden = !show;
-      tab.classList.toggle('active', false);
-    });
-    document.querySelectorAll('.module-view').forEach((view) => view.classList.remove('active'));
-
-    const home = allowed.includes('careloop') ? 'careloop' : allowed[0];
-    if (home) this.switchModule(home);
-  },
-
-  // ─── Navigation ───────────────────────────────────────
-  setupNavigation() {
-    const tabs = document.querySelectorAll('.nav-tab');
-    tabs.forEach(tab => {
+  setupLettersNav() {
+    document.querySelectorAll('#app-shell .nav-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
-        const module = tab.dataset.module;
-        this.switchModule(module);
+        document.querySelectorAll('#app-shell .nav-tab').forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.module-view').forEach((v) => v.classList.remove('active'));
+        const view = document.getElementById(`module-${tab.dataset.module}`);
+        if (view) view.classList.add('active');
       });
     });
+    const provider = document.getElementById('module-provider');
+    if (provider) provider.classList.add('active');
   },
 
-  switchModule(module) {
-    const tab = document.querySelector(`[data-module="${module}"]`);
-    if (!tab || tab.hidden) return;
-
-    this.currentModule = module;
-
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-
-    document.querySelectorAll('.module-view').forEach(v => v.classList.remove('active'));
-    const view = document.getElementById(`module-${module}`);
-    if (view) view.classList.add('active');
+  async restoreLettersSession() {
+    if (!API.getToken()) return;
+    try {
+      const user = await API.me();
+      this.user = user;
+      const label = document.getElementById('nav-user-label');
+      if (label) label.textContent = `${user.name} · letter drafts (HITL)`;
+    } catch (err) {
+      API.setToken('');
+    }
   },
 
-  // ─── Notifications ────────────────────────────────────
   notify(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+      return;
+    }
+
     const existing = document.querySelector('.notification');
     if (existing) existing.remove();
-
     const icons = { success: '✓', error: '✕', info: 'ℹ' };
     const el = document.createElement('div');
     el.className = `notification ${type}`;
-    el.innerHTML = `<span>${icons[type] || 'ℹ'}</span> ${message}`;
+    el.innerHTML = `<span>${icons[type] || 'ℹ'}</span> ${this.escapeHTML(message)}`;
     document.body.appendChild(el);
-
     setTimeout(() => {
       el.style.animation = 'notif-out 300ms ease forwards';
       setTimeout(() => el.remove(), 300);
     }, 4000);
   },
 
-  // ─── HITL Approval Modal ──────────────────────────────
   _hitlResolve: null,
   _hitlContent: '',
 
   setupHITLModal() {
     const modal = document.getElementById('hitl-modal');
+    if (!modal) return;
     const checkbox = document.getElementById('hitl-confirm');
     const approveBtn = document.getElementById('hitl-approve');
     const cancelBtn = document.getElementById('hitl-cancel');
@@ -179,19 +102,19 @@ const App = {
     });
   },
 
-  /**
-   * Show the HITL modal and return a Promise<boolean>.
-   * true = approved, false = cancelled.
-   */
   requestApproval(documentContent) {
     this._hitlContent = documentContent;
-    document.getElementById('hitl-modal').classList.add('visible');
-    return new Promise(resolve => {
+    const modal = document.getElementById('hitl-modal');
+    if (!modal) {
+      this.notify('Human review is required before downloading a generated letter.', 'error');
+      return Promise.resolve(false);
+    }
+    modal.classList.add('visible');
+    return new Promise((resolve) => {
       this._hitlResolve = resolve;
     });
   },
 
-  // ─── Document Download ────────────────────────────────
   downloadDocument(content, filename) {
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -203,18 +126,12 @@ const App = {
     this.notify('Document downloaded successfully.', 'success');
   },
 
-  // ─── Utility ──────────────────────────────────────────
   escapeHTML(str) {
     const div = document.createElement('div');
-    div.textContent = str;
+    div.textContent = str == null ? '' : String(str);
     return div.innerHTML;
   },
 
-  /**
-   * Render a lightweight subset of Markdown (headers, bold, hr, bullet/numbered
-   * lists, paragraphs) as safe HTML. Generated documents use this formatting;
-   * everything is HTML-escaped before any markdown syntax is interpreted.
-   */
   renderMarkdown(raw) {
     const lines = this.escapeHTML(raw).split('\n');
     const inline = (text) => text
@@ -229,18 +146,15 @@ const App = {
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
-
       if (line === '') {
         closeList();
         continue;
       }
-
       if (/^(-{3,}|\*{3,})$/.test(line)) {
         closeList();
         html += '<hr>';
         continue;
       }
-
       const heading = line.match(/^(#{1,4})\s+(.*)$/);
       if (heading) {
         closeList();
@@ -248,14 +162,12 @@ const App = {
         html += `<h${level}>${inline(heading[2])}</h${level}>`;
         continue;
       }
-
       const listItem = line.match(/^[-*]\s+(.*)$/) || line.match(/^\d+\.\s+(.*)$/);
       if (listItem) {
         if (!inList) { html += '<ul>'; inList = true; }
         html += `<li>${inline(listItem[1])}</li>`;
         continue;
       }
-
       closeList();
       html += `<p>${inline(line)}</p>`;
     }
@@ -272,10 +184,10 @@ const App = {
   },
 };
 
-// Boot
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
-  Provider.init();
-  Patient.init();
-  CareLoop.init();
+  if (App.page === 'letters') {
+    if (window.Provider) Provider.init();
+    if (window.Patient) Patient.init();
+  }
 });

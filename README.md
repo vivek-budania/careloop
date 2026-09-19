@@ -4,7 +4,7 @@ Hackathon product: **one mocked US patient journey** so context survives coverag
 
 It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. Drafts are for a human to review; the app never files, faxes, e-prescribes, or calls a live insurer.
 
-The running app is **CareLoop** (coverage intake behind mock login). Old DenialShield PA/appeal forms are not product tabs; **Insurance Claims Management** is a Coming soon placeholder. Dummy logins: [`AGENTS.md`](AGENTS.md).
+The running app is **CareLoop** (patient shell behind mock login: Today / History / Medicines / Tests / Insurance / Profile, plus an 8-step visit). Old DenialShield PA/appeal forms are a secondary page at `/letters` (watermark + HITL), not hamburger items. **Insurance Claims Management** is Coming soon on the Insurance screen. Dummy logins: [`AGENTS.md`](AGENTS.md).
 
 **Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**.
 
@@ -64,7 +64,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 |--------|-------------|
 | Backend | Python + FastAPI (`backend/main.py`) |
 | LLM | Gemini primary (`google-generativeai`); optional Groq fallback |
-| Frontend | Vanilla HTML/CSS/JS (`frontend/`) |
+| Frontend | Vanilla HTML/CSS/JS (`frontend/`) — ivory/sage/terracotta patient UI |
 | Data today | Embedded JSON (ICD-10, CPT, CARC/RARC) |
 
 **Request flow (letters):** Pydantic model in `main.py` → user-message string → `backend/llm.py` `generate()` / `generate_json()` → system prompt from `backend/prompts.py`. New CareLoop routes stay on this app (`main.py` or an imported `backend/careloop/` package). Do not fork a second server. Frontend talks only through named methods in `frontend/js/api.js`.
@@ -83,14 +83,16 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 │   ├── risk_engine.py      # Deterministic heuristic scorer (no LLM)
 │   └── data/               # icd10_codes.json, cpt_codes.json, denial_reasons.json
 ├── frontend/
-│   ├── index.html
-│   ├── css/style.css
+│   ├── index.html          # Patient shell (login first-time vs returning)
+│   ├── letters.html        # Secondary PA / appeal drafts (HITL)
+│   ├── css/style.css       # Patient UI (Instrument Serif + DM Sans)
+│   ├── css/letters.css     # Letter-draft surface
 │   └── js/
 │       ├── api.js          # Named fetch methods per endpoint
-│       ├── app.js          # Login, CareLoop + claims tabs, HITL
-│       ├── careloop.js     # Coverage intake wizard
-│       ├── provider.js     # Parked DenialShield PA forms (not in nav)
-│       └── patient.js      # Parked DenialShield appeal forms (not in nav)
+│       ├── app.js          # HITL, toasts, /letters chrome
+│       ├── careloop.js     # Patient IA; calls Dave coverage APIs
+│       ├── provider.js     # Parked DenialShield PA forms (`/letters`)
+│       └── patient.js      # Parked DenialShield appeal forms (`/letters`)
 ├── requirements.txt
 └── .env.example
 ```
@@ -138,7 +140,9 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open **http://localhost:8080**
 
-Patient-facing **visual mockups** (not the live product): **http://localhost:8080/mockups/**. Text walkthrough of the same screens: **[`workflow.md`](workflow.md)**.
+Log in (`maya` / `demo`, or any account in [`AGENTS.md`](AGENTS.md)). **I’m returning** seeds mock coverage via Dave’s APIs and opens **Today**. **Start my first visit** resets coverage and opens the insurance hub (skip allowed → no estimated-costs step). Visit journey is 8 steps (SOAP → skippable estimated costs from `POST /api/careloop/coverage/visit-guess` → plan). Letter drafts: **http://localhost:8080/letters** (approve-before-download).
+
+Patient-facing **visual mockups** (static clickthrough): **http://localhost:8080/mockups/**. Text walkthrough: **[`workflow.md`](workflow.md)**.
 
 Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require Gemini.
 
