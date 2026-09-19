@@ -8,6 +8,10 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-flash-lite-latest"
 
+# Local demo only. Copy from Stedi portal → API keys (Test mode). Gitignored .env.
+# Never commit this value. Production Stedi keys are out of scope.
+STEDI_API_KEY = os.getenv("STEDI_API_KEY", "")
+
 # Backup LLM, used automatically if Gemini fails (quota exceeded, outage, etc.)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"

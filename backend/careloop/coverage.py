@@ -1,7 +1,7 @@
 """Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
 
-No Gemini. Live 270/271 is optional (STEDI_API_KEY) and will not match these
-fixture members — we still probe so the response shows the option exists.
+No Gemini. Live 270/271 is optional: put a Stedi *test* key in local `.env`
+as STEDI_API_KEY. Aetna + Jane Doe / AETNA12345 is the canned sandbox member.
 """
 
 from __future__ import annotations
@@ -10,18 +10,12 @@ import json
 import math
 import os
 import re
-import urllib.error
-import urllib.request
 from copy import deepcopy
 from typing import Any, Optional
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+from backend.careloop import stedi as careloop_stedi
 
-STEDI_ELIGIBILITY_URL = (
-    "https://healthcare.us.stedi.com/2024-04-01/change/medicalnetwork/eligibility/v3"
-)
-# Dummy Type-2 NPI that passes the Luhn check digit (not a real clinic).
-DEMO_PROVIDER_NPI = "1999999984"
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 ZIP_COORDS = {
     "94110": (37.7484, -122.4156),
@@ -68,6 +62,7 @@ def _empty_state() -> dict:
         "visit_cost_estimate": None,
         "clinicians": None,
         "source": "mock",
+        "stedi": careloop_stedi.status(),
     }
 
 
@@ -91,6 +86,7 @@ def list_payers() -> list[dict]:
             "plan_type": p["plan_type"],
             "network_name": p["network_name"],
             "active": p["active"],
+            "stedi_demo": bool(p.get("stedi_demo")),
         }
         for p in _payers()
     ]
@@ -223,6 +219,17 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
         active = False
 
     status = "active" if active else "inactive"
+    if payer.get("stedi_demo"):
+        disclaimer = (
+            "Mock eligibility matching this payer's Stedi canned sandbox member. "
+            "Add STEDI_API_KEY to local .env to run a live test 270/271. "
+            "This is not a coverage determination."
+        )
+    else:
+        disclaimer = (
+            "Mock eligibility — not a live 270/271 check. "
+            "This is not a coverage determination."
+        )
     return {
         "status": status,
         "in_network": active,
@@ -235,95 +242,13 @@ def _mock_eligibility(payer: dict, profile: dict) -> dict:
         "estimated_copay_er": payer.get("er_copay"),
         "deductible": payer.get("deductible"),
         "deductible_remaining": payer.get("deductible_remaining"),
+        "oon_deductible": payer.get("oon_deductible"),
         "oop_max": payer.get("oop_max"),
         "oop_remaining": payer.get("oop_remaining"),
         "coinsurance_pct": payer.get("coinsurance_pct"),
         "pa_required_rx": payer.get("pa_required_rx"),
-        "disclaimer": (
-            "Mock eligibility — not a live 270/271 check. "
-            "This is not a coverage determination."
-        ),
+        "disclaimer": disclaimer,
     }
-
-
-def _stedi_configured() -> bool:
-    key = os.getenv("STEDI_API_KEY", "").strip()
-    return bool(key) and key != "your_api_key_here"
-
-
-def _probe_stedi(payer: dict, profile: dict) -> dict:
-    """Optional 270/271. Fixture members will not match sandbox canned data."""
-    if not _stedi_configured():
-        return {
-            "attempted": False,
-            "used": False,
-            "vendor": "stedi",
-            "message": (
-                "STEDI_API_KEY not set. Coverage used the mock plan. "
-                "A Stedi test key is optional later; sandbox only accepts "
-                "Stedi's canned members, not this fixture card."
-            ),
-        }
-
-    payload = {
-        "tradingPartnerServiceId": payer.get("stedi_payer_id") or "60054",
-        "provider": {
-            "organizationName": "CareLoop Demo Clinic",
-            "npi": DEMO_PROVIDER_NPI,
-        },
-        "subscriber": {
-            "firstName": (profile.get("member_name") or "Maya").split(" ")[0],
-            "lastName": (profile.get("member_name") or "Chen").split(" ")[-1],
-            "memberId": profile.get("member_id") or "M-1001",
-            "dateOfBirth": (profile.get("date_of_birth") or "1972-03-14").replace("-", ""),
-        },
-        "encounter": {"serviceTypeCodes": ["30"]},
-    }
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        STEDI_ELIGIBILITY_URL,
-        data=body,
-        headers={
-            "Authorization": os.getenv("STEDI_API_KEY", "").strip(),
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            raw = resp.read().decode("utf-8")
-        parsed = json.loads(raw) if raw else {}
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "http_status": 200,
-            "message": (
-                "Stedi returned a payload, but CareLoop still uses mock eligibility "
-                "for this demo unless the member is a documented sandbox subscriber."
-            ),
-            "raw_keys": list(parsed.keys())[:12],
-        }
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:400]
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "http_status": exc.code,
-            "message": (
-                "Stedi rejected this fixture member (expected). "
-                "Sandbox keys only accept canned test subscribers. Mock eligibility used."
-            ),
-            "error": detail,
-        }
-    except Exception as exc:
-        return {
-            "attempted": True,
-            "used": False,
-            "vendor": "stedi",
-            "message": f"Stedi probe failed ({exc}). Mock eligibility used.",
-        }
 
 
 def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
@@ -353,10 +278,16 @@ def confirm_coverage(payer_name: str = "", member_id: str = "") -> dict:
     if not payer:
         raise ValueError("Unknown insurance company on the saved profile.")
 
-    eligibility = _mock_eligibility(payer, profile)
-    eligibility["live_api"] = _probe_stedi(payer, profile)
+    live = careloop_stedi.check_eligibility(payer, profile)
+    if live.get("used") and live.get("eligibility"):
+        eligibility = live["eligibility"]
+        state["source"] = "stedi"
+    else:
+        eligibility = _mock_eligibility(payer, profile)
+        state["source"] = "mock"
+    eligibility["live_api"] = {k: v for k, v in live.items() if k != "eligibility"}
     state["eligibility"] = eligibility
-    state["source"] = "mock"
+    state["stedi"] = careloop_stedi.status()
     return snapshot()
 
 

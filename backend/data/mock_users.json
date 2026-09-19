@@ -1,8 +1,14 @@
 [
   {
+    "username": "jane",
+    "password": "demo",
+    "name": "Jane Doe",
+    "role": "patient"
+  },
+  {
     "username": "maya",
     "password": "demo",
-    "name": "Maya Chen",
+    "name": "Jane Doe",
     "role": "patient"
   },
   {
@@ -20,7 +26,7 @@
   {
     "username": "demo",
     "password": "demo",
-    "name": "Hackathon Demo",
+    "name": "Jane Doe",
     "role": "demo"
   }
 ]
