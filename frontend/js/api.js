@@ -194,7 +194,12 @@ const API = {
     const form = new FormData();
     form.append('file', file);
 
-    const response = await fetch(url, { method: 'POST', headers, body: form });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: form,
+      credentials: 'same-origin',
+    });
     if (response.status === 401) {
       this.setToken('');
       if (window.App && typeof App.showLogin === 'function') App.showLogin();

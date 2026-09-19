@@ -97,7 +97,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
 - Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
 
-**Sreekar Stream C (visit steps 5–6, not a second wizard):** seeded transcript `GET /api/careloop/scribe/fixture` → SOAP/Plan `POST /api/careloop/scribe/draft` → clinician review `POST /api/careloop/scribe/approve` (orders; `pa_required` on GLP-1). Optional `XAI_API_KEY` for `POST /api/careloop/scribe/transcribe`. Voice UI in `frontend/js/scribe.js` is not loaded in Vivek’s shell yet — APIs are live. The seeded visit note is Maya Chen / Dr. Patel; the logged-in patient remains Jane Doe.
+**Sreekar Stream C (visit steps 5–6, not a second wizard):** seeded transcript `GET /api/careloop/scribe/fixture` → SOAP/Plan `POST /api/careloop/scribe/draft` → clinician review `POST /api/careloop/scribe/approve` (orders; `pa_required` on GLP-1). Optional `XAI_API_KEY` for `POST /api/careloop/scribe/transcribe`. Visit step 5 in `careloop.js` has Record / Upload (MediaRecorder → transcribe). Live text drafts SOAP with `use_seeded: false`; fixture remains the no-key fallback. `frontend/js/scribe.js` is the older standalone voice room and is still not loaded. The seeded visit note is Maya Chen / Dr. Patel; the logged-in patient remains Jane Doe.
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. `maya` still logs in (alias of Jane Doe).
 
@@ -123,7 +123,7 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 - `backend/data/mock_users.json` — dummy accounts (Jane Doe / `jane`)
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`, `mock_visit_transcript.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`
-- `frontend/js/scribe.js` — Stream C voice UI (not loaded in Vivek’s shell yet)
+- `frontend/js/scribe.js` — older Stream C voice room (not loaded; Record lives in `careloop.js` step 5)
 - `frontend/index.html` — patient shell
 - `frontend/letters.html` — PA/appeal HITL (not in ☰)
 - `pyproject.toml` — Vercel FastAPI entrypoint
