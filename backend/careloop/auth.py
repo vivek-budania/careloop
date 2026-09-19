@@ -1,7 +1,7 @@
-"""Mock login for the CareLoop demo. Not production auth. No HIPAA.
+"""CareLoop login. Prefer Supabase Auth + public.profiles; mock JSON is fallback.
 
-Sessions are signed tokens (HMAC), not a server-side map. That way login
-survives Vercel serverless workers. Tokens carry only username + expiry.
+Not production HIPAA. Tokens are stateless so Vercel workers can authorize
+coverage routes: either a Supabase access JWT, or the legacy HMAC app token.
 """
 
 from __future__ import annotations
@@ -12,9 +12,11 @@ import hmac
 import json
 import os
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import Header, HTTPException, Request
+
+from backend.careloop import supabase_auth
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 TOKEN_TTL_SEC = 60 * 60 * 12
@@ -51,26 +53,47 @@ def public_user(user: dict) -> dict:
     }
 
 
+def public_user_from_profile(row: dict) -> dict:
+    first = (row.get("first_name") or "").strip()
+    last = (row.get("last_name") or "").strip()
+    name = f"{first} {last}".strip() or (row.get("username") or "Patient")
+    return {
+        "username": row.get("username") or "",
+        "name": name,
+        "role": "patient",
+        "tabs": ROLE_TABS["patient"],
+    }
+
+
 def _secret() -> bytes:
     raw = (os.getenv("SESSION_SECRET") or _DEMO_SECRET).strip()
     return raw.encode("utf-8")
 
 
 def session_status() -> dict:
+    sb = supabase_auth.status()
     custom = bool((os.getenv("SESSION_SECRET") or "").strip())
+    if sb["configured"]:
+        return {
+            "configured": True,
+            "signed": True,
+            "provider": "supabase",
+            "custom_secret": custom,
+            "used_for": "Supabase Auth JWT after profiles username lookup",
+            "message": sb["message"],
+            "supabase": sb,
+        }
     return {
         "configured": True,
         "signed": True,
+        "provider": "mock",
         "custom_secret": custom,
-        "used_for": "Mock login tokens (username + expiry only)",
+        "used_for": "Mock login tokens (username + expiry only) until Supabase env is set",
         "message": (
-            "SESSION_SECRET is set. Login tokens are signed and work across Vercel workers."
-            if custom
-            else (
-                "Mock login uses a signed token (no server session map). "
-                "Optional SESSION_SECRET rotates the signature; the demo fallback works without it."
-            )
+            "Supabase login keys are not loaded. Mock jane/demo still signs an HMAC token. "
+            + sb["message"]
         ),
+        "supabase": sb,
     }
 
 
@@ -110,9 +133,29 @@ def parse_token(token: Optional[str]) -> Optional[str]:
         return None
 
 
+def list_accounts() -> list[dict]:
+    if supabase_auth.configured():
+        try:
+            rows = supabase_auth.list_profiles()
+        except ValueError:
+            rows = []
+        out = []
+        for row in rows:
+            pub = public_user_from_profile(row)
+            out.append({"username": pub["username"], "name": pub["name"], "role": pub["role"]})
+        return out
+    return [{"username": u["username"], "name": u["name"], "role": u["role"]} for u in _users()]
+
+
 def login(username: str, password: str) -> dict:
-    username = (username or "").strip().lower()
+    username = (username or "").strip()
     password = password or ""
+    if supabase_auth.configured():
+        return _login_supabase(username, password)
+    return _login_mock(username.lower(), password)
+
+
+def _login_mock(username: str, password: str) -> dict:
     match = next(
         (u for u in _users() if u["username"].lower() == username and u["password"] == password),
         None,
@@ -123,19 +166,68 @@ def login(username: str, password: str) -> dict:
     return {"token": issue_token(match["username"]), "user": pub}
 
 
-def logout(_token: Optional[str]) -> dict:
-    # Tokens are stateless. Client drops localStorage + cookie.
+def _login_supabase(username: str, password: str) -> dict:
+    try:
+        profile = supabase_auth.profile_by_username(username)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
+    if not profile or not (profile.get("email") or "").strip():
+        raise ValueError("Unknown username or password.")
+    try:
+        session = supabase_auth.password_sign_in(profile["email"].strip(), password)
+    except ValueError:
+        raise ValueError("Unknown username or password.") from None
+    token = (session or {}).get("access_token") if isinstance(session, dict) else None
+    if not token:
+        raise ValueError("Unknown username or password.")
+    return {"token": token, "user": public_user_from_profile(profile)}
+
+
+def logout(token: Optional[str]) -> dict:
+    if token and not token.startswith("v1."):
+        supabase_auth.sign_out(token)
     return {"ok": True}
 
 
 def user_for_token(token: Optional[str]) -> Optional[dict]:
+    if not token:
+        return None
     username = parse_token(token)
-    if not username:
+    if username:
+        match = _find_user(username)
+        if match:
+            return public_user(match)
+        if supabase_auth.configured():
+            try:
+                profile = supabase_auth.profile_by_username(username)
+            except ValueError:
+                profile = None
+            if profile:
+                return public_user_from_profile(profile)
         return None
-    match = _find_user(username)
-    if not match:
+    if not supabase_auth.configured():
         return None
-    return public_user(match)
+    auth_user = supabase_auth.auth_user(token)
+    if not auth_user:
+        return None
+    user_id = auth_user.get("id") or ""
+    try:
+        profile = supabase_auth.profile_by_id(user_id)
+    except ValueError:
+        return None
+    if not profile:
+        email = ((auth_user.get("email") or "").strip())
+        meta = auth_user.get("user_metadata") or {}
+        username = (meta.get("username") or email.split("@")[0] or "patient").strip()
+        return public_user_from_profile(
+            {
+                "username": username,
+                "first_name": meta.get("first_name") or "",
+                "last_name": meta.get("last_name") or "",
+                "email": email,
+            }
+        )
+    return public_user_from_profile(profile)
 
 
 def _token_from_request(request: Request, authorization: Optional[str]) -> Optional[str]:
