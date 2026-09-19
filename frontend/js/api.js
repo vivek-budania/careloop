@@ -28,6 +28,7 @@ const API = {
     const config = {
       ...options,
       headers,
+      credentials: 'same-origin',
     };
 
     try {

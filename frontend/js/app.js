@@ -8,6 +8,14 @@ const App = {
   user: null,
   page: document.body?.dataset?.page || 'careloop',
 
+  showLogin() {
+    if (window.CareLoop && typeof CareLoop.renderLogin === 'function') {
+      CareLoop.renderLogin();
+      return;
+    }
+    API.setToken('');
+  },
+
   init() {
     this.setupHITLModal();
     if (this.page === 'letters') {
