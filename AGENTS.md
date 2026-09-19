@@ -16,6 +16,7 @@ Read this before changing the running app. Setup commands also live in [`README.
 | Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
 | Sreekar Stream C scribe APIs (fixture / draft / approve / optional Grok STT) | **main (PR #6)**; SOAP step in this shell |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
+| Hosted DB docs (`profiles`, `visits`, `insurance`) | [`docs/database/`](docs/database/README.md) · SQL [`supabase/migrations/`](supabase/migrations/) |
 
 Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample card stays the no-key path. Do not invent copays. Tag unreadable OCR fields `[NEEDS VERIFICATION]`. No letter watermark on JSON extract.
 
@@ -39,7 +40,7 @@ Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire
 
 ## Dummy credentials (login)
 
-Not production auth. No HIPAA. **Login-only** against the existing Supabase project: username looks up `public.profiles`, then Auth signs in with that row’s email + password. No insurance, medicines, tests, or history tables.
+Not production auth. No HIPAA. **Login-only** against the existing Supabase project: username looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet — do not wire that in a docs-only change. Medicines, tests, claims, and PA letters are still not tables.
 
 When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are set on the **server** (never in frontend JS), `/api/careloop/login` returns `{ token, user }` where `token` is the **Supabase access JWT**. Dave’s coverage routes still take `Authorization: Bearer <token>` (or the `careloop_token` cookie). `require_user` accepts that JWT **or** the older HMAC `v1.` mock token so coverage cookies from a no-key deploy still work.
 
@@ -104,7 +105,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. Live login is **`jane` / `demo`**.
 
-Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s thread store exists. Visit/meds/history UI state is local until that store lands.
+Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s thread store exists. Intended columns: [`docs/database/insurance.md`](docs/database/insurance.md). Visit/meds/history UI state is local until that store lands.
 
 ## Safety (do not weaken)
 
@@ -116,6 +117,8 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 ## Files that matter for this slice
 
 - `backend/careloop/auth.py` — login (Supabase JWT or mock HMAC)
+- [`docs/database/`](docs/database/README.md) — hosted schema (`profiles` 1:1 Auth; `insurance` one current row; `visits` many)
+- [`supabase/`](supabase/README.md) — idempotent SQL matching those tables (hosted project; CLI not required)
 - `backend/careloop/supabase_auth.py` — server-only Auth + `profiles` HTTP
 - `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network/specialty suggestion
 - `backend/careloop/extract.py` — Gemini vision card/SBC → InsuranceProfile (no watermark)
