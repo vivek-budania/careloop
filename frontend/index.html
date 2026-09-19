@@ -9,7 +9,33 @@
 </head>
 <body>
 
-  <div class="app-container">
+  <div id="login-screen" class="login-screen">
+    <div class="card login-card">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="card-title-icon blue">🔐</div>
+          <h2>CareLoop login</h2>
+        </div>
+        <span class="card-badge">Mock auth</span>
+      </div>
+      <p class="form-hint">Demo only. Password for every account is <strong>demo</strong>.</p>
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-username">Username</label>
+          <input type="text" class="form-input" id="login-username" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" class="form-input" id="login-password" value="demo" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" type="submit" id="login-submit">Log in</button>
+      </form>
+      <p class="form-hint" id="login-error"></p>
+      <ul class="form-hint" id="login-accounts"></ul>
+    </div>
+  </div>
+
+  <div class="app-container" id="app-shell" hidden>
 
     <!-- ═══════════════ TOP NAVIGATION ═══════════════ -->
     <nav class="top-nav" id="top-nav">
@@ -19,20 +45,21 @@
       </div>
 
       <div class="nav-tabs" id="nav-tabs">
-        <button class="nav-tab active" data-module="provider" id="tab-provider">
+        <button class="nav-tab" data-module="provider" data-roles="clinician,demo" id="tab-provider">
           🩺 Provider
         </button>
-        <button class="nav-tab" data-module="patient" id="tab-patient">
+        <button class="nav-tab" data-module="patient" data-roles="advocate,demo" id="tab-patient">
           👤 Patient Advocate
         </button>
-        <button class="nav-tab" data-module="careloop" id="tab-careloop">
+        <button class="nav-tab" data-module="careloop" data-roles="patient,clinician,demo" id="tab-careloop">
           🔁 CareLoop
         </button>
       </div>
 
       <div class="nav-status">
         <span class="status-dot"></span>
-        <span>AI Ready</span>
+        <span id="nav-user-label">Signed out</span>
+        <button class="btn btn-secondary btn-sm" type="button" id="btn-logout">Log out</button>
       </div>
     </nav>
 
@@ -318,10 +345,11 @@
     <div class="module-view" id="module-careloop">
       <p class="careloop-banner">
         Mock coverage intake. Not a live eligibility check, bill, or coverage decision.
-        Insurance company is the only required field.
+        One step at a time. Insurance company is the only required field on step 1.
       </p>
+      <p class="form-hint" id="cl-step-label">Step 1 of 6</p>
 
-      <div class="section-grid">
+      <div class="cl-step" data-step="1">
         <div class="card">
           <div class="card-header">
             <div class="card-title">
@@ -377,7 +405,9 @@
           </div>
           <p class="form-hint" id="cl-identity-status"></p>
         </div>
+      </div>
 
+      <div class="cl-step" data-step="2" hidden>
         <div class="card">
           <div class="card-header">
             <div class="card-title">
@@ -386,15 +416,12 @@
             </div>
             <span class="card-badge">Skip allowed</span>
           </div>
-          <p class="form-hint">Edit fields above if you want, then continue. You do not have to confirm.</p>
-          <div class="btn-group">
-            <button class="btn btn-secondary" id="cl-btn-skip-review" type="button">Skip review</button>
-            <button class="btn btn-primary" id="cl-btn-apply-review" type="button">Save edits</button>
-          </div>
+          <p class="form-hint">Check the saved fields. Go back to edit, or continue without confirming.</p>
+          <div class="coverage-result" id="cl-review-summary"></div>
         </div>
       </div>
 
-      <div class="section-grid">
+      <div class="cl-step" data-step="3" hidden>
         <div class="card">
           <div class="card-header">
             <div class="card-title">
@@ -406,7 +433,9 @@
           <button class="btn btn-primary" id="cl-btn-confirm" type="button">Check coverage</button>
           <div class="coverage-result" id="cl-eligibility"></div>
         </div>
+      </div>
 
+      <div class="cl-step" data-step="4" hidden>
         <div class="card">
           <div class="card-header">
             <div class="card-title">
@@ -432,7 +461,7 @@
         </div>
       </div>
 
-      <div class="section-grid">
+      <div class="cl-step" data-step="5" hidden>
         <div class="card">
           <div class="card-header">
             <div class="card-title">
@@ -443,7 +472,9 @@
           </div>
           <div class="coverage-result" id="cl-visit-guess"></div>
         </div>
+      </div>
 
+      <div class="cl-step" data-step="6" hidden>
         <div class="card">
           <div class="card-header">
             <div class="card-title">
@@ -469,6 +500,11 @@
           <button class="btn btn-primary" id="cl-btn-network" type="button">Find clinicians</button>
           <div class="coverage-result" id="cl-network"></div>
         </div>
+      </div>
+
+      <div class="cl-pager">
+        <button class="btn btn-secondary" type="button" id="cl-btn-back" disabled>Back</button>
+        <button class="btn btn-primary" type="button" id="cl-btn-next">Continue</button>
       </div>
     </div>
 

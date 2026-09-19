@@ -1,0 +1,26 @@
+[
+  {
+    "username": "maya",
+    "password": "demo",
+    "name": "Maya Chen",
+    "role": "patient"
+  },
+  {
+    "username": "priya",
+    "password": "demo",
+    "name": "Dr. Priya Shah",
+    "role": "clinician"
+  },
+  {
+    "username": "advocate",
+    "password": "demo",
+    "name": "Alex Rivera",
+    "role": "advocate"
+  },
+  {
+    "username": "demo",
+    "password": "demo",
+    "name": "Hackathon Demo",
+    "role": "demo"
+  }
+]

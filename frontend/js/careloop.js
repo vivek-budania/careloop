@@ -1,22 +1,75 @@
 /**
  * CareLoop coverage intake (Dave). Mock data only — no OCR, no live payer.
+ * One step visible at a time.
  */
 const CareLoop = {
+  step: 1,
+  totalSteps: 6,
+  payersLoaded: false,
+
   init() {
     this.bind();
-    this.loadPayers();
+    this.showStep(1);
   },
 
   bind() {
     document.getElementById('cl-btn-save').addEventListener('click', () => this.saveIdentity());
     document.getElementById('cl-btn-scan').addEventListener('click', () => this.scanFixture());
-    document.getElementById('cl-btn-skip-review').addEventListener('click', () => {
-      App.notify('Review skipped. You can still confirm coverage.', 'info');
-    });
-    document.getElementById('cl-btn-apply-review').addEventListener('click', () => this.saveIdentity());
     document.getElementById('cl-btn-confirm').addEventListener('click', () => this.confirmCoverage());
     document.getElementById('cl-btn-intake').addEventListener('click', () => this.saveIntakeAndGuess());
     document.getElementById('cl-btn-network').addEventListener('click', () => this.findClinicians());
+    document.getElementById('cl-btn-back').addEventListener('click', () => this.back());
+    document.getElementById('cl-btn-next').addEventListener('click', () => this.next());
+  },
+
+  showStep(n) {
+    this.step = n;
+    document.querySelectorAll('.cl-step').forEach((el) => {
+      el.hidden = Number(el.dataset.step) !== n;
+    });
+    document.getElementById('cl-step-label').textContent = `Step ${n} of ${this.totalSteps}`;
+    document.getElementById('cl-btn-back').disabled = n === 1;
+    document.getElementById('cl-btn-next').textContent = n === this.totalSteps ? 'Done' : 'Continue';
+    if (n === 2) this.renderReview();
+  },
+
+  back() {
+    if (this.step > 1) this.showStep(this.step - 1);
+  },
+
+  async next() {
+    try {
+      if (this.step === 1) {
+        const ok = await this.saveIdentity();
+        if (!ok) return;
+        this.showStep(2);
+        return;
+      }
+      if (this.step === 2) {
+        this.showStep(3);
+        return;
+      }
+      if (this.step === 3) {
+        const ok = await this.confirmCoverage();
+        if (!ok) return;
+        this.showStep(4);
+        return;
+      }
+      if (this.step === 4) {
+        const ok = await this.saveIntakeAndGuess();
+        if (!ok) return;
+        this.showStep(5);
+        return;
+      }
+      if (this.step === 5) {
+        this.showStep(6);
+        this.findClinicians();
+        return;
+      }
+      App.notify('Intake complete. Choose a clinician when you are ready.', 'success');
+    } catch (err) {
+      App.notify(err.message, 'error');
+    }
   },
 
   fileNote(inputId, prefix) {
@@ -55,7 +108,20 @@ const CareLoop = {
     if (profile.zip) document.getElementById('cl-network-zip').value = profile.zip;
   },
 
+  renderReview() {
+    const box = document.getElementById('cl-review-summary');
+    const p = this.identityPayload();
+    box.innerHTML = `
+      <p><strong>Payer:</strong> ${App.escapeHTML(p.payer_name || '—')}</p>
+      <p><strong>Member:</strong> ${App.escapeHTML(p.member_name || '—')}
+        · <strong>ID:</strong> ${App.escapeHTML(p.member_id || '—')}</p>
+      <p><strong>Group:</strong> ${App.escapeHTML(p.group_number || '—')}
+        · <strong>ZIP:</strong> ${App.escapeHTML(p.zip || '—')}</p>
+    `;
+  },
+
   async loadPayers() {
+    if (this.payersLoaded) return;
     try {
       const payers = await API.listPayers();
       const select = document.getElementById('cl-payer');
@@ -65,6 +131,7 @@ const CareLoop = {
         opt.textContent = `${p.name} (${p.plan_type})`;
         select.appendChild(opt);
       });
+      this.payersLoaded = true;
     } catch (err) {
       App.notify(err.message, 'error');
     }
@@ -73,7 +140,7 @@ const CareLoop = {
   async saveIdentity() {
     if (!this.payerName()) {
       App.notify('Pick an insurance company first.', 'error');
-      return;
+      return false;
     }
     try {
       const snap = await API.saveCoverage(this.identityPayload());
@@ -81,8 +148,10 @@ const CareLoop = {
       document.getElementById('cl-identity-status').textContent =
         `Saved ${snap.profile.payer_name} member ${snap.profile.member_id || '(none)'}.`;
       App.notify('Identity saved (mock).', 'success');
+      return true;
     } catch (err) {
       App.notify(err.message, 'error');
+      return false;
     }
   },
 
@@ -125,7 +194,7 @@ const CareLoop = {
   async confirmCoverage() {
     if (!this.payerName()) {
       App.notify('Pick an insurance company first.', 'error');
-      return;
+      return false;
     }
     try {
       await API.saveCoverage(this.identityPayload());
@@ -135,8 +204,10 @@ const CareLoop = {
       });
       this.renderEligibility(snap.eligibility);
       App.notify(`Coverage ${snap.eligibility.status} (mock).`, 'success');
+      return true;
     } catch (err) {
       App.notify(err.message, 'error');
+      return false;
     }
   },
 
@@ -173,8 +244,10 @@ const CareLoop = {
       });
       this.renderGuess(snap.visit_cost_estimate);
       App.notify('Visit/cost guess ready (estimate only).', 'success');
+      return true;
     } catch (err) {
       App.notify(err.message, 'error');
+      return false;
     }
   },
 

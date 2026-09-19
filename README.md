@@ -48,7 +48,7 @@ See [`plan.md`](plan.md) for inherited A–F mapping.
 
 | Owner | Builds |
 |--------|--------|
-| **Dave** | Payer **dropdown** (required) + optional typed card fields / card scan / SBC-EOB → mock coverage confirmation; symptoms + optional prior-visit PDF; visit/cost **guess**; in-network clinicians by ZIP; Coverage facts for history |
+| **Dave** | Payer **dropdown** (required) + optional typed card fields / card scan / SBC-EOB → mock coverage confirmation; symptoms + optional prior-visit PDF; visit/cost **guess**; in-network clinicians by ZIP; Coverage facts for history. **Mock login** + **one-step wizard**. |
 | **Sreekar** | First visit → transcribe/SOAP/Plan → orders, mock payer + PA + step-therapy denial + policy-to-evidence + appeal (DenialShield HITL/watermark), meds/adherence/refill, claims/EOB light, follow-up; clinical/admin **history fact capture** |
 | **Vivek** | Patient-facing CareLoop workflow (basic) + SQLite/in-memory **thread** as app shell + unified timeline + **history share/export**; **Dribbble-informed polish later** |
 

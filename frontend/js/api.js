@@ -5,23 +5,46 @@
 
 const API = {
   BASE_URL: '',  // Same origin — served by FastAPI
+  TOKEN_KEY: 'careloop_token',
+
+  getToken() {
+    return localStorage.getItem(this.TOKEN_KEY) || '';
+  },
+
+  setToken(token) {
+    if (token) localStorage.setItem(this.TOKEN_KEY, token);
+    else localStorage.removeItem(this.TOKEN_KEY);
+  },
 
   /**
    * Generic fetch wrapper with error handling.
    */
   async request(endpoint, options = {}) {
     const url = `${this.BASE_URL}${endpoint}`;
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const token = this.getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
     const config = {
-      headers: { 'Content-Type': 'application/json' },
       ...options,
+      headers,
     };
 
     try {
       const response = await fetch(url, config);
 
+      if (response.status === 401 && !endpoint.includes('/login')) {
+        this.setToken('');
+        if (window.App && typeof App.showLogin === 'function') {
+          App.showLogin();
+        }
+      }
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+        const detail = error.detail;
+        const message = Array.isArray(detail) ? detail.map((d) => d.msg || d).join('; ') : (detail || `HTTP ${response.status}`);
+        throw new Error(message);
       }
 
       return await response.json();
@@ -125,5 +148,21 @@ const API = {
     if (specialty) params.set('specialty', specialty);
     if (zip) params.set('zip', zip);
     return this.get(`/api/careloop/network?${params.toString()}`);
+  },
+
+  listDemoAccounts() {
+    return this.get('/api/careloop/auth/accounts');
+  },
+
+  login(username, password) {
+    return this.post('/api/careloop/login', { username, password });
+  },
+
+  logout() {
+    return this.post('/api/careloop/logout', {});
+  },
+
+  me() {
+    return this.get('/api/careloop/me');
   },
 };

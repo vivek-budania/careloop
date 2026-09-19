@@ -126,6 +126,21 @@ Manual entry is first-class. Photo/PDF is optional enrichment, not the only path
 
 Do **not** reimplement PA letters or let the model approve coverage. Cost figures are **estimates**, never a determination.
 
+### Login, wizard, and the old tabs
+
+CareLoop intake is **one step at a time** (identity → review → coverage → symptoms → cost guess → clinicians). The whole app shell is behind **mock login** (`POST /api/careloop/login`). Password for every demo account is `demo`.
+
+| Username | Role | Tabs they see |
+|----------|------|----------------|
+| `maya` | patient | CareLoop only |
+| `priya` | clinician | Provider + CareLoop |
+| `advocate` | advocate | Patient Advocate |
+| `demo` | demo | all three (judges) |
+
+**Why Provider and Patient Advocate still exist:** they are **DenialShield**, shipped before CareLoop. Provider drafts PA packets (ICD/CPT, risk, letter). Patient Advocate parses denials and drafts appeal/demand letters. They stay because Sreekar’s authorization seed still lives there. They are **not** the CareLoop patient journey. Role-based nav is how we keep them without dumping every tool on a patient. Vivek can later restyle CareLoop; do not fold PA letter forms into Dave’s wizard.
+
+This is **not** production auth (no HIPAA, plaintext demo passwords, in-memory sessions).
+
 ### Scope
 
 - **Insurance identity (required + optional):** dropdown of mocked payers is the only required field. Optional input boxes for member ID, group, plan type, subscriber name, DOB, ZIP. Optional card image and supporting insurance PDFs (SBC, EOB, benefits summary) for accuracy.

@@ -13,10 +13,10 @@ import json
 import os
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from backend.llm import generate, generate_json
@@ -29,6 +29,7 @@ from backend.prompts import (
 from backend.risk_engine import calculate_risk_score
 from backend.config import NATIONAL_APPEAL_STATS
 from backend.careloop import coverage as careloop_coverage
+from backend.careloop import auth as careloop_auth
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -130,6 +131,11 @@ class CoverageIntakeRequest(BaseModel):
 class CoverageVisitGuessRequest(BaseModel):
     symptoms: str = ""
     prior_visit_note: str = ""
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 # ---------------------------------------------------------------------------
 # API Endpoints
@@ -311,28 +317,78 @@ Please draft a complete, professional demand letter requesting all internal reco
 
 
 # ---------------------------------------------------------------------------
+# CareLoop auth (mock login — not production)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/careloop/auth/accounts")
+def careloop_auth_accounts():
+    """Demo usernames/roles for the login screen. Passwords are not returned."""
+    with open(os.path.join(DATA_DIR, "mock_users.json"), "r") as f:
+        users = json.load(f)
+    return [{"username": u["username"], "name": u["name"], "role": u["role"]} for u in users]
+
+
+@app.post("/api/careloop/login")
+def careloop_login(req: LoginRequest):
+    try:
+        result = careloop_auth.login(req.username, req.password)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    response = JSONResponse(result)
+    response.set_cookie(
+        "careloop_token",
+        result["token"],
+        httponly=False,
+        samesite="lax",
+        max_age=60 * 60 * 12,
+    )
+    return response
+
+
+@app.post("/api/careloop/logout")
+def careloop_logout(request: Request, authorization: Optional[str] = Header(default=None)):
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get("careloop_token")
+    careloop_auth.logout(token)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("careloop_token")
+    return response
+
+
+@app.get("/api/careloop/me")
+def careloop_me(user: dict = Depends(careloop_auth.require_user)):
+    return user
+
+
+# ---------------------------------------------------------------------------
 # CareLoop coverage (Dave) — mock identity / eligibility / visit guess / network
 # ---------------------------------------------------------------------------
 
 @app.get("/api/careloop/payers")
-def careloop_payers():
+def careloop_payers(_user: dict = Depends(careloop_auth.require_user)):
     """Dropdown list of mocked insurance companies."""
     return careloop_coverage.list_payers()
 
 
 @app.get("/api/careloop/coverage")
-def careloop_get_coverage():
+def careloop_get_coverage(_user: dict = Depends(careloop_auth.require_user)):
     """Current in-memory coverage snapshot for this demo process."""
     return careloop_coverage.snapshot()
 
 
 @app.post("/api/careloop/coverage/reset")
-def careloop_reset_coverage():
+def careloop_reset_coverage(_user: dict = Depends(careloop_auth.require_user)):
     return careloop_coverage.reset()
 
 
 @app.post("/api/careloop/coverage")
-def careloop_save_coverage(req: CoverageProfileRequest):
+def careloop_save_coverage(
+    req: CoverageProfileRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
     try:
         return careloop_coverage.save_profile(
             payer_name=req.payer_name,
@@ -349,7 +405,10 @@ def careloop_save_coverage(req: CoverageProfileRequest):
 
 
 @app.post("/api/careloop/coverage/scan")
-def careloop_scan_coverage(req: CoverageScanRequest):
+def careloop_scan_coverage(
+    req: CoverageScanRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
     try:
         return careloop_coverage.scan_card(
             payer_name=req.payer_name,
@@ -361,7 +420,10 @@ def careloop_scan_coverage(req: CoverageScanRequest):
 
 
 @app.post("/api/careloop/coverage/confirm")
-def careloop_confirm_coverage(req: CoverageConfirmRequest):
+def careloop_confirm_coverage(
+    req: CoverageConfirmRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
     try:
         return careloop_coverage.confirm_coverage(
             payer_name=req.payer_name,
@@ -372,7 +434,10 @@ def careloop_confirm_coverage(req: CoverageConfirmRequest):
 
 
 @app.post("/api/careloop/coverage/intake")
-def careloop_coverage_intake(req: CoverageIntakeRequest):
+def careloop_coverage_intake(
+    req: CoverageIntakeRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
     return careloop_coverage.save_intake(
         symptoms=req.symptoms,
         prior_visit_note=req.prior_visit_note,
@@ -382,7 +447,10 @@ def careloop_coverage_intake(req: CoverageIntakeRequest):
 
 
 @app.post("/api/careloop/coverage/visit-guess")
-def careloop_visit_guess(req: CoverageVisitGuessRequest):
+def careloop_visit_guess(
+    req: CoverageVisitGuessRequest,
+    _user: dict = Depends(careloop_auth.require_user),
+):
     try:
         return careloop_coverage.visit_guess(
             symptoms=req.symptoms,
@@ -393,7 +461,11 @@ def careloop_visit_guess(req: CoverageVisitGuessRequest):
 
 
 @app.get("/api/careloop/network")
-def careloop_network(specialty: str = "pcp", zip: str = ""):
+def careloop_network(
+    specialty: str = "pcp",
+    zip: str = "",
+    _user: dict = Depends(careloop_auth.require_user),
+):
     return careloop_coverage.search_network(specialty=specialty, zip_code=zip)
 
 

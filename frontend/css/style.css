@@ -1280,3 +1280,25 @@ a:hover { color: var(--accent-blue); }
 .coverage-result li {
   margin-bottom: var(--space-sm);
 }
+
+.login-screen {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  margin: 48px auto;
+  padding: var(--space-md);
+}
+
+.login-card {
+  width: 100%;
+}
+
+.cl-pager {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+[hidden] {
+  display: none !important;
+}
