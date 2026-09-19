@@ -73,6 +73,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 .
 ├── AGENTS.md               # Dummy logins + what the running app is (for agents)
 ├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
+├── workflow.md             # Patient-facing screen flow (teammate map; pairs with frontend/mockups/)
 ├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
 ├── backend/
 │   ├── main.py             # All routes; mounts static; serves index.html
@@ -136,6 +137,8 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
 Open **http://localhost:8080**
+
+Patient-facing **visual mockups** (not the live product): **http://localhost:8080/mockups/**. Text walkthrough of the same screens: **[`workflow.md`](workflow.md)**.
 
 Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require Gemini.
 
