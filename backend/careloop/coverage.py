@@ -19,6 +19,8 @@ from typing import Any, Optional
 
 from backend.careloop import extract as careloop_extract
 from backend.careloop import stedi as careloop_stedi
+from backend.llm import generate_json
+from backend.prompts import COST_ESTIMATE_SYSTEM_PROMPT
 from backend.risk_engine import calculate_risk_score
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -802,24 +804,89 @@ def _office_copay(eligibility: dict, specialty_code: str = "") -> tuple[float, s
     return float(copay), f"in-network PCP copay ${copay}"
 
 
+def _grok_visit_price_estimate(
+    candidates: list[dict],
+    *,
+    zip_code: str,
+    payer_name: str = "",
+    plan_type: str = "",
+    network_name: str = "",
+    symptoms: str = "",
+    prior_visit_note: str = "",
+) -> dict[str, tuple[float, float]]:
+    """Ask Grok for a realistic allowed-charge range per CPT code, for this ZIP/region.
+
+    Returns {} on any failure (no XAI_API_KEY, request error, bad/partial JSON) so
+    callers fall back to the static fee schedule. Grok never computes what the patient
+    owes — only the typical billed/allowed charge; copay/deductible/coinsurance math
+    stays deterministic in Python from the patient's real plan data (see `_line_cost`).
+    """
+    if not candidates or not zip_code:
+        return {}
+
+    services_blob = "\n".join(
+        f"- {c['code']}: {c['description']} (setting: {c['setting']})" for c in candidates
+    )
+    user_message = (
+        f"Patient ZIP code: {zip_code}\n"
+        f"Insurance payer: {payer_name or 'unknown'} "
+        f"({plan_type or 'unknown plan type'}, network: {network_name or 'unknown'})\n"
+        f"Visit reason (context only — do not diagnose): {symptoms or 'not provided'}\n"
+        f"Prior visit note (context only): {prior_visit_note or 'none'}\n\n"
+        f"Services needing a typical allowed-charge estimate for this ZIP code:\n{services_blob}"
+    )
+
+    try:
+        raw = generate_json(COST_ESTIMATE_SYSTEM_PROMPT, user_message)
+        payload = json.loads(raw)
+    except Exception:
+        return {}
+
+    wanted = {c["code"] for c in candidates}
+    out: dict[str, tuple[float, float]] = {}
+    for row in (payload.get("visit_prices") or []) if isinstance(payload, dict) else []:
+        if not isinstance(row, dict):
+            continue
+        code = str(row.get("code") or "").strip()
+        if code not in wanted:
+            continue
+        try:
+            low = float(row["allowed_low"])
+            high = float(row["allowed_high"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if low < 0 or high < 0:
+            continue
+        if high < low:
+            low, high = high, low
+        out[code] = (round(low, 2), round(high, 2))
+    return out
+
+
 def _line_cost(
     code: str,
     eligibility: dict,
     setting: str,
     *,
     specialty_code: str = "",
+    price_range: Optional[tuple[float, float]] = None,
 ) -> dict:
+    """Price one visit service. `price_range` (allowed_low, allowed_high) overrides the
+    static fee-schedule amount, e.g. with a Grok region estimate — the copay/deductible/
+    coinsurance math below always stays deterministic from the patient's real plan data.
+    """
     fee = _fee_schedule().get(code)
     if not fee:
         raise ValueError("Could not estimate a price for that visit service.")
-    allowed = fee["allowed"]
+    allowed_low, allowed_high = price_range if price_range else (fee["allowed"], fee["allowed"])
+    fee = {**fee, "allowed": round((allowed_low + allowed_high) / 2, 2)}
     status = (eligibility or {}).get("status")
     if status != "active":
         return {
             **fee,
             "kind": "visit",
-            "patient_owes_low": allowed,
-            "patient_owes_high": allowed,
+            "patient_owes_low": allowed_low,
+            "patient_owes_high": allowed_high,
             "priced": True,
             "basis": "this plan looks inactive — showing the full amount",
         }
@@ -838,23 +905,27 @@ def _line_cost(
     # Labs / imaging: apply remaining deductible then coinsurance on the rest.
     deductible_left = eligibility.get("deductible_remaining") or 0
     coins = (eligibility.get("coinsurance_pct") or 0) / 100.0
-    if deductible_left >= allowed:
-        owed = allowed
-        basis = f"applies to deductible (remaining ${deductible_left})"
-    else:
+
+    def _owed_for(allowed: float) -> tuple[float, str]:
+        if deductible_left >= allowed:
+            return allowed, f"applies to deductible (remaining ${deductible_left})"
         after_deduct = allowed - deductible_left
         owed = round(deductible_left + after_deduct * coins, 2)
         basis = (
             f"deductible remaining ${deductible_left} then "
             f"{int((eligibility.get('coinsurance_pct') or 0))}% coinsurance"
         )
+        return owed, basis
+
+    owed_low, basis_low = _owed_for(allowed_low)
+    owed_high, basis_high = _owed_for(allowed_high)
     return {
         **fee,
         "kind": "visit",
-        "patient_owes_low": owed,
-        "patient_owes_high": owed,
+        "patient_owes_low": min(owed_low, owed_high),
+        "patient_owes_high": max(owed_low, owed_high),
         "priced": True,
-        "basis": basis,
+        "basis": basis_high if allowed_high != allowed_low else basis_low,
     }
 
 
@@ -1017,10 +1088,37 @@ def visit_guess(
         specialty_code=specialty_code,
     )
     urgent = _has_word(blob, ("chest", "shortness", "emergency", "urgent"))
+
+    profile = state.get("profile") or {}
+    zip_code = (profile.get("zip") or "").strip()
+    fee_sched = _fee_schedule()
+    price_overrides: dict[str, tuple[float, float]] = {}
+    if codes:
+        candidates = [
+            {"code": code, "description": fee_sched[code]["description"], "setting": setting}
+            for code, setting in codes
+            if code in fee_sched
+        ]
+        price_overrides = _grok_visit_price_estimate(
+            candidates,
+            zip_code=zip_code,
+            payer_name=profile.get("payer_name") or "",
+            plan_type=eligibility.get("plan_type") or "",
+            network_name=eligibility.get("network_name") or "",
+            symptoms=symptoms,
+            prior_visit_note=prior_text,
+        )
     visit_lines = [
-        _line_cost(code, eligibility, setting, specialty_code=specialty_code)
+        _line_cost(
+            code,
+            eligibility,
+            setting,
+            specialty_code=specialty_code,
+            price_range=price_overrides.get(code),
+        )
         for code, setting in codes
     ]
+    priced_via_grok = bool(price_overrides)
 
     medicine_lines = estimate_medicines(medicines, eligibility)
 
@@ -1035,7 +1133,13 @@ def visit_guess(
         "is_guess": True,
         "is_estimate": True,
         "from_transcript": bool(from_transcript),
-        "disclaimer": "Estimate based on your saved plan — not a bill.",
+        "disclaimer": (
+            f"Estimate based on your saved plan and typical charges near {zip_code} — not a bill."
+            if priced_via_grok and zip_code
+            else "Estimate based on your saved plan — not a bill."
+        ),
+        "pricing_source": "grok" if priced_via_grok else "fixture",
+        "zip_code": zip_code,
         "likely_visits": visit_lines,
         "medicines": medicine_lines,
         "visit_owes_low": visit_low,
