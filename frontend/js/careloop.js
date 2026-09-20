@@ -3,6 +3,61 @@
  * Journey / meds / history stay in-browser until the longitudinal store lands.
  * Cost and network numbers come from /api/careloop/*, not hardcoded money.
  */
+const patientSummaryCopy = (value) => {
+  const raw = String(value || '').trim();
+  const verification = [];
+  let text = raw.replace(/\[NEEDS VERIFICATION\]\s*([^.!?]+?)([.!?]|$)/gi, (_match, detail) => {
+    const cleaned = String(detail || '').trim().replace(/[.!?]+$/, '');
+    if (cleaned) verification.push(cleaned);
+    return '';
+  });
+  text = text.replace(/([^.!?]+?)\s*\[NEEDS VERIFICATION\]\s*([.!?]|$)/gi, (_match, statement, punctuation) => {
+    const cleaned = String(statement || '').trim();
+    if (cleaned) verification.push(cleaned);
+    return `${statement}${punctuation}`;
+  });
+  text = text.replace(/\[NEEDS VERIFICATION\]/gi, () => {
+    verification.push('the related detail in this section');
+    return '';
+  });
+
+  const protectedTerms = [];
+  const protect = (pattern) => {
+    text = text.replace(pattern, (match) => {
+      const token = `__CARELOOP_TERM_${protectedTerms.length}__`;
+      protectedTerms.push(match);
+      return token;
+    });
+  };
+  protect(/\bblood pressure \(BP\)/gi);
+  protect(/\bA1c blood sugar test \(HbA1c\)/gi);
+  protect(/\banti-inflammatory medicine \(NSAID\)/gi);
+  protect(/\bMRI scan\b/gi);
+
+  text = text
+    .replace(/\b(\d{1,3})F\s+with\b/g, '$1-year-old woman with')
+    .replace(/\bOTC\b/gi, 'over-the-counter')
+    .replace(/\b(\d+)\s+PT\s+sessions?\b/g, '$1 physical therapy sessions')
+    .replace(/\bPT\s+sessions?\b/g, 'physical therapy sessions')
+    .replace(/\b(\d+)\s+weeks?\s+of\s+PT\b/g, '$1 weeks of physical therapy')
+    .replace(/\bfailed\s+PT\b/gi, 'failed physical therapy')
+    .replace(/\bPA\s+(likely|required|may be required)\b/gi, 'prior authorization (approval from your insurance plan) $1')
+    .replace(/\bafter the PA\b/gi, 'after the prior authorization')
+    .replace(/\bBID\b/g, 'twice a day')
+    .replace(/\bBP\b/g, 'blood pressure (BP)')
+    .replace(/\bHbA1c\b/g, 'A1c blood sugar test (HbA1c)')
+    .replace(/\bMRI\b(?!\s+scan\b)/g, 'MRI scan')
+    .replace(/\blumbar radiculopathy\b/gi, (match, offset, copy) => (
+      /^\s+suspected\b/i.test(copy.slice(offset + match.length))
+        ? match
+        : `${match} (irritation of a nerve in the lower back)`
+    ))
+    .replace(/\blumbar radiculopathy suspected\b/gi, 'lumbar radiculopathy is suspected (irritation of a nerve in the lower back)');
+  text = text.replace(/__CARELOOP_TERM_(\d+)__/g, (_match, index) => protectedTerms[Number(index)] || '');
+  text = text.replace(/\s+([.,;:!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  return { text, verification };
+};
+
 const CareLoop = {
   THREAD_KEY: 'careloop-patient-thread-v2',
   COVERAGE_KEY: 'careloop-coverage-v1',
@@ -2354,7 +2409,6 @@ const CareLoop = {
   },
 
   soapBody() {
-    const j = this.thread.journey || {};
     const soap = (this.encounter && this.encounter.soap) || {};
     const source = (this.encounter && this.encounter.source) || 'seeded';
     const live = this.liveTranscript();
@@ -2378,15 +2432,22 @@ const CareLoop = {
       plan_summary: demo ? 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.' : '',
     };
     const rows = [
-      ['S', 'What you shared', soap.subjective || fallback.subjective || 'Nothing could be pulled from this transcript yet.'],
-      ['O', 'What’s on file', soap.objective || fallback.objective || 'No objective details were extracted from this transcript.'],
-      ['A', 'What to review', soap.assessment || fallback.assessment || 'No assessment could be drafted from this transcript yet.'],
-      ['P', 'Suggested next steps', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
+      ['What you told us', soap.subjective || fallback.subjective || 'Nothing could be pulled from this transcript yet.'],
+      ['What your care team knows', soap.objective || fallback.objective || 'No visit details could be pulled from this transcript yet.'],
+      ['What this could mean', soap.assessment || fallback.assessment || 'No clinician assessment could be drafted from this transcript yet.'],
+      ['What happens next', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
     ];
+    const sections = rows.map(([title, copy]) => {
+      const formatted = patientSummaryCopy(copy);
+      const verification = formatted.verification.map((detail) => `<div class="verification-callout"><strong>Your care team still needs to confirm</strong><span>${this.esc(detail)}.</span></div>`).join('');
+      return `<section class="patient-summary-section"><h3>${title}</h3><p>${this.esc(formatted.text)}</p>${verification}</section>`;
+    }).join('');
+    const clinicianReviewed = Boolean(this.encounter && this.encounter.clinician_reviewed);
+    const reviewStatus = clinicianReviewed ? 'Clinician review recorded' : 'Awaiting clinician review';
     const transcriptActions = this.transcriptText()
       ? `<div class="mt">${this.btn(`${this.icon('download')} Download full transcript (PDF)`, 'export-transcript-pdf', 'secondary')}</div>`
       : '';
-    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}${transcriptActions}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Mark this summary as reviewed.</label>`;
+    return `<h2>Your visit, in plain language.</h2><p>${intro}</p><div class="patient-summary-status" role="status"><strong>${reviewStatus}</strong><span>This is a draft for information only. Your care team must review it before it is used for care or orders.</span></div>${sumBlock}<div class="patient-summary">${sections}</div>${transcriptActions}`;
   },
 
   async loadScribeFixture() {
@@ -2867,18 +2928,6 @@ const CareLoop = {
     }
   },
 
-  async approveScribeEncounter(reviewed) {
-    this.saveThread({ journey: { ...this.thread.journey, reviewed } });
-    if (!reviewed || !this.encounter) return;
-    try {
-      const result = await API.approveScribe(this.encounter);
-      this.encounter = result.encounter || this.encounter;
-      this.orders = result.orders || [];
-    } catch (err) {
-      this.toast(err.message);
-    }
-  },
-
   medicinesForCostGuess() {
     const plan = (this.encounter && this.encounter.plan) || [];
     const fromPlan = plan
@@ -3185,12 +3234,6 @@ const CareLoop = {
         });
       });
     });
-    const review = document.getElementById('reviewed');
-    if (review) {
-      review.addEventListener('change', (e) => {
-        this.approveScribeEncounter(e.target.checked);
-      });
-    }
     this.bindVisitAudio();
     const labForm = document.getElementById('lab-form');
     if (labForm) {

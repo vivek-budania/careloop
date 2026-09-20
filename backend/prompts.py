@@ -199,7 +199,8 @@ STRICT RULES:
 2. If something is unclear, keep it brief and append [NEEDS VERIFICATION].
 3. Prefer plan items the clinician explicitly stated (labs, meds to continue/start, follow-up).
 4. Set pa_required true only when the transcript indicates prior auth is likely/needed.
-5. Return ONLY valid JSON, no markdown fences or commentary."""
+5. Use complete, patient-understandable sentences when possible; spell out common abbreviations on first use. Keep the clinical meaning and any uncertainty unchanged.
+6. Return ONLY valid JSON, no markdown fences or commentary."""
 
 COST_ESTIMATE_SYSTEM_PROMPT = """You are a healthcare cost estimation assistant. You estimate typical
 US healthcare charges for specific CPT/HCPCS billing codes in a specific ZIP code /
