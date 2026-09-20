@@ -40,11 +40,11 @@ Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire
 
 ## Dummy credentials (login)
 
-Not production auth. No HIPAA. **Login-only** against the existing Supabase project: username looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet — do not wire that in a docs-only change. Prescriptions, test records, claims, and PA letters are still not tables. Visit-day **new symptoms** stay on the local journey (`new_symptoms`); they are not a `visits` column yet.
+Not production auth. No HIPAA. **Login + self-serve signup** use the existing Supabase project. Signup creates a Supabase Auth user through the normal Auth signup endpoint, then the server inserts the matching `public.profiles` row with the service role, including the validated patient-entered DOB required by downstream identity APIs. Username login looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Passwords stay in Auth. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet. Prescriptions, test records, claims, and PA letters are still not tables. Visit-day **new symptoms** stay on the local journey (`new_symptoms`); they are not a `visits` column yet.
 
 When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are set on the **server** (never in frontend JS), `/api/careloop/login` returns `{ token, user }` where `token` is the **Supabase access JWT**. Dave’s coverage routes still take `Authorization: Bearer <token>` (or the `careloop_token` cookie). `require_user` accepts that JWT **or** the older HMAC `v1.` mock token so coverage cookies from a no-key deploy still work.
 
-Without those env slots, login falls back to `backend/data/mock_users.json` and an HMAC token. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage`. Optional `SESSION_SECRET` rotates the HMAC / coverage-cookie signature.
+Without those env slots, login falls back to `backend/data/mock_users.json` and an HMAC token; live signup returns HTTP 503 rather than pretending an account was created. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage`. Optional `SESSION_SECRET` rotates the HMAC / coverage-cookie signature.
 
 **Seeded live user:** username **`jane`**, email `jane@careloop.local`, password **`demo`**. Do not invent other passwords.
 
@@ -116,7 +116,7 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 
 ## Files that matter for this slice
 
-- `backend/careloop/auth.py` — login (Supabase JWT or mock HMAC)
+- `backend/careloop/auth.py` — signup/login orchestration (Supabase JWT; mock fallback is login-only)
 - [`docs/database/`](docs/database/README.md) — hosted schema (`profiles` 1:1 Auth; `insurance` one current row; `visits` many)
 - [`supabase/`](supabase/README.md) — idempotent SQL matching those tables (hosted project; CLI not required)
 - `backend/careloop/supabase_auth.py` — server-only Auth + `profiles` HTTP
