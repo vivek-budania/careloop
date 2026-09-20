@@ -127,6 +127,59 @@ def _score_role(text: str) -> tuple[int, int]:
     return doctor, patient
 
 
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
+def _guess_turns_from_text(text: str) -> list[dict[str, str]] | None:
+    """Best-effort DOCTOR/PATIENT split from clinical phrasing alone.
+
+    Only used when Grok's diarization returned a single voice — e.g. one
+    person recording both sides of the conversation solo. This is a text
+    heuristic, not real speaker diarization: it cannot detect who actually
+    spoke, only which sentences read like a doctor's vs a patient's. Returns
+    None when the text doesn't have enough of a doctor/patient cue mix to
+    guess confidently, so callers can fall back to a single undivided block.
+    """
+    sentences = [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
+    if len(sentences) < 2:
+        return None
+
+    scored = [(s, *_score_role(s)) for s in sentences]
+    if not any(d or p for _, d, p in scored):
+        return None
+
+    labeled: list[tuple[str | None, str]] = []
+    last_role: str | None = None
+    for s, d, p in scored:
+        if d == 0 and p == 0:
+            role = last_role
+        else:
+            role = "DOCTOR" if d >= p else "PATIENT"
+        labeled.append((role, s))
+        if role:
+            last_role = role
+
+    first_known = next((r for r, _ in labeled if r), None)
+    if first_known is None:
+        return None
+    filled = []
+    running = first_known
+    for role, s in labeled:
+        running = role or running
+        filled.append((running, s))
+
+    turns: list[dict[str, str]] = []
+    for role, s in filled:
+        if turns and turns[-1]["role"] == role:
+            turns[-1]["text"] += f" {s}"
+        else:
+            turns.append({"role": role, "text": s})
+
+    if len({t["role"] for t in turns}) < 2:
+        return None
+    return turns
+
+
 def _assign_doctor_patient(turns: list[dict[str, Any]]) -> dict[int, str]:
     """Map numeric speaker ids → Doctor / Patient using clinical cues.
 
@@ -222,6 +275,31 @@ def build_diarized_payload(raw: dict[str, Any], plain_text: str) -> dict[str, An
         })
 
     speaker_count = len({t["speaker_id"] for t in turns}) if turns else 0
+
+    if speaker_count < 2:
+        guess = _guess_turns_from_text(plain_text)
+        if guess:
+            return {
+                "text": "\n\n".join(f"{t['role']}: {t['text']}" for t in guess),
+                "text_plain": plain_text,
+                "diarized": False,
+                "guessed": True,
+                "speaker_count": speaker_count,
+                "speakers": [
+                    {"speaker_id": 0, "role": "DOCTOR", "label": "Doctor"},
+                    {"speaker_id": 0, "role": "PATIENT", "label": "Patient"},
+                ],
+                "turns": [
+                    {"speaker_id": 0, "role": t["role"], "label": t["role"].title(), "text": t["text"]}
+                    for t in guess
+                ],
+                "warnings": [
+                    "Only one voice detected, so Doctor/Patient labels below are a "
+                    "text-based guess from clinical phrasing — not real speaker "
+                    "diarization. Record with two people near the mic for accurate "
+                    "speaker separation."
+                ],
+            }
 
     return {
         "text": diarized if speaker_count >= 1 else plain_text,

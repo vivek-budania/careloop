@@ -197,8 +197,8 @@ function bootApp() {
   App._booted = true;
   App.init();
   if (App.page === 'letters') {
-    if (window.Provider) Provider.init();
-    if (window.Patient) Patient.init();
+    if (typeof Provider !== 'undefined') Provider.init();
+    if (typeof Patient !== 'undefined') Patient.init();
   }
 }
 
