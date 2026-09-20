@@ -17,6 +17,7 @@ import re
 from copy import deepcopy
 from typing import Any, Optional
 
+from backend.careloop import directory as careloop_directory
 from backend.careloop import extract as careloop_extract
 from backend.careloop import stedi as careloop_stedi
 from backend.llm import generate_json
@@ -24,6 +25,8 @@ from backend.prompts import COST_ESTIMATE_SYSTEM_PROMPT
 from backend.risk_engine import calculate_risk_score
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+
+EXAMPLE_ZIP = "94110"
 
 ZIP_COORDS = {
     "94110": (37.7484, -122.4156),
@@ -1194,11 +1197,13 @@ def _haversine_miles(a: tuple[float, float], b: tuple[float, float]) -> float:
     return round(2 * r * math.asin(min(1, math.sqrt(h))), 1)
 
 
-def _coords_for_zip(zip_code: str) -> tuple[tuple[float, float], bool]:
+def _coords_for_zip(zip_code: str) -> tuple[tuple[float, float], bool, dict[str, Any]]:
     zip_code = (zip_code or "").strip()
-    if zip_code in ZIP_COORDS:
-        return ZIP_COORDS[zip_code], False
-    return ZIP_COORDS["94110"], True
+    place = careloop_directory.geocode_zip(zip_code, ZIP_COORDS)
+    if place:
+        return (place["lat"], place["lng"]), False, place
+    fallback = ZIP_COORDS[EXAMPLE_ZIP]
+    return fallback, True, {"zip": EXAMPLE_ZIP, "lat": fallback[0], "lng": fallback[1], "city": "", "state": ""}
 
 
 def _clinician_payload(doc: dict, origin: tuple[float, float], payer_name: str) -> dict:
@@ -1222,42 +1227,62 @@ def _clinician_payload(doc: dict, origin: tuple[float, float], payer_name: str) 
 def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     state = _ensure_state()
     profile = state.get("profile") or {}
-    zip_code = zip_code or profile.get("zip") or "94110"
-    origin, zip_fallback = _coords_for_zip(zip_code)
+    zip_code = zip_code or profile.get("zip") or EXAMPLE_ZIP
+    origin, zip_fallback, place = _coords_for_zip(zip_code)
     payer_name = (profile.get("payer_name") or "").strip()
     intake = state.get("intake") or {}
     spec = (specialty or intake.get("suggested_specialty") or "pcp").strip().lower()
+    nearby_radius = careloop_directory.NEARBY_RADIUS_MILES
 
-    results = []
-    for doc in _network():
-        if spec not in ("any", "") and doc.get("specialty") != spec:
-            continue
-        results.append(_clinician_payload(doc, origin, payer_name))
-    results.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
-    nearby_radius = 40
-    nearby = [row for row in results if row["miles"] <= nearby_radius]
-    if not nearby:
-        fallback = [_clinician_payload(doc, origin, payer_name) for doc in _network()]
-        fallback = [row for row in fallback if row["miles"] <= nearby_radius]
-        fallback.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
-        if fallback:
-            results = fallback
-            nearby = fallback
+    live = careloop_directory.search_nearby_clinicians(
+        zip_code=zip_code,
+        specialty=spec,
+        origin=origin,
+        city=str(place.get("city") or ""),
+        state=str(place.get("state") or ""),
+        known_zips=ZIP_COORDS,
+    )
+    nearby_live = [row for row in live if row["miles"] <= nearby_radius]
+    if live:
+        results = live
+        nearby = nearby_live or []
+        source = "live"
+    else:
+        fixture_origin = origin
+        if zip_fallback or zip_code != EXAMPLE_ZIP:
+            fixture_origin = ZIP_COORDS[EXAMPLE_ZIP]
+            zip_fallback = True
+        results = []
+        for doc in _network():
+            if spec not in ("any", "") and doc.get("specialty") != spec:
+                continue
+            results.append(_clinician_payload(doc, fixture_origin, payer_name))
+        results.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
+        nearby = [row for row in results if row["miles"] <= nearby_radius]
+        if not nearby:
+            fallback = [_clinician_payload(doc, fixture_origin, payer_name) for doc in _network()]
+            fallback = [row for row in fallback if row["miles"] <= nearby_radius]
+            fallback.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
+            if fallback:
+                results = fallback
+                nearby = fallback
+        source = "fixture"
+
+    specialty_label = careloop_directory.specialty_label(spec, results)
     payload = {
         "zip": zip_code,
         "specialty": spec,
-        "specialty_label": next(
-            (row["specialty_label"] for row in results if row["specialty"] == spec),
-            "Primary care" if spec == "pcp" else spec.title(),
-        ),
+        "specialty_label": specialty_label,
         "suggested_from_visit": bool(intake.get("suggested_specialty")),
         "zip_fallback_used": zip_fallback,
         "nearby_radius_miles": nearby_radius,
         "nearby_count": len(nearby),
-        "source": "fixture",
+        "source": source,
         "disclaimer": (
-            "Mock directory filtered by visit-reason specialty and distance from this ZIP. "
-            "Not a payer directory or a diagnosis."
+            "Public listings near this ZIP — not your insurer’s directory. "
+            "Confirm network with the office."
+            if source == "live"
+            else "Clinicians sorted by distance from this ZIP."
         ),
         "clinicians": results,
         "nearby": nearby,
