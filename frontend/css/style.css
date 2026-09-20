@@ -5,6 +5,9 @@
 a.link{text-decoration:none;font-weight:600;color:var(--green);display:inline-flex;gap:8px;align-items:center}
 a.link svg{width:15px}
 .cost-total small{font:12px 'DM Sans',sans-serif;color:var(--muted)}
+.cost-subtotal{font:18px var(--serif);margin:8px 0 18px;color:var(--ink)}
+.cost-basis{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;font-weight:400}
+.cost-table .tag{white-space:normal;text-align:left}
 .signup-form{overflow-y:auto;align-items:flex-start}.signup-form form{margin:auto;padding:26px 0}.signup-form .signup-back{margin-bottom:30px}.signup-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}.signup-consent{display:flex;align-items:flex-start;gap:10px;margin:4px 0 18px;color:var(--muted);font-size:11px;line-height:1.55}.signup-consent input{margin:2px 0 0;accent-color:var(--green);flex-shrink:0}.signup-form .btn svg{width:15px}.signup-form .error{margin-top:4px}.signup-form>form>p{font-size:12px;margin-bottom:24px}
 .signup-form input[aria-invalid="true"]{border-color:#b54932;box-shadow:0 0 0 3px #f7e4de}.signup-form .signup-consent input[aria-invalid="true"]{outline:2px solid #b54932;outline-offset:2px;box-shadow:none}
 .signup-success{width:380px;max-width:100%;margin:auto}.signup-success-icon{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--sage);color:var(--green);margin-bottom:28px}.signup-success-icon svg{width:24px;height:24px}.signup-success h2{margin-top:14px}.signup-success>p:not(.fine-print){margin:12px 0 28px}.signup-success strong{color:var(--ink)}

@@ -2460,6 +2460,37 @@ const CareLoop = {
     }
   },
 
+  medicinesForCostGuess() {
+    const plan = (this.encounter && this.encounter.plan) || [];
+    const fromPlan = plan
+      .filter((item) => String(item.type || '').toLowerCase() === 'rx')
+      .map((item) => ({
+        id: item.id || item.plan_item_id,
+        name: this.careName(item.description) || item.description,
+        description: item.description || '',
+        pa_required: Boolean(item.pa_required),
+        code: item.code || null,
+      }));
+    if (fromPlan.length) return fromPlan;
+    return (this.careFromEncounter().prescriptions || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: [item.name, item.notes].filter(Boolean).join(' · '),
+      pa_required: /PA may be required/i.test(item.notes || ''),
+      code: null,
+    }));
+  },
+
+  costMoneyCell(line) {
+    if (!line || line.priced === false || line.patient_owes_low == null) {
+      if (line && line.pa_required) {
+        return `${this.tag('PA may be required', 'peach')} — not priced`;
+      }
+      return this.tag('Not priced', 'gray');
+    }
+    return this.money(line.patient_owes_low);
+  },
+
   claimAcceptanceBlock() {
     const claim = this.claimAcceptance
       || (this.costEstimate && this.costEstimate.claim_acceptance)
@@ -2487,22 +2518,40 @@ const CareLoop = {
       return `<h2>A little visibility into costs.</h2><p>${demo ? 'Loading mock amounts from the selected demo conversation…' : 'Trying to pull cost lines from your transcript…'}</p><div class="notice">${demo ? 'Demo boilerplate only. Guess only — not a bill or a coverage decision.' : 'If this stays empty, the transcript did not have enough service detail. That’s alright for now.'}</div>${claim}`;
     }
     const lines = estimate.likely_visits || [];
-    if (!lines.length) {
+    if (!lines.length && !(estimate.medicines || []).length) {
       return `<h2>A little visibility into costs.</h2><p>${demo ? 'The selected demo did not return priced services.' : 'Nothing billable could be pulled from this transcript yet.'}</p><div class="notice">${this.esc((estimate.warnings && estimate.warnings[0]) || 'No demo boilerplate is shown for a live transcript.')}</div>${claim}`;
     }
-    const rows = lines.map((line) => {
+    const visitRows = lines.map((line) => {
       const allowed = line.allowed;
       const you = line.patient_owes_low;
       const planPays = (allowed != null && you != null) ? Math.max(0, Number(allowed) - Number(you)) : null;
-      return `<tr><td>${this.esc(line.description)} <small>(${this.esc(line.code)})</small><br><small>${this.esc(line.basis || '')}</small></td><td>${this.money(allowed)}</td><td>${this.money(planPays)}</td><td>${this.money(you)}</td></tr>`;
+      return `<tr><td>${this.esc(line.description)} <small>(${this.esc(line.code)})</small><div class="cost-basis">${this.esc(line.basis || '')}</div></td><td>${this.money(allowed)}</td><td>${planPays == null ? '—' : this.money(planPays)}</td><td>${this.money(you)}</td></tr>`;
     }).join('');
-    const addOn = demo
-      ? `<tr><td>Add-on medicine</td><td colspan="3">${this.tag('PA may be required', 'peach')} — not priced as if it were allowed</td></tr>`
-      : '';
+    const meds = estimate.medicines || [];
+    const medRows = meds.length
+      ? meds.map((line) => {
+        const tier = line.tier_label ? `<small>${this.esc(line.tier_label)}</small>` : '';
+        return `<tr><td>${this.esc(line.name || line.description || 'Medicine')} ${tier}<div class="cost-basis">${this.esc(line.basis || '')}</div></td><td>${line.allowed != null ? this.money(line.allowed) : '—'}</td><td>${line.priced ? this.money(0) : '—'}</td><td>${this.costMoneyCell(line)}</td></tr>`;
+      }).join('')
+      : '<tr><td colspan="4"><span style="color:var(--muted)">No medicines on this visit plan yet.</span></td></tr>';
+    const visitLow = estimate.visit_owes_low != null ? estimate.visit_owes_low : estimate.patient_owes_low;
+    const visitHigh = estimate.visit_owes_high != null ? estimate.visit_owes_high : estimate.patient_owes_high;
+    const medLow = estimate.medicine_owes_low || 0;
+    const medHigh = estimate.medicine_owes_high || 0;
+    const unpriced = estimate.medicine_unpriced_count || 0;
+    const totalNote = unpriced
+      ? `estimated you-pay · visit + priced medicines · ${unpriced} medicine${unpriced === 1 ? '' : 's'} not priced`
+      : 'estimated you-pay · visit + medicines';
+    const warnings = (estimate.warnings || [])
+      .map((w) => `<div class="notice">${this.esc(w)}</div>`)
+      .join('');
     const source = demo
-      ? `Sample amounts from the selected demo conversation and your saved plan. An estimate, not a bill or a coverage decision.`
-      : `Amounts inferred from your transcript and your saved plan. An estimate, not a bill or a coverage decision.`;
-    return `<h2>A little visibility into costs.</h2><p>${source}</p><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${rows}${addOn}</tbody></table><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>estimated you-pay · medicine excluded</small></div>${claim}<p>${this.esc(estimate.disclaimer || '')}</p><p>Coverage status: ${this.esc(e?.status || 'unknown')} · ${this.esc(e?.network_name || '')}. Add-on therapy is a PA flag, not a claim.</p>`;
+      ? 'Sample amounts from the selected demo conversation, your saved plan, and medicines on this visit’s plan. An estimate, not a bill or a coverage decision.'
+      : 'Amounts inferred from your transcript, your saved plan, and medicines on this visit’s plan. An estimate, not a bill or a coverage decision.';
+    const visitTable = lines.length
+      ? `<h3 class="mt">Visit</h3><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${visitRows}</tbody></table><div class="cost-subtotal">Visit subtotal ${this.money(visitLow)}${visitHigh !== visitLow ? `–${this.money(visitHigh)}` : ''}</div>`
+      : `<h3 class="mt">Visit</h3><div class="notice">${this.esc((estimate.warnings && estimate.warnings[0]) || 'No visit services priced yet.')}</div>`;
+    return `<h2>A little visibility into costs.</h2><p>${source}</p>${visitTable}<h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${warnings}${claim}<p>${this.esc(estimate.disclaimer || '')}</p><p>Coverage status: ${this.esc(e?.status || 'unknown')} · ${this.esc(e?.network_name || '')}. PA ≠ claim.</p>`;
   },
 
   followups() {
@@ -2858,6 +2907,8 @@ const CareLoop = {
         this.rememberCoverage(await API.guessVisitCost({
           symptoms,
           from_transcript: !demo,
+          medicines: this.medicinesForCostGuess(),
+          specialty: j.suggested_specialty || this.coverageSnap.intake?.suggested_specialty || '',
         }));
         this.costEstimate = this.coverageSnap.visit_cost_estimate;
       } catch (err) {

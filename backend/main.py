@@ -142,6 +142,8 @@ class CoverageIntakeRequest(BaseModel):
 class CoverageVisitGuessRequest(BaseModel):
     symptoms: str = ""
     prior_visit_note: str = ""
+    medicines: list[dict] = []
+    specialty: str = ""
     from_transcript: bool = False
 
 
@@ -591,6 +593,8 @@ def careloop_visit_guess(
             careloop_coverage.visit_guess(
                 symptoms=req.symptoms,
                 prior_visit_note=req.prior_visit_note,
+                medicines=req.medicines,
+                specialty=req.specialty,
                 from_transcript=req.from_transcript,
             ),
             request,
