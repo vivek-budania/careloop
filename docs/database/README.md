@@ -59,7 +59,7 @@ erDiagram
 
 - **`auth.users` 1:1 `profiles`.** `profiles.id` = `auth.users.id`. There is **no** `login` table. Password is Auth-only (never a column on `profiles`).
 - **`insurance`:** many rows allowed; **at most one** `is_current` per user (partial unique index). Returning login hydrates coverage from that row.
-- **`visits`:** many per user. **History → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
+- **`visits`:** many per user. **Past visits → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
 
 ## What is not in the database yet
 
@@ -69,7 +69,7 @@ Do not invent these tables in migrations:
 |---------|----------------------|--------|
 | Prescriptions / doses / refill | `localStorage` in the patient shell (☰ **Prescriptions**) | Stream E later; no table yet |
 | Test records / lab results | Shell + mock test doc | Not a coverage object |
-| New symptoms at check-in | `localStorage` `journey.new_symptoms` | Not a `visits` column yet |
+| New symptoms at check-in | `localStorage` `journey.new_symptoms` + `new_symptoms_log` | Not a `visits` column yet |
 | Open / upcoming visits | `localStorage` `openVisits` | Persist to `visits` only after the journey is completed |
 | Claims / EOB | Insurance screen: Coming soon | Separate from PA |
 | PA / appeal / demand letters | `/letters` + HITL; watermarked drafts | Not stored as rows |

@@ -148,6 +148,10 @@ const API = {
     return this.post('/api/careloop/coverage/visit-guess', data);
   },
 
+  claimAcceptance(data) {
+    return this.post('/api/careloop/coverage/claim-acceptance', data);
+  },
+
   searchNetwork(specialty, zip) {
     const params = new URLSearchParams();
     if (specialty) params.set('specialty', specialty);

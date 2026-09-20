@@ -142,6 +142,17 @@ class CoverageIntakeRequest(BaseModel):
 class CoverageVisitGuessRequest(BaseModel):
     symptoms: str = ""
     prior_visit_note: str = ""
+    from_transcript: bool = False
+
+
+class ClaimAcceptanceRequest(BaseModel):
+    symptoms: str = ""
+    prior_visit_note: str = ""
+    cpt_code: str = ""
+    icd10_code: str = ""
+    has_prior_auth: bool = False
+    has_clinical_notes: bool = True
+    is_emergency: bool = False
 
 
 class ScribeDraftRequest(BaseModel):
@@ -550,11 +561,29 @@ def careloop_visit_guess(
             careloop_coverage.visit_guess(
                 symptoms=req.symptoms,
                 prior_visit_note=req.prior_visit_note,
+                from_transcript=req.from_transcript,
             ),
             request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/careloop/coverage/claim-acceptance")
+def careloop_claim_acceptance(
+    req: ClaimAcceptanceRequest,
+    _user: dict = Depends(require_coverage_user),
+):
+    """DenialShield risk engine inverted as claim-acceptance certainty."""
+    return careloop_coverage.claim_acceptance_estimate(
+        symptoms=req.symptoms,
+        prior_visit_note=req.prior_visit_note,
+        cpt_code=req.cpt_code,
+        icd10_code=req.icd10_code,
+        has_prior_auth=req.has_prior_auth,
+        has_clinical_notes=req.has_clinical_notes,
+        is_emergency=req.is_emergency,
+    )
 
 
 @app.get("/api/careloop/network")

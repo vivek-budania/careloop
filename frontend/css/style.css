@@ -29,3 +29,21 @@ dialog:has(.test-preview){max-width:720px}
 .test-preview{margin:12px 0;max-height:60vh;overflow:auto}
 .test-preview-img{display:block;width:100%;border-radius:8px;background:#fff}
 .test-preview-frame{display:block;width:100%;min-height:420px;border:0;border-radius:8px;background:#fff}
+.empathy{font-size:16px;line-height:1.6;color:var(--ink);margin-bottom:18px}
+.zip-confirm p{font-size:13px;color:var(--ink);margin-top:6px}
+.symptom-booked{font-size:15px;color:var(--ink);margin-top:6px}
+.symptom-empty{font-size:13px;margin:10px 0 6px}
+.symptom-log{margin:8px 0 18px}
+.symptom-log-item{padding:14px 0;border-bottom:1px solid var(--line)}
+.symptom-log-item:last-child{border-bottom:0}
+.symptom-log-item time{display:block;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.symptom-log-item p{font-size:18px;line-height:1.5;color:var(--ink)}
+.symptom-noted{font-size:16px;line-height:1.5;color:var(--ink);margin:8px 0 0}
+#new-symptoms{font-size:18px;line-height:1.5;min-height:130px}
+.acceptance{margin:22px 0;padding:18px;border:1px solid #dce1d2;border-radius:10px;background:#f4f6ee}
+.acceptance-meter{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+.acceptance-meter strong{font:42px var(--serif);color:var(--green)}
+.acceptance-meter small{font-size:12px;color:var(--muted)}
+.acceptance-factors{margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
+.visit-care-item{align-items:flex-start}
+.visit-care-form{margin-top:12px}
