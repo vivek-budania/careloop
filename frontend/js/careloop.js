@@ -1075,6 +1075,11 @@ const CareLoop = {
     } else {
       this.thread = this.loadThread();
       if (!this.thread.visits) this.thread = this.seedThread('returning');
+      if (App.user && App.user.name) {
+        this.thread.patient.name = App.user.name;
+        this.thread.patient.identity_source = 'login';
+        this.saveThread();
+      }
       this.syncPatientName();
       await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       if (!this.coverageOnFile()) {
