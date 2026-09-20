@@ -1161,7 +1161,6 @@ const CareLoop = {
     const session = env.session || {};
     const supabase = env.supabase || session.supabase || {};
     const stedi = env.stedi || {};
-    const gemini = env.gemini || {};
     const xai = env.xai || {};
     return [
       {
@@ -1182,9 +1181,9 @@ const CareLoop = {
       },
       {
         name: 'Letter drafts',
-        tag: gemini.configured ? 'ready' : 'not available',
-        tagType: gemini.configured ? '' : 'peach',
-        detail: gemini.configured
+        tag: xai.configured ? 'ready' : 'not available',
+        tagType: xai.configured ? '' : 'peach',
+        detail: xai.configured
           ? 'Letter drafts can be prepared.'
           : 'Letter drafts are not available on this host yet.',
       },

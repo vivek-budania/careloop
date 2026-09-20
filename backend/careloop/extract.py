@@ -1,4 +1,4 @@
-"""Image readability. xAI vision (XAI_API_KEY) → JSON, Gemini fallback.
+"""Image readability. xAI vision (XAI_API_KEY) → JSON.
 
 No letter watermark. Never invent copays, member IDs, drugs, or results.
 Fixture scan stays in coverage.scan_card for the no-key golden path.
@@ -12,7 +12,7 @@ import os
 import re
 from typing import Any, Optional
 
-from backend.config import GEMINI_API_KEY, XAI_API_KEY
+from backend.config import XAI_API_KEY
 from backend.llm import generate_json
 from backend.prompts import CARD_EXTRACT_PROMPT, DOCUMENT_PARTS_PROMPT
 
@@ -52,12 +52,8 @@ def xai_configured() -> bool:
     return _key_on(os.getenv("XAI_API_KEY") or XAI_API_KEY or "")
 
 
-def gemini_configured() -> bool:
-    return _key_on(os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY or "")
-
-
 def vision_configured() -> bool:
-    return xai_configured() or gemini_configured()
+    return xai_configured()
 
 
 def decode_upload(b64: str, mime: str, filename: str) -> dict:
@@ -213,7 +209,7 @@ def extract_parts(upload: dict) -> dict:
     tests = parsed.get("tests") or []
     insurance = parsed.get("insurance") if isinstance(parsed.get("insurance"), dict) else {}
     return {
-        "source": "xai-vision" if xai_configured() else "gemini-vision",
+        "source": "xai-vision",
         "document_type": _clean_text(parsed.get("document_type")) or "other",
         "title": _clean_text(parsed.get("title")),
         "filename": name,

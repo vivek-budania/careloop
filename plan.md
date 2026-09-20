@@ -151,7 +151,7 @@ This is **not** production auth (no HIPAA, plaintext demo passwords, in-memory s
 - **Pre-visit coverage panel** in the journey (Vivek renders; Dave owns data + APIs).
 - **History fact capture (coverage):** persist Coverage snapshots + intake symptoms/prior-visit notes so the next visit can show “this is the plan we had / these were the estimates.”
 
-### Card/docs → JSON (not married to Gemini vision)
+### Card/docs → JSON (xAI vision)
 
 Use whatever extractor is available; always the same `InsuranceProfile` JSON. Confidence / `[NEEDS VERIFICATION]` on unreadable fields. Never invent a copay that is not on the card or SBC.
 
@@ -161,10 +161,9 @@ Use whatever extractor is available; always the same `InsuranceProfile` JSON. Co
 | **Fixture scan** (`image_note: fixture:front-of-card`) | Deterministic demo | Golden path; no API keys. |
 | **Azure Document Intelligence `prebuilt-healthInsuranceCard.us`** | Best dedicated **US card** model (insurer, member, group, Rx BIN/PCN, printed copays, per-field confidence) | Optional upgrade if someone adds an Azure key. Cards only — not SBCs or visit notes. |
 | **xAI vision (`XAI_API_KEY`)** | Vercel env slot; `POST /api/careloop/extract-image` + Insurance scan | Default live extractor. Pulls a file, returns a JSON summary of printed parts. Same zero-hallucination rule (no letter watermark). |
-| **Gemini `generate_json()` (vision)** | Already in this repo | Fallback if xAI is down or unset. Same JSON shape. |
 | **AWS Textract / generic OCR** | Raw text or key-values; you still map to `InsuranceProfile` | Skip unless we are already on AWS. No US-card schema. |
 
-**Recommendation for this repo:** fixture + manual entry first; xAI vision (`XAI_API_KEY`) when a key is present (one stack for card, SBC, doctor pages, and lab uploads); Gemini as fallback; Azure card model only if we want higher card-field confidence and accept a second vendor.
+**Recommendation for this repo:** fixture + manual entry first; xAI (`XAI_API_KEY`) when a key is present (one stack for letters, card, SBC, doctor pages, and lab uploads); Azure card model only if we want higher card-field confidence and accept a second vendor.
 
 ### Coverage confirmation APIs (step 4a) — can we search, and what do we use?
 
@@ -227,12 +226,12 @@ Same env/run as everyone (one uvicorn process):
 
 ```bash
 cp .env.example .env
-echo "GEMINI_API_KEY=your_key_here" > .env   # free: https://aistudio.google.com/apikey
+echo "XAI_API_KEY=your_key_here" > .env   # already on Vercel; console.x.ai
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open **http://localhost:8080**. Gemini key is **not** required for mocked coverage/card/network (fixture + manual entry). It **is** required for live card/SBC/prior-visit extraction.
+Open **http://localhost:8080**. `XAI_API_KEY` is **not** required for mocked coverage/card/network (fixture + manual entry). It **is** required for live card/SBC/prior-visit extraction.
 
 Isolate by curling coverage endpoints (once added); skip scribe/PA UI.
 
@@ -347,10 +346,10 @@ Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests
 
 ```bash
 cp .env.example .env
-echo "GEMINI_API_KEY=your_key_here" > .env   # free: https://aistudio.google.com/apikey
+echo "XAI_API_KEY=your_key_here" > .env   # already on Vercel; console.x.ai
 ```
 
-Optional Groq fallback (used by `backend/llm.py` if Gemini fails): add `GROQ_API_KEY` to `.env` if you have one. Not required if Gemini works.
+Optional Groq fallback (used by `backend/llm.py` if xAI fails): add `GROQ_API_KEY` to `.env` if you have one. Not required if xAI works.
 
 ### Install and run (serves API + frontend)
 
@@ -378,7 +377,7 @@ curl -s -X POST http://localhost:8080/api/risk-score \
 # National stats (no LLM)
 curl -s http://localhost:8080/api/national-stats
 
-# PA / parse / appeal / demand need GEMINI_API_KEY (500 if missing/placeholder)
+# PA / parse / appeal / demand need XAI_API_KEY (500 if missing/placeholder)
 curl -s -X POST http://localhost:8080/api/generate-pa \
   -H "Content-Type: application/json" \
   -d '{"icd10_code":"E11.9","icd10_description":"Type 2 diabetes mellitus without complications","cpt_code":"J3490","cpt_description":"Unclassified drugs","clinical_context":"On metformin 1000mg BID 12 months; HbA1c 9.1%. Requesting GLP-1.","urgency":"standard","patient_age":54,"patient_sex":"Female"}'
@@ -473,12 +472,12 @@ After the basic workflow is demoable: visual pass inspired by Dribbble (healthca
 
 ```bash
 cp .env.example .env
-echo "GEMINI_API_KEY=your_key_here" > .env   # free: https://aistudio.google.com/apikey
+echo "XAI_API_KEY=your_key_here" > .env   # already on Vercel; console.x.ai
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open **http://localhost:8080**. Gemini is only needed when exercising Sreekar’s letter endpoints from the journey.
+Open **http://localhost:8080**. `XAI_API_KEY` is only needed when exercising Sreekar’s letter endpoints from the journey.
 
 | Stream | How to work in isolation |
 |--------|---------------------------|

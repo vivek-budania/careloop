@@ -11,8 +11,8 @@ Read this before changing the running app. Setup commands also live in [`README.
 | Vivek patient shell (☰ Today / Past visits / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
 | Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
 | Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **this branch** (`confirm` always sends Jane identity) |
-| Demo key slots on Profile (Stedi / Gemini / Groq / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
-| Image → JSON (`XAI_API_KEY`) | **this branch**; cards, doctor pages, lab pages; Gemini fallback |
+| Demo key slots on Profile (Stedi / Groq / xAI / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
+| Image → JSON (`XAI_API_KEY`) | **this branch**; cards, doctor pages, lab pages |
 | Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
 | Sreekar Stream C scribe APIs (fixture / draft / approve / optional Grok STT) | **main (PR #6)**; SOAP step in this shell |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
@@ -68,13 +68,12 @@ Use the returned `token` as `Authorization: Bearer <token>` on `/api/careloop/*`
 
 ```bash
 cp .env.example .env
-# GEMINI_API_KEY is not required for coverage/login
+# XAI_API_KEY is not required for coverage/login
 # Demo key slots (inject at launch; extra keys later the same way):
 #   SUPABASE_URL=… SUPABASE_ANON_KEY=… SUPABASE_SERVICE_ROLE_KEY=…  # login only; never frontend
 #   STEDI_API_KEY=test_… python3 -m uvicorn backend.main:app --port 8080
-#   XAI_API_KEY=…        # image → JSON + visit STT (already on Vercel)
-#   GEMINI_API_KEY=…     # /letters; fallback image JSON
-#   GROQ_API_KEY=…       # optional letter fallback
+#   XAI_API_KEY=…        # letters + image JSON + visit STT (already on Vercel)
+#   GROQ_API_KEY=…       # optional letter fallback if xAI is down
 # Laptop fallback: gitignored .env. Never paste keys in chat/GitHub.
 # Vercel: Project Settings → Environment Variables → same names, then Redeploy.
 pip3 install -r requirements.txt
@@ -83,9 +82,9 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning** or **Start my first visit**.
 
-**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (`XAI_API_KEY`, Gemini fallback) lives on this Insurance flow — not in the hamburger. Without a vision key, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
+**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (`XAI_API_KEY`) lives on this Insurance flow — not in the hamburger. Without a vision key, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
 
-**Where the keys go:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (login), `STEDI_API_KEY`, `XAI_API_KEY` (image JSON + visit STT; already on Vercel), `GEMINI_API_KEY` (/letters; fallback image JSON), and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Never put `service_role` in frontend JS. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
+**Where the keys go:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (login), `STEDI_API_KEY`, `XAI_API_KEY` (letters + image JSON + visit STT; already on Vercel), and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Never put `service_role` in frontend JS. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
 
 **Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub. Fold extra keys into the same Vercel env list as they arrive. Live login needs the three `SUPABASE_*` names.
 
@@ -122,11 +121,11 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 - [`supabase/`](supabase/README.md) — idempotent SQL matching those tables (hosted project; CLI not required)
 - `backend/careloop/supabase_auth.py` — server-only Auth + `profiles` HTTP
 - `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network/specialty suggestion
-- `backend/careloop/extract.py` — xAI vision (`XAI_API_KEY`) then Gemini; `POST /api/careloop/extract-image` returns a printed-parts JSON summary (no watermark)
+- `backend/careloop/extract.py` — xAI vision (`XAI_API_KEY`); `POST /api/careloop/extract-image` returns a printed-parts JSON summary (no watermark)
 - `backend/careloop/stedi.py` — optional sandbox 270/271 (`STEDI_API_KEY` at launch)
 - `backend/careloop/scribe.py` — seeded SOAP/Plan + clinician approve → orders
 - `backend/careloop/stt.py` — optional xAI Grok STT (`XAI_API_KEY`)
-- `backend/config.py` — `demo_env_status()` (Supabase / Stedi / Gemini / Groq / xAI / Vercel; no secret values)
+- `backend/config.py` — `demo_env_status()` (Supabase / Stedi / Groq / xAI / Vercel; no secret values)
 - `.env.example` — documents the same key slots (inject at launch; do not commit secrets)
 - `backend/data/mock_users.json` — HMAC fallback accounts (Jane Doe / `jane`)
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`, `mock_visit_transcript.json`
