@@ -58,7 +58,13 @@ dialog:has(.test-preview){max-width:720px}
 .acceptance-meter small{font-size:12px;color:var(--muted)}
 .acceptance-factors{margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
 .visit-care-item{align-items:flex-start}
-.extract-parts{margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.55}
+.packet-preview-status{margin:0;padding:28px 20px;text-align:center;color:var(--muted);font-size:13px}
+.env-panel{margin-top:8px}
+.env-panel summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--green);list-style:none}
+.env-panel summary::-webkit-details-marker{display:none}
+.env-panel summary:after{content:' ▾';font-size:11px;color:var(--muted)}
+.env-panel[open] summary:after{content:' ▴'}
+.env-panel p{font-size:12px;margin:10px 0 16px}
 .extract-parts strong{color:var(--ink)}
 
 @media(max-width:680px){.topbar-logout span,.profile-mini .logout span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}.topbar-logout,.profile-mini .logout{padding:7px}}

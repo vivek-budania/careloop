@@ -89,10 +89,7 @@ def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
         return {
             "code": "endocrinology",
             "label": "Endocrinology",
-            "reason": (
-                "Visit reason looks like a diabetes follow-up. "
-                "Suggestion only — not a diagnosis."
-            ),
+            "reason": "Visit reason looks like a diabetes follow-up.",
         }
     if _has_word(
         blob,
@@ -110,10 +107,7 @@ def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
         return {
             "code": "dermatology",
             "label": "Dermatology",
-            "reason": (
-                "Visit reason looks like a skin or psoriasis visit. "
-                "Suggestion only — not a diagnosis."
-            ),
+            "reason": "Visit reason looks like a skin or psoriasis visit.",
         }
     if _has_word(
         blob,
@@ -130,10 +124,7 @@ def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
         return {
             "code": "neurology",
             "label": "Neurology",
-            "reason": (
-                "Visit reason looks like headaches or migraine. "
-                "Suggestion only — not a diagnosis."
-            ),
+            "reason": "Visit reason looks like headaches or migraine.",
         }
     if _has_word(
         blob,
@@ -151,15 +142,12 @@ def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
         return {
             "code": "orthopedics",
             "label": "Orthopedics",
-            "reason": (
-                "Visit reason looks like back or joint pain. "
-                "Suggestion only — not a diagnosis."
-            ),
+            "reason": "Visit reason looks like back or joint pain.",
         }
     return {
         "code": "pcp",
         "label": "Primary care",
-        "reason": "No specialty keywords matched. Defaulting to primary care.",
+        "reason": "I’ll start with primary care.",
     }
 
 
@@ -173,7 +161,7 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "E11.9",
             "description": "Type 2 diabetes mellitus without complications",
-            "reason": "Visit text looks like a diabetes follow-up. Code estimate only — not a diagnosis.",
+            "reason": "Visit text looks like a diabetes follow-up.",
         }
     if _has_word(
         blob,
@@ -182,7 +170,7 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "L40.0",
             "description": "Psoriasis vulgaris",
-            "reason": "Visit text looks like plaque psoriasis. Code estimate only — not a diagnosis.",
+            "reason": "Visit text looks like plaque psoriasis.",
         }
     if _has_word(
         blob,
@@ -191,31 +179,31 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "G43.909",
             "description": "Migraine, unspecified, not intractable, without status migrainosus",
-            "reason": "Visit text looks like migraine. Code estimate only — not a diagnosis.",
+            "reason": "Visit text looks like migraine.",
         }
     if _has_word(blob, ("sciatica", "radiculopathy")):
         return {
             "code": "M54.41",
             "description": "Lumbago with sciatica, right side",
-            "reason": "Visit text looks like sciatica. Code estimate only — not a diagnosis.",
+            "reason": "Visit text looks like sciatica.",
         }
     if _has_word(blob, ("back", "spine", "lumbar", "meloxicam", "mri", "orthop")):
         return {
             "code": "M54.5",
             "description": "Low back pain",
-            "reason": "Visit text looks like low-back pain. Code estimate only — not a diagnosis.",
+            "reason": "Visit text looks like low-back pain.",
         }
     if _has_word(blob, ("headache",)):
         return {
             "code": "R51.9",
             "description": "Headache, unspecified",
-            "reason": "Visit text mentions headache. Code estimate only — not a diagnosis.",
+            "reason": "Visit text mentions headache.",
         }
     if _has_word(blob, ("fatigue", "thirst")):
         return {
             "code": "R53.83",
             "description": "Other fatigue",
-            "reason": "Visit text mentions fatigue. Code estimate only — not a diagnosis.",
+            "reason": "Visit text mentions fatigue.",
         }
     return None
 
@@ -258,6 +246,35 @@ def infer_service_codes(
     return codes
 
 
+def _quiet_claim_factors(factors: list) -> list[str]:
+    """Patient-facing reasons, without scoring jargon."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in factors or []:
+        text = str(raw or "")
+        lower = text.lower()
+        if "not in our database" in lower:
+            mapped = ""
+        elif text.startswith("High-denial category"):
+            mapped = "This kind of visit is often reviewed more closely."
+        elif "unspecified" in lower:
+            mapped = "A more specific visit reason can help."
+        elif text.startswith("High-risk combination"):
+            mapped = "This mix of visit details is often reviewed more closely."
+        elif "no prior authorization" in lower:
+            mapped = "Some items may need approval first."
+        elif "no clinical notes" in lower:
+            mapped = "A visit summary on file can help."
+        elif "emergency service" in lower:
+            mapped = "Emergency visits are often reviewed differently."
+        else:
+            mapped = text
+        if mapped and mapped not in seen:
+            seen.add(mapped)
+            out.append(mapped)
+    return out
+
+
 def claim_acceptance_estimate(
     *,
     symptoms: str = "",
@@ -286,10 +303,7 @@ def claim_acceptance_estimate(
             "available": False,
             "acceptance_percent": None,
             "denial_risk": None,
-            "disclaimer": (
-                "Not enough coded information yet to estimate claim acceptance. "
-                "This is not a coverage decision."
-            ),
+            "disclaimer": "Not enough visit detail yet to estimate whether a later claim might be accepted.",
         }
     result = calculate_risk_score(
         icd10_code=icd,
@@ -305,18 +319,14 @@ def claim_acceptance_estimate(
         "denial_risk": result["score"],
         "risk_level": result["risk_level"],
         "color": result["color"],
-        "factors": result["factors"],
+        "factors": _quiet_claim_factors(result["factors"]),
         "recommendations": result["recommendations"],
         "icd10_code": icd,
         "cpt_code": cpt,
         "icd10": result.get("icd10"),
         "cpt": result.get("cpt"),
         "guessed_icd": guessed,
-        "disclaimer": (
-            "Heuristic estimate that a later claim might be accepted — "
-            "not a coverage decision, approval, or paid claim. "
-            "Prior authorization is a separate event from a claim."
-        ),
+        "disclaimer": "Estimate only — not a promise of payment.",
     }
 
 
@@ -786,10 +796,10 @@ def _office_copay(eligibility: dict, specialty_code: str = "") -> tuple[float, s
         copay = eligibility.get("estimated_copay_specialist")
         if copay is None:
             copay = eligibility.get("estimated_copay_pcp") or 0
-            return float(copay), f"in-network specialist copay unavailable — using PCP copay ${copay} (mock)"
-        return float(copay), f"in-network specialist copay ${copay} (mock)"
+            return float(copay), f"in-network specialist copay unavailable — using PCP copay ${copay}"
+        return float(copay), f"in-network specialist copay ${copay}"
     copay = eligibility.get("estimated_copay_pcp") or 0
-    return float(copay), f"in-network PCP copay ${copay} (mock)"
+    return float(copay), f"in-network PCP copay ${copay}"
 
 
 def _line_cost(
@@ -801,7 +811,7 @@ def _line_cost(
 ) -> dict:
     fee = _fee_schedule().get(code)
     if not fee:
-        raise ValueError(f"No mock allowed amount for {code}.")
+        raise ValueError("Could not estimate a price for that visit service.")
     allowed = fee["allowed"]
     status = (eligibility or {}).get("status")
     if status != "active":
@@ -811,7 +821,7 @@ def _line_cost(
             "patient_owes_low": allowed,
             "patient_owes_high": allowed,
             "priced": True,
-            "basis": "coverage inactive — estimate is the full mock allowed amount",
+            "basis": "this plan looks inactive — showing the full amount",
         }
 
     if setting == "office":
@@ -830,12 +840,12 @@ def _line_cost(
     coins = (eligibility.get("coinsurance_pct") or 0) / 100.0
     if deductible_left >= allowed:
         owed = allowed
-        basis = f"applies to deductible (mock remaining ${deductible_left})"
+        basis = f"applies to deductible (remaining ${deductible_left})"
     else:
         after_deduct = allowed - deductible_left
         owed = round(deductible_left + after_deduct * coins, 2)
         basis = (
-            f"mock deductible remaining ${deductible_left} then "
+            f"deductible remaining ${deductible_left} then "
             f"{int((eligibility.get('coinsurance_pct') or 0))}% coinsurance"
         )
     return {
@@ -914,7 +924,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
             "priced": False,
             "basis": (
                 (entry or {}).get("notes")
-                or "PA may be required — not priced as if the medicine were already allowed"
+                or "May need insurance approval first — not priced yet"
             ),
         }
 
@@ -924,10 +934,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
             "patient_owes_low": None,
             "patient_owes_high": None,
             "priced": False,
-            "basis": (
-                "No mock formulary match for this medicine — "
-                "[NEEDS VERIFICATION] before treating any dollar amount as real"
-            ),
+            "basis": "No estimated amount on file for this medicine yet",
         }
 
     if not active:
@@ -938,7 +945,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
                 "patient_owes_low": None,
                 "patient_owes_high": None,
                 "priced": False,
-                "basis": "coverage inactive — no mock cash price on file for this medicine",
+                "basis": "this plan looks inactive — no cash-pay amount on file for this medicine",
             }
         return {
             **base,
@@ -946,7 +953,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
             "patient_owes_high": float(cash),
             "priced": True,
             "allowed": float(cash),
-            "basis": f"coverage inactive — mock cash price ${cash}",
+            "basis": f"this plan looks inactive — cash-pay amount ${cash}",
         }
 
     copay = entry.get("patient_copay")
@@ -956,7 +963,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
             "patient_owes_low": None,
             "patient_owes_high": None,
             "priced": False,
-            "basis": entry.get("notes") or "Mock formulary has no retail copay for this medicine",
+            "basis": entry.get("notes") or "No retail copay on file for this medicine",
         }
 
     return {
@@ -966,7 +973,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
         "priced": True,
         "allowed": float(copay),
         "basis": (
-            f"{entry.get('tier_label') or 'Mock formulary'} retail copay ${copay} "
+            f"{entry.get('tier_label') or 'Plan'} retail copay ${copay} "
             f"(from your saved plan)"
         ),
     }
@@ -1014,8 +1021,6 @@ def visit_guess(
         _line_cost(code, eligibility, setting, specialty_code=specialty_code)
         for code, setting in codes
     ]
-    if urgent and visit_lines:
-        visit_lines[0]["description"] += " [NEEDS VERIFICATION — urgency inferred from free text]"
 
     medicine_lines = estimate_medicines(medicines, eligibility)
 
@@ -1030,12 +1035,7 @@ def visit_guess(
         "is_guess": True,
         "is_estimate": True,
         "from_transcript": bool(from_transcript),
-        "disclaimer": (
-            "Estimate based on your saved plan — not a bill, quote, or coverage decision. "
-            "Visit amounts use your plan’s copay and deductible. "
-            "Medicine amounts use the mock formulary retail copay. "
-            "PA-flagged medicines are listed but not priced as if already allowed."
-        ),
+        "disclaimer": "Estimate based on your saved plan — not a bill.",
         "likely_visits": visit_lines,
         "medicines": medicine_lines,
         "visit_owes_low": visit_low,
@@ -1058,8 +1058,7 @@ def visit_guess(
         )
     if unpriced:
         estimate["warnings"].append(
-            f"{len(unpriced)} medicine(s) are listed without a dollar estimate "
-            "(PA or no mock formulary match)."
+            f"{len(unpriced)} medicine(s) are listed without a dollar estimate yet."
         )
     estimate["suggested_specialty"] = suggestion["code"]
     estimate["suggested_specialty_label"] = suggestion["label"]

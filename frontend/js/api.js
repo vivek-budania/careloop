@@ -51,7 +51,7 @@ const API = {
       return await response.json();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        throw new Error('Cannot connect to server. Is the backend running?');
+        throw new Error('Couldn’t reach CareLoop. Try again in a moment.');
       }
       throw err;
     }
