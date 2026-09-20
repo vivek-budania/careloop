@@ -8,7 +8,7 @@ Created in the hosted project’s Table Editor. The migration is idempotent and 
 
 Username → email lookup so `/api/careloop/login` can call Auth’s password grant. Display name is `first_name` + `last_name`.
 
-**There is no `login` table.** Passwords are not stored here.
+This is the **only** table login **reads** for that lookup. Sign-in **events** belong on [`logins`](logins.md) (not wired yet). **Passwords are not stored here.** There is no credentials table besides Auth.
 
 ## Columns
 
@@ -52,7 +52,8 @@ Same `profiles` row either way. First-time vs returning is **not** stored here (
 - Plaintext or hashed **password**
 - Insurance fields (`payer_name`, member id, copay, eligibility, ZIP)
 - SOAP, transcripts, visit reason, clinician
-- Medicines, tests, claims, intakes, PA/appeal letter bodies (use [`medicines`](medicines.md) / [`tests`](tests.md) / [`claims`](claims.md) / [`intakes`](intakes.md); no `login` / packet / letters tables)
+- Medicines, tests, claims, intakes, PA/appeal letter bodies (use [`medicines`](medicines.md) / [`tests`](tests.md) / [`claims`](claims.md) / [`intakes`](intakes.md); packet / letters are not tables)
+- Sign-in events (use [`logins`](logins.md); still no password column anywhere except Auth)
 - API keys, card images, Stedi/Gemini secrets
 
 - Role / tabs (app derives `role: patient` from this demo)

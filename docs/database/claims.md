@@ -69,6 +69,6 @@ Login does not read this table. `service_role` bypasses RLS (server jobs later).
 - API keys, `service_role`, Stedi/Gemini/Groq secrets
 - A live 837/835 / CARC-RARC codebook table
 - Clinic packet file bytes
-- Passwords / a `login` table
+- Passwords (Auth only). Sign-in events belong on [`logins`](logins.md), not here.
 
 `eob_summary` is a mock blurb, not an appeal. An approved PA (if the demo ever flags one) still does not mean this claim was paid. **PA ≠ claim.**

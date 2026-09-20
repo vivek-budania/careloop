@@ -8,15 +8,16 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 
 | Layer | What is true today |
 |-------|-------------------|
-| Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance`, `public.intakes`, `public.claims` already exist. `public.medicines` and `public.tests` are in this PR’s SQL (apply in the hosted SQL editor). |
-| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / intakes / meds / tests / claims / packet stay in the browser until a later wiring PR. |
-| This docs PR | Schema + SQL only. **Do not** wire coverage, intakes, medicines, tests, or claims APIs, or change login. |
+| Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance`, `public.intakes`, `public.claims` already exist. `public.medicines`, `public.tests`, and `public.logins` are in this PR’s SQL (apply in the hosted SQL editor). |
+| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / intakes / meds / tests / claims / packet stay in the browser until a later wiring PR. Login does **not** write `logins` yet. |
+| This docs PR | Schema + SQL only. **Do not** wire coverage, intakes, medicines, tests, claims, or logins APIs, or change login. |
 
 ## ER (what exists)
 
 ```mermaid
 erDiagram
   AUTH_USERS ||--|| PROFILES : "id 1:1"
+  PROFILES ||--o{ LOGINS : "user_id 1:many events"
   PROFILES ||--o{ VISITS : "user_id 1:many"
   PROFILES ||--o{ INSURANCE : "user_id many rows, one current"
   PROFILES ||--o{ MEDICINES : "user_id 1:many"
@@ -40,6 +41,13 @@ erDiagram
     text last_name
     date date_of_birth
     timestamptz created_at
+  }
+  LOGINS {
+    uuid id PK
+    uuid user_id FK
+    text username
+    timestamptz logged_in_at
+    boolean success
   }
   VISITS {
     uuid id PK
@@ -110,7 +118,8 @@ erDiagram
   }
 ```
 
-- **`auth.users` 1:1 `profiles`.** `profiles.id` = `auth.users.id`. There is **no** `login` table. Password is Auth-only (never a column on `profiles`).
+- **`auth.users` 1:1 `profiles`.** `profiles.id` = `auth.users.id`. Password is Auth-only (never a column on `profiles` or `logins`).
+- **`logins`:** many **sign-in events** per user. Not a credentials table. No password column. Password hashes stay in Auth.
 - **`insurance`:** many rows allowed; **at most one** `is_current` per user (partial unique index). Returning login hydrates coverage from that row.
 - **`visits`:** many per user. **Past visits → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
 - **`medicines`:** many per user (**☰ Prescriptions**). Optional `visit_id` (`ON DELETE SET NULL`).
@@ -124,7 +133,7 @@ Do **not** add these tables in migrations. The packet is still **generated** at 
 
 | Not a table | Where it lives today | Notes |
 |-------------|----------------------|--------|
-| **`login`** | Auth + `profiles` | No `login` table. Passwords stay in Auth. |
+| **Credentials / password hashes** | Supabase Auth only | [`logins`](logins.md) is a sign-in **event** log — not a credentials table. No password column. |
 | **History packet** | Generated `.md` / PDF export | Record export only — not a letter. Do not add `packets`. |
 | **PA / appeal / demand letters** | `/letters` + HITL; watermarked drafts | Not stored as rows. Not `claims.eob_summary`. |
 | **Transcripts** | Scribe fixture / STT API | Do not dump onto `insurance`, `visits`, or `intakes`. |
@@ -139,12 +148,13 @@ Also not persisted as columns yet (stay in the patient-shell `localStorage` thre
 | Open / upcoming visits | `openVisits` | [`intakes`](intakes.md) (`status = 'open'`) |
 | Visit symptoms / cost guess | Dave intake APIs (in-memory) | [`intakes`](intakes.md) `symptoms` / `visit_cost_guess` |
 
-## Auth (no `login` table)
+## Auth (`logins` is events, not credentials)
 
 1. User types username + password (`jane` / `demo`).
 2. Server looks up `public.profiles` by **username** (service_role, bypasses RLS).
 3. Auth password grant with that row’s **email**.
 4. Response token is the Supabase access JWT (or HMAC `v1.` when Supabase env is unset).
+5. Intended later: append one [`logins`](logins.md) **event** (no password). Not wired yet.
 
 Self-serve signup calls Supabase Auth’s normal signup endpoint, inserts the matching `profiles` row server-side (including validated `date_of_birth`), and follows the hosted project’s email-confirmation setting.
 
@@ -170,8 +180,9 @@ No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a 
 | `tests` | Patient JWT on Test records save / filename attach | Owner only (four RLS policies) |
 | `intakes` | Patient JWT while the visit journey is in flight | Owner only (four RLS policies) |
 | `claims` | Patient JWT when a mock EOB is recorded | Owner only (four RLS policies) |
+| `logins` | Patient JWT (or server service_role) after a sign-in attempt | Owner select + insert only (append-only) |
 
-RLS is on for all seven `public` tables. `service_role` bypasses RLS (server login/signup lookup only for `profiles`).
+RLS is on for all eight `public` tables. `service_role` bypasses RLS (server login/signup lookup only for `profiles`; optional `logins` insert for known profiles).
 
 ## Safety (do not weaken)
 
@@ -191,3 +202,4 @@ RLS is on for all seven `public` tables. `service_role` bypasses RLS (server log
 | `tests` | [`tests.md`](tests.md) | [`20260919105000_create_tests.sql`](../../supabase/migrations/20260919105000_create_tests.sql) |
 | `intakes` | [`intakes.md`](intakes.md) | [`20260919106000_create_intakes.sql`](../../supabase/migrations/20260919106000_create_intakes.sql) |
 | `claims` | [`claims.md`](claims.md) | [`20260919107000_create_claims.sql`](../../supabase/migrations/20260919107000_create_claims.sql) |
+| `logins` | [`logins.md`](logins.md) | [`20260919108000_create_logins.sql`](../../supabase/migrations/20260919108000_create_logins.sql) |

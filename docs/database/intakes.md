@@ -91,6 +91,6 @@ Login does not read this table. `service_role` bypasses RLS (server jobs later).
 - Card images, member id, copays (use [`insurance`](insurance.md))
 - API keys, `service_role`, secrets
 - Clinic packet file bytes
-- Passwords / a `login` table
+- Passwords (Auth only). Sign-in events belong on [`logins`](logins.md), not here.
 
 `status = 'open'` is not “coverage approved.” Finishing the cost step does not create a claim. **PA ≠ claim.**
