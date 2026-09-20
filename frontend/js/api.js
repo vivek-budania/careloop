@@ -228,11 +228,11 @@ const API = {
     return blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
   },
 
-  async downloadHistoryPdf(markdown, title = 'CareLoop history packet') {
+  async downloadHistoryPdf(markdown, title = 'CareLoop history packet', filename = 'careloop-history.pdf') {
     const blob = await this.fetchHistoryPdf(markdown, title);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'careloop-history.pdf';
+    a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },

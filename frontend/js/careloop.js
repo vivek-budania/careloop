@@ -1875,6 +1875,36 @@ const CareLoop = {
     }).join('');
   },
 
+  transcriptMarkdown() {
+    const j = this.thread.journey || {};
+    const text = this.transcriptText();
+    const live = Boolean(this.liveTranscript());
+    const lines = ['# CareLoop · Visit transcript', '', `Patient: ${this.displayName()}`];
+    if (j.doctor) lines.push(`Clinician: ${j.doctor}`);
+    if (j.symptoms) lines.push(`Visit reason: ${j.symptoms}`);
+    lines.push('', '## Full conversation', '');
+    let hasUnresolved = false;
+    (text || '').split(/\n\n+/).forEach((block) => {
+      const line = block.replace(/\n/g, ' ').trim();
+      if (!line) return;
+      const m = line.match(/^([^:]{2,48}):\s*(.*)$/);
+      if (m) {
+        let label = m[1].trim();
+        if (live && /^SPEAKER(\s\d+)?$/.test(label)) {
+          label += '*';
+          hasUnresolved = true;
+        }
+        lines.push(`### ${label}`, m[2], '');
+      } else {
+        lines.push(line, '');
+      }
+    });
+    if (hasUnresolved) {
+      lines.push('---', '* Speaker role could not be confidently identified as Doctor or Patient.');
+    }
+    return lines.join('\n');
+  },
+
   transcriptBody() {
     const live = this.liveTranscript();
     const demo = this.usesDemoTranscript();
@@ -1898,7 +1928,10 @@ const CareLoop = {
       const on = Number(this.thread.journey?.demo_id) === Number(row.id) && demo;
       return this.btn(on ? `${row.label} ✓` : row.label, 'pick-demo', on ? '' : 'secondary', `data-demo-id="${row.id}"`);
     }).join('');
-    return `<div class="row" style="justify-content:space-between"><h2>Capture this visit.</h2>${tag}</div><p>Record or upload the conversation, or pick a demo transcript. The samples stay hidden until you choose one.</p>${this.recordControls('visit')}<div class="demo-picks mt">${demos}</div><div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
+    const transcriptActions = text
+      ? `<div class="mt">${this.btn(`${this.icon('download')} Download full transcript (PDF)`, 'export-transcript-pdf', 'secondary')}</div>`
+      : '';
+    return `<div class="row" style="justify-content:space-between"><h2>Capture this visit.</h2>${tag}</div><p>Record or upload the conversation, or pick a demo transcript. The samples stay hidden until you choose one.</p>${this.recordControls('visit')}<div class="demo-picks mt">${demos}</div><div class="transcript">${this.renderTranscriptParas(text)}</div>${transcriptActions}<div class="notice">${this.esc(hint)}</div>`;
   },
 
   planBody() {
@@ -1978,7 +2011,10 @@ const CareLoop = {
       ['A', 'What to review', soap.assessment || fallback.assessment || 'No assessment could be drafted from this transcript yet.'],
       ['P', 'Suggested next steps', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
     ];
-    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Mark this summary as reviewed.</label>`;
+    const transcriptActions = this.transcriptText()
+      ? `<div class="mt">${this.btn(`${this.icon('download')} Download full transcript (PDF)`, 'export-transcript-pdf', 'secondary')}</div>`
+      : '';
+    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}${transcriptActions}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Mark this summary as reviewed.</label>`;
   },
 
   async loadScribeFixture() {
@@ -3402,6 +3438,14 @@ const CareLoop = {
             await API.downloadHistoryPdf(markdown, 'CareLoop history packet');
           }
           this.toast('PDF packet downloaded.');
+        } catch (err) {
+          this.toast(err.message);
+        }
+        break;
+      case 'export-transcript-pdf':
+        try {
+          await API.downloadHistoryPdf(this.transcriptMarkdown(), 'CareLoop visit transcript', 'visit-transcript.pdf');
+          this.toast('Full transcript downloaded.');
         } catch (err) {
           this.toast(err.message);
         }
