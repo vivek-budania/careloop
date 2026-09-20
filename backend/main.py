@@ -462,20 +462,13 @@ def careloop_signup(req: SignupRequest, request: Request):
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    if result.get("token"):
-        careloop_coverage.bind_user(result["user"]["username"])
-        payload = {
-            "user": result["user"],
-            "requires_email_confirmation": False,
-        }
-        session_token = _browser_session_token(result)
-        return _set_session_cookies(JSONResponse(payload), request, session_token)
-    return JSONResponse(
-        {
-            "user": result["user"],
-            "requires_email_confirmation": True,
-        }
-    )
+    careloop_coverage.bind_user(result["user"]["username"])
+    payload = {
+        "user": result["user"],
+        "requires_email_confirmation": False,
+    }
+    session_token = _browser_session_token(result)
+    return _set_session_cookies(JSONResponse(payload), request, session_token)
 
 
 @app.post("/api/careloop/logout")

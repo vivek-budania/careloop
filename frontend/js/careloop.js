@@ -1799,15 +1799,10 @@ const CareLoop = {
 
   renderSignupSuccess(result, profile) {
     const app = document.getElementById('app');
-    const needsEmail = Boolean(result.requires_email_confirmation);
     const username = result.user?.username || '';
-    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>${needsEmail ? 'One quick email check, then your journey can begin.' : 'Your account is created. Continue when you’re ready.'}</p>${this.art()}<small>Your password stays with your account, not in your care profile.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>${needsEmail ? 'Check your email.' : 'Welcome to CareLoop.'}</h2><p>${needsEmail ? `We sent a verification link to <strong>${this.esc(profile.email)}</strong>. After verifying, return and log in with <strong>${this.esc(username)}</strong>.` : `Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.`}</p>${needsEmail ? '<button type="button" class="btn pill full" data-signup-action="login">BACK TO LOGIN</button>' : `<button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button>`}<p class="fine-print">Your password stays with your account.</p></div></section></div>`;
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>Your account is created. Continue when you’re ready.</p>${this.art()}<small>Your password stays with your account, not in your care profile.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>Welcome to CareLoop.</h2><p>Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.</p><button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button><p class="fine-print">Your password stays with your account.</p></div></section></div>`;
     const button = app.querySelector('[data-signup-action]');
     button.addEventListener('click', async () => {
-      if (button.dataset.signupAction === 'login') {
-        this.renderLogin();
-        return;
-      }
       button.disabled = true;
       await this.startSession(result, 'first', profile);
     });
