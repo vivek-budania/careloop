@@ -683,8 +683,7 @@ async def extract_image(
 ):
     """Read an uploaded photo/PDF into a JSON summary of the printed parts.
 
-    Uses XAI_API_KEY (Grok vision) first, then Gemini if needed.
-    Copy-only — does not invent drugs, IDs, or copays.
+    Uses XAI_API_KEY (Grok vision). Copy-only — does not invent drugs, IDs, or copays.
     """
     from backend.careloop import extract as careloop_extract
 
@@ -710,7 +709,7 @@ def scribe_draft(
     """Draft SOAP + structured Plan from a transcript.
 
     Default use_seeded=true for demo without LLM. Set use_seeded=false to
-    draft from the transcript via Gemini/Groq. Always returns clinician_reviewed=false.
+    draft from the transcript via xAI. Always returns clinician_reviewed=false.
     """
     transcript = (req.transcript or "").strip()
     if not transcript and not req.use_seeded:

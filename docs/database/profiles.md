@@ -53,7 +53,7 @@ Same `profiles` row either way. First-time vs returning is **not** stored here (
 - Insurance fields (`payer_name`, member id, copay, eligibility, ZIP)
 - SOAP, transcripts, visit reason, clinician
 - Medicines, tests, claims, PA/appeal letter bodies
-- API keys, card images, Stedi/Gemini secrets
+- API keys, card images, Stedi/xAI secrets
 
 - Role / tabs (app derives `role: patient` from this demo)
 

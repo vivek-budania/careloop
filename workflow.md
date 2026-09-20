@@ -265,7 +265,7 @@ Skip insurance → Today (no cost screen on that visit)
 | Claim / EOB | **Separate mock object** from PA. Do not collapse. |
 | Meds taken/missed/refill | **Local/mock schedule** after mock dispense. No pharmacy, no eRx. |
 | History packet (For the clinic) | **Export fixture** from the thread. Not a signed appeal. |
-| DenialShield letters (PA/appeal/demand) | **Real LLM drafts** when `GEMINI_API_KEY` is set, plus **watermark + HITL**. Journey *calls* those APIs; no new letter types. |
+| DenialShield letters (PA/appeal/demand) | **Real LLM drafts** when `XAI_API_KEY` is set, plus **watermark + HITL**. Journey *calls* those APIs; no new letter types. |
 | Provider / Patient Advocate tabs | **Existing app** at `/`. Keep reachable; not CareLoop chrome. |
 | Live payer, EHR, eRx, real claims, production HIPAA | **Out of scope.** |
 
