@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**: [`AGENTS.md`](AGENTS.md). Owner split: [`plan.md`](plan.md). Hosted schema: [`docs/database/`](docs/database/README.md) (SQL: [`supabase/`](supabase/README.md)).
 
-**Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
+**Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. The old Provider/Patient Advocate letter-draft UI (`/letters`) has been removed from the frontend; the backend PA/appeal/demand/denial-parse endpoints and `risk_engine.py` still exist but are currently unused by any UI.
 
 **Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Letters, image → JSON, and visit STT use `XAI_API_KEY` (Vercel slot) — cards, doctor pages, lab pages; no letter watermark on JSON, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Groq / xAI / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
@@ -41,9 +41,8 @@ Request flow for all AI-generated documents (PA letters, appeals, demand letters
 **Frontend** (`frontend/`) is a single-page vanilla JS app with no framework/bundler — files are loaded directly as `<script>` tags.
 
 - `js/api.js` — `API` object: single fetch wrapper (`request()`) plus one named method per backend endpoint. Any new backend endpoint should get a corresponding method here rather than calling `fetch` directly from feature code.
-- `js/app.js` — login, tab nav (**CareLoop** + **Insurance Claims Management**), toast, HITL modal if letters are generated. Every generated document must still go through `App.requestApproval()` before download.
+- `js/app.js` — login, tab nav (**CareLoop** + **Insurance Claims Management**), toast. Still has the HITL modal helpers (`setupHITLModal`/`requestApproval`) from the removed `/letters` page; they no-op safely since `#hitl-modal` no longer exists in any page, but any new AI-generated-document feature should reuse this pattern (approve-before-download) rather than reinvent it.
 - `js/careloop.js` — paginated coverage intake.
-- `js/provider.js` / `js/patient.js` — leftover DenialShield modules; **not in the nav**.
 
 **Database (hosted Supabase, not wired to coverage/login beyond `profiles`):** [`docs/database/`](docs/database/README.md). Matching SQL: [`supabase/migrations/`](supabase/migrations/). No `login` table.
 

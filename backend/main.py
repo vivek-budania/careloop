@@ -816,11 +816,6 @@ if os.path.isdir(FRONTEND_DIR):
     def serve_frontend():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
-    @app.get("/letters")
-    def serve_letters():
-        """Secondary DenialShield PA / appeal surface. Not the CareLoop patient UX."""
-        return FileResponse(os.path.join(FRONTEND_DIR, "letters.html"))
-
     @app.get("/showcase")
     def serve_showcase():
         """Judge-facing HopHacks product story."""
