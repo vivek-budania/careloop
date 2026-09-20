@@ -20,10 +20,12 @@ from typing import Any, Optional
 from backend.careloop import extract as careloop_extract
 from backend.careloop import stedi as careloop_stedi
 from backend.llm import generate_json
-from backend.prompts import COST_ESTIMATE_SYSTEM_PROMPT
+from backend.prompts import COST_ESTIMATE_SYSTEM_PROMPT, NETWORK_NEARBY_SYSTEM_PROMPT
 from backend.risk_engine import calculate_risk_score
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+
+EXAMPLE_ZIP = "94110"
 
 ZIP_COORDS = {
     "94110": (37.7484, -122.4156),
@@ -1198,7 +1200,91 @@ def _coords_for_zip(zip_code: str) -> tuple[tuple[float, float], bool]:
     zip_code = (zip_code or "").strip()
     if zip_code in ZIP_COORDS:
         return ZIP_COORDS[zip_code], False
-    return ZIP_COORDS["94110"], True
+    return ZIP_COORDS[EXAMPLE_ZIP], True
+
+
+_SPECIALTY_LABELS = {
+    "pcp": "Primary care",
+    "endocrinology": "Endocrinology",
+    "dermatology": "Dermatology",
+    "neurology": "Neurology",
+    "orthopedics": "Orthopedics",
+}
+
+
+def _demo_npi(zip_code: str, name: str, index: int) -> str:
+    digest = hashlib.sha256(f"{zip_code}:{name}:{index}".encode("utf-8")).hexdigest()
+    return f"demo-{digest[:12]}"
+
+
+def _grok_nearby_clinicians(
+    *,
+    zip_code: str,
+    specialty: str,
+    specialty_label: str = "",
+) -> list[dict]:
+    """Ask xAI for fictional nearby names. Empty list on any failure."""
+    zip_code = (zip_code or "").strip()
+    if not zip_code or zip_code == EXAMPLE_ZIP:
+        return []
+    spec = (specialty or "pcp").strip().lower() or "pcp"
+    label = specialty_label or _SPECIALTY_LABELS.get(spec, spec.replace("_", " ").title())
+    user_message = (
+        f"Patient ZIP code: {zip_code}\n"
+        f"Specialty filter: {spec} ({label})\n"
+        "Return fictional clinicians near this ZIP only."
+    )
+    try:
+        raw = generate_json(NETWORK_NEARBY_SYSTEM_PROMPT, user_message)
+        payload = json.loads(raw)
+    except Exception:
+        return []
+    rows = payload.get("clinicians") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    allowed = set(_SPECIALTY_LABELS)
+    out: list[dict] = []
+    seen_names = set()
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").strip()
+        if not name or name.lower() in seen_names:
+            continue
+        row_spec = str(row.get("specialty") or spec).strip().lower()
+        if row_spec not in allowed:
+            row_spec = spec if spec in allowed else "pcp"
+        try:
+            miles = float(row.get("miles"))
+        except (TypeError, ValueError):
+            continue
+        if miles < 0.1:
+            miles = 0.1
+        if miles > 39.9:
+            miles = 39.9
+        city = str(row.get("city") or "").strip() or "Nearby"
+        state = str(row.get("state") or "").strip()[:2].upper() or "US"
+        row_zip = str(row.get("zip") or zip_code).strip()[:10] or zip_code
+        street = str(row.get("address") or "").strip() or "Main St"
+        phone = str(row.get("phone") or "555-0100").strip()[:20]
+        out.append({
+            "npi": _demo_npi(zip_code, name, i),
+            "name": name[:80],
+            "specialty": row_spec,
+            "specialty_label": str(row.get("specialty_label") or _SPECIALTY_LABELS[row_spec])[:80],
+            "address": f"{street}, {city}, {state} {row_zip}",
+            "zip": row_zip,
+            "phone": phone,
+            "accepting_new_patients": bool(row.get("accepting_new_patients", True)),
+            "miles": round(miles, 1),
+            "in_network": False,
+            "networks": [],
+        })
+        seen_names.add(name.lower())
+        if len(out) >= 7:
+            break
+    out.sort(key=lambda row: (row["miles"], row["name"]))
+    return out if len(out) >= 3 else []
 
 
 def _clinician_payload(doc: dict, origin: tuple[float, float], payer_name: str) -> dict:
@@ -1222,7 +1308,7 @@ def _clinician_payload(doc: dict, origin: tuple[float, float], payer_name: str) 
 def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     state = _ensure_state()
     profile = state.get("profile") or {}
-    zip_code = zip_code or profile.get("zip") or "94110"
+    zip_code = zip_code or profile.get("zip") or EXAMPLE_ZIP
     origin, zip_fallback = _coords_for_zip(zip_code)
     payer_name = (profile.get("payer_name") or "").strip()
     intake = state.get("intake") or {}
@@ -1243,22 +1329,36 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
         if fallback:
             results = fallback
             nearby = fallback
+    source = "fixture"
+    specialty_label = next(
+        (row["specialty_label"] for row in results if row["specialty"] == spec),
+        "Primary care" if spec == "pcp" else spec.title(),
+    )
+    if zip_code != EXAMPLE_ZIP:
+        invented = _grok_nearby_clinicians(
+            zip_code=zip_code,
+            specialty=spec,
+            specialty_label=specialty_label,
+        )
+        if invented:
+            results = invented
+            nearby = invented
+            source = "grok"
+            zip_fallback = False
+            specialty_label = next(
+                (row["specialty_label"] for row in results if row["specialty"] == spec),
+                specialty_label,
+            )
     payload = {
         "zip": zip_code,
         "specialty": spec,
-        "specialty_label": next(
-            (row["specialty_label"] for row in results if row["specialty"] == spec),
-            "Primary care" if spec == "pcp" else spec.title(),
-        ),
+        "specialty_label": specialty_label,
         "suggested_from_visit": bool(intake.get("suggested_specialty")),
         "zip_fallback_used": zip_fallback,
         "nearby_radius_miles": nearby_radius,
         "nearby_count": len(nearby),
-        "source": "fixture",
-        "disclaimer": (
-            "Mock directory filtered by visit-reason specialty and distance from this ZIP. "
-            "Not a payer directory or a diagnosis."
-        ),
+        "source": source,
+        "disclaimer": "Clinicians sorted by distance from this ZIP.",
         "clinicians": results,
         "nearby": nearby,
     }

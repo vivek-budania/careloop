@@ -1977,10 +1977,11 @@ const CareLoop = {
     }));
   },
 
-  cliniciansForZip(zip, specialty, live) {
+  cliniciansForZip(zip, specialty, live, source) {
     const example = !zip || zip === this.EXAMPLE_ZIP;
     const hardcoded = this.exampleZipClinicians();
     const incoming = Array.isArray(live) ? live : [];
+    if (source === 'grok' && incoming.length) return incoming;
     if (!example) return incoming.length ? incoming : hardcoded;
     const byNpi = new Map(incoming.map((row) => [String(row.npi), row]));
     const merged = hardcoded.map((doc) => {
@@ -2001,7 +2002,7 @@ const CareLoop = {
     const fallback = this.cliniciansForZip(zip, specialty, []);
     try {
       const payload = await API.searchNetwork(specialty, zip);
-      this.clinicians = this.cliniciansForZip(zip, specialty, payload.clinicians || []);
+      this.clinicians = this.cliniciansForZip(zip, specialty, payload.clinicians || [], payload.source);
       this.networkMeta = {
         ...(payload || {}),
         zip: zip || this.EXAMPLE_ZIP,

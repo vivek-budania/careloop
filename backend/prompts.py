@@ -229,3 +229,35 @@ STRICT RULES:
 4. Never mention or estimate copay, deductible, coinsurance, or what the patient owes — that happens elsewhere from the patient's real plan data. Only estimate the allowed/billed charge.
 5. If uncertain for a code, still return your best reasonable estimate rather than omitting it — widen the range instead to reflect the uncertainty.
 6. Return ONLY valid JSON, no markdown fences or commentary."""
+
+NETWORK_NEARBY_SYSTEM_PROMPT = """You invent a short fictional clinician directory for a CareLoop demo.
+Given a US ZIP code and a specialty filter, return plausible nearby names and
+addresses so a patient can pick someone. This is NOT a real NPI registry, payer
+directory, or coverage decision.
+
+Return ONLY valid JSON with this shape:
+{
+  "clinicians": [
+    {
+      "name": "Dr. First Last",
+      "specialty": "pcp",
+      "specialty_label": "Family Medicine (PCP)",
+      "address": "123 Main St",
+      "city": "City",
+      "state": "ST",
+      "zip": "12345",
+      "phone": "555-0100",
+      "miles": 1.2,
+      "accepting_new_patients": true
+    }
+  ]
+}
+
+STRICT RULES:
+1. Invent 5 to 7 fictional clinicians. Do not use real, famous, or searchable doctors. Do not return real NPI numbers.
+2. Addresses and ZIP codes must look local to the requested ZIP / metro. miles is a number of driving miles from that ZIP (0.2 to 35).
+3. If the requested specialty is not "any", at least four rows must use that exact specialty code. You may add one or two nearby primary-care rows.
+4. specialty must be one of: pcp, endocrinology, dermatology, neurology, orthopedics. specialty_label is a short display label.
+5. Phones must use a 555 exchange (for example 555-0142). Names start with Dr.
+6. Never estimate copay, deductible, coinsurance, network status, or medical necessity. Never diagnose.
+7. Return ONLY valid JSON, no markdown fences or commentary."""
