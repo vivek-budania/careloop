@@ -2440,13 +2440,17 @@ const CareLoop = {
             demo_transcript: false,
             stt_meta: result.diarized
               ? `Grok · ${n} voices → ${roles || 'Doctor / Patient'}`
-              : `Grok · ${n || 1} voice`,
+              : result.guessed
+                ? 'Grok · 1 voice, Doctor/Patient guessed from text'
+                : `Grok · ${n || 1} voice`,
           },
         });
         this.recordStatus = result.diarized
           ? `Ready — ${roles || 'Doctor / Patient'}. Continue to draft the summary.`
-          : ((result.warnings && result.warnings[0]) || 'Transcribed. Continue to draft the summary.');
-        this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : 'Transcribed. Continue for a draft summary.');
+          : result.guessed
+            ? 'Ready — Doctor/Patient split guessed from phrasing (one voice detected). Review before continuing.'
+            : ((result.warnings && result.warnings[0]) || 'Transcribed. Continue to draft the summary.');
+        this.toast(result.diarized ? `Split ${n} speakers (${roles}).` : result.guessed ? 'Guessed Doctor/Patient turns from the text.' : 'Transcribed. Continue for a draft summary.');
       }
     } catch (err) {
       const raw = String(err.message || '');
