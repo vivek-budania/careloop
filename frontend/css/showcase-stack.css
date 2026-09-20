@@ -1,0 +1,46 @@
+.button-outline {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.button-outline:hover {
+  color: #fff;
+  border-color: var(--terra);
+}
+
+.tech-stack-grid article {
+  display: flex;
+  flex-direction: column;
+  min-height: 250px;
+}
+
+.tech-stack-grid h3 {
+  margin: 20px 0 10px;
+  font-size: 25px;
+  line-height: 1.08;
+}
+
+.tech-stack-grid article > span {
+  font: 700 10px var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.tech-stack-grid p {
+  margin: auto 0 0;
+  line-height: 1.65;
+}
+
+.tech-stack-grid code {
+  color: var(--ink);
+  font: 600 11px var(--sans);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .hero-actions {
+    flex-wrap: wrap;
+    gap: 16px 22px;
+  }
+}
