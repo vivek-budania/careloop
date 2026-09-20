@@ -202,7 +202,7 @@ const API = {
     return this.post('/api/careloop/scribe/summarize', data);
   },
 
-  async downloadHistoryPdf(markdown, title = 'CareLoop history packet') {
+  async fetchHistoryPdf(markdown, title = 'CareLoop history packet') {
     const url = `${this.BASE_URL}/api/careloop/history/pdf`;
     const headers = { 'Content-Type': 'application/json' };
     const token = this.getToken();
@@ -225,6 +225,11 @@ const API = {
       throw new Error(message);
     }
     const blob = await response.blob();
+    return blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  },
+
+  async downloadHistoryPdf(markdown, title = 'CareLoop history packet') {
+    const blob = await this.fetchHistoryPdf(markdown, title);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'careloop-history.pdf';
