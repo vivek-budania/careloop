@@ -8,7 +8,7 @@ Read this before changing the running app. Setup commands also live in [`README.
 
 | Work | Where |
 |------|--------|
-| Vivek patient shell (☰ Today / History / Medicines / Tests / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
+| Vivek patient shell (☰ Today / History / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
 | Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
 | Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **this branch** (`confirm` always sends Jane identity) |
 | Demo key slots on Profile (Stedi / Gemini / Groq / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
@@ -32,7 +32,7 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 
 After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
-1. **☰** Today · History (My visits | For the clinic) · Medicines · Tests · Insurance · Profile · Log out
+1. **☰** Today · History (My visits | For the clinic) · Upcoming visits · Prescriptions · Test records · Insurance · Profile · Log out
 2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with **Aetna / Jane Doe** coverage seeded.
 3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
 
@@ -40,7 +40,7 @@ Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire
 
 ## Dummy credentials (login)
 
-Not production auth. No HIPAA. **Login-only** against the existing Supabase project: username looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet — do not wire that in a docs-only change. Medicines, tests, claims, and PA letters are still not tables.
+Not production auth. No HIPAA. **Login-only** against the existing Supabase project: username looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet — do not wire that in a docs-only change. Prescriptions, test records, claims, and PA letters are still not tables. Visit-day **new symptoms** stay on the local journey (`new_symptoms`); they are not a `visits` column yet.
 
 When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are set on the **server** (never in frontend JS), `/api/careloop/login` returns `{ token, user }` where `token` is the **Supabase access JWT**. Dave’s coverage routes still take `Authorization: Bearer <token>` (or the `careloop_token` cookie). `require_user` accepts that JWT **or** the older HMAC `v1.` mock token so coverage cookies from a no-key deploy still work.
 
@@ -101,7 +101,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
 - Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
 
-**Sreekar Stream C (visit steps 5–6, not a second wizard):** seeded transcript `GET /api/careloop/scribe/fixture` → SOAP/Plan `POST /api/careloop/scribe/draft` → clinician review `POST /api/careloop/scribe/approve` (orders; `pa_required` on GLP-1). Optional `XAI_API_KEY` for `POST /api/careloop/scribe/transcribe`. Visit step 5 in `careloop.js` has Record / Upload (MediaRecorder → transcribe). Live text drafts SOAP with `use_seeded: false`; fixture remains the no-key fallback. Step 6 calls `POST /api/careloop/scribe/summarize` (Sumy). On Vercel, NLTK corpora go to `/tmp/nltk_data` (home is read-only); if Sumy still cannot run, the API returns a simple sentence split instead of 500. `frontend/js/scribe.js` is the older standalone voice room and is still not loaded. The seeded visit note is Maya Chen / Dr. Patel; the logged-in patient remains Jane Doe.
+**Sreekar Stream C (visit-day from Upcoming visits):** booking steps 1–3 end at **Save request**, which confirms the appointment. Step 2 searches the mock directory by **ZIP + specialty from the visit reason** (nearby ≤ 40 miles, then farther alternatives). Open/upcoming visits can be deleted. Opening an upcoming visit starts visit-day: **New symptoms** (optional, before check-in; **local only** — not written to `visits`) then check-in → record / upload / **Demo 1, Demo 2, Demo 3** → summary → costs → plan. Demo 1 psoriasis/Skyrizi, Demo 2 lumbar MRI, Demo 3 chronic-migraine Botox (`GET /api/careloop/scribe/demos`). Finishing the plan opens a follow-up summary of medicines to take/buy and tests to complete, with **Update Prescriptions and Test records**. Audio goes to `POST /api/careloop/scribe/transcribe` (2-minute cap). A selected demo drafts SOAP with `use_seeded: true` and `demo_id`; live audio uses `use_seeded: false`. Step 6 calls `POST /api/careloop/scribe/summarize` (Sumy). On Vercel, NLTK corpora go to `/tmp/nltk_data`. `frontend/js/scribe.js` is still not loaded. Returning login is Jane Doe; first-visit signup keeps the typed name on `thread.patient` and maps it onto `App.user.name` (auth is still `jane` / `demo`).
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. Live login is **`jane` / `demo`**.
 

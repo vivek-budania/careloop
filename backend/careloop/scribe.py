@@ -11,15 +11,75 @@ import json
 import os
 import uuid
 from copy import deepcopy
-from typing import Any
+from typing import Any, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 FIXTURE_PATH = os.path.join(DATA_DIR, "mock_visit_transcript.json")
+DEMOS_PATH = os.path.join(DATA_DIR, "demo_transcripts.json")
 
 
 def load_fixture() -> dict[str, Any]:
     with open(FIXTURE_PATH, "r") as f:
         return json.load(f)
+
+
+def load_demos() -> list[dict[str, Any]]:
+    with open(DEMOS_PATH, "r") as f:
+        return json.load(f)
+
+
+def load_demo(demo_id: Any) -> dict[str, Any] | None:
+    if demo_id in (None, "", 0, "0"):
+        return None
+    key = str(demo_id)
+    for row in load_demos():
+        if str(row.get("id")) == key:
+            return row
+    return None
+
+
+def list_demo_summaries() -> list[dict[str, Any]]:
+    out = []
+    for row in load_demos():
+        out.append({
+            "id": row.get("id"),
+            "label": row.get("label"),
+            "title": row.get("title"),
+            "patient_name": row.get("patient_name"),
+            "clinician": row.get("clinician"),
+            "symptoms": row.get("symptoms") or "",
+            "suggested_specialty": row.get("suggested_specialty"),
+            "suggested_specialty_label": row.get("suggested_specialty_label"),
+            "transcript": row.get("transcript") or "",
+        })
+    return out
+
+
+def match_demo(transcript: str) -> dict[str, Any] | None:
+    text = (transcript or "").lower()
+    if not text:
+        return None
+    for row in load_demos():
+        token = str(row.get("match") or "").lower()
+        if token and token in text:
+            return row
+    return None
+
+
+def _seeded_from_demo(demo: dict[str, Any], transcript: str) -> dict[str, Any]:
+    return {
+        "soap": deepcopy(demo.get("soap") or {}),
+        "plan": deepcopy(demo.get("plan") or []),
+        "source": "seeded",
+        "warnings": [],
+        "patient_name": demo.get("patient_name"),
+        "patient_age": demo.get("patient_age"),
+        "patient_sex": demo.get("patient_sex"),
+        "visit_date": demo.get("visit_date"),
+        "clinician": demo.get("clinician"),
+        "transcript": (transcript or "").strip() or demo.get("transcript") or "",
+        "demo_id": demo.get("id"),
+    }
 
 
 def _seeded_soap_and_plan(fixture: dict[str, Any], transcript: str) -> dict[str, Any]:
@@ -135,13 +195,18 @@ def build_encounter_draft(
     transcript: str,
     use_seeded: bool = True,
     llm_payload: dict[str, Any] | None = None,
+    demo_id: Any = None,
 ) -> dict[str, Any]:
     """Build a draft Encounter (clinician_reviewed=False). Does not create Orders."""
     fixture = load_fixture()
-    text = (transcript or "").strip() or fixture["transcript"]
+    demo = load_demo(demo_id) or match_demo(transcript)
+    text = (transcript or "").strip() or ((demo or {}).get("transcript")) or fixture["transcript"]
 
     if use_seeded or llm_payload is None:
-        content = _seeded_soap_and_plan(fixture, text)
+        if demo:
+            content = _seeded_from_demo(demo, text)
+        else:
+            content = _seeded_soap_and_plan(fixture, text)
     else:
         content = _normalize_llm_payload(llm_payload, text, fixture)
 
@@ -159,6 +224,7 @@ def build_encounter_draft(
         "status": "draft",
         "source": content["source"],
         "warnings": content.get("warnings") or [],
+        "demo_id": content.get("demo_id"),
     }
 
 

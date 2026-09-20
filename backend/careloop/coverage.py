@@ -27,6 +27,9 @@ ZIP_COORDS = {
     "94117": (37.7629, -122.4436),
     "94103": (37.7706, -122.4110),
     "94107": (37.7621, -122.3971),
+    "94108": (37.7910, -122.4089),
+    "94109": (37.7926, -122.4218),
+    "94115": (37.7858, -122.4358),
     "10001": (40.7506, -73.9971),
     "10016": (40.7450, -73.9780),
 }
@@ -83,6 +86,68 @@ def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
             "label": "Endocrinology",
             "reason": (
                 "Visit reason looks like a diabetes follow-up. "
+                "Suggestion only — not a diagnosis."
+            ),
+        }
+    if _has_word(
+        blob,
+        (
+            "psoriasis",
+            "plaque",
+            "clobetasol",
+            "skyrizi",
+            "biologic",
+            "phototherapy",
+            "dermatolog",
+            "scalp",
+        ),
+    ):
+        return {
+            "code": "dermatology",
+            "label": "Dermatology",
+            "reason": (
+                "Visit reason looks like a skin or psoriasis visit. "
+                "Suggestion only — not a diagnosis."
+            ),
+        }
+    if _has_word(
+        blob,
+        (
+            "migraine",
+            "headache",
+            "botox",
+            "topamax",
+            "topiramate",
+            "sumatriptan",
+            "neurolog",
+        ),
+    ):
+        return {
+            "code": "neurology",
+            "label": "Neurology",
+            "reason": (
+                "Visit reason looks like headaches or migraine. "
+                "Suggestion only — not a diagnosis."
+            ),
+        }
+    if _has_word(
+        blob,
+        (
+            "back",
+            "spine",
+            "sciatica",
+            "radiculopathy",
+            "lumbar",
+            "meloxicam",
+            "mri",
+            "orthop",
+        ),
+    ):
+        return {
+            "code": "orthopedics",
+            "label": "Orthopedics",
+            "reason": (
+                "Visit reason looks like back or joint pain. "
                 "Suggestion only — not a diagnosis."
             ),
         }
@@ -613,11 +678,20 @@ def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
     new_patient = _has_word(blob, ("new patient", "first visit")) or "never seen" in blob
     urgent = _has_word(blob, ("chest", "shortness", "emergency", "urgent"))
 
+    imaging = _has_word(blob, ("mri", "radiculopathy", "sciatica", "lumbar"))
+    specialist = _has_word(
+        blob,
+        ("psoriasis", "migraine", "botox", "skyrizi", "neurolog", "dermatolog", "orthop"),
+    )
+
     if diabetes:
         codes.append(("99214", "office"))
         codes.append(("83036", "lab"))
-    elif new_patient:
-        codes.append(("99203", "office"))
+    elif imaging:
+        codes.append(("99214", "office"))
+        codes.append(("72148", "imaging"))
+    elif specialist or new_patient:
+        codes.append(("99214" if specialist else "99203", "office"))
     elif urgent:
         codes.append(("99214", "office"))
     else:
@@ -703,21 +777,26 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
             "networks": doc["networks"],
         })
     results.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
+    nearby_radius = 40
+    nearby = [row for row in results if row["miles"] <= nearby_radius]
     payload = {
         "zip": zip_code,
         "specialty": spec,
         "specialty_label": next(
             (row["specialty_label"] for row in results if row["specialty"] == spec),
-            "Primary care" if spec == "pcp" else spec,
+            "Primary care" if spec == "pcp" else spec.title(),
         ),
         "suggested_from_visit": bool(intake.get("suggested_specialty")),
         "zip_fallback_used": zip_fallback,
+        "nearby_radius_miles": nearby_radius,
+        "nearby_count": len(nearby),
         "source": "fixture",
         "disclaimer": (
-            "Mock in-network list for this demo plan, filtered by distance. "
-            "Not a payer directory."
+            "Mock directory filtered by visit-reason specialty and distance from this ZIP. "
+            "Not a payer directory or a diagnosis."
         ),
         "clinicians": results,
+        "nearby": nearby,
     }
     state["clinicians"] = payload
     return payload

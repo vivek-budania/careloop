@@ -173,8 +173,13 @@ const API = {
 
   // --- CareLoop scribe (Stream C) ---
 
-  getScribeFixture() {
+  getScribeFixture(demo) {
+    if (demo) return this.get(`/api/careloop/scribe/fixture?demo=${encodeURIComponent(demo)}`);
     return this.get('/api/careloop/scribe/fixture');
+  },
+
+  listScribeDemos() {
+    return this.get('/api/careloop/scribe/demos');
   },
 
   draftScribe(data) {

@@ -1,0 +1,143 @@
+[
+  {
+    "id": 1,
+    "label": "Demo 1",
+    "title": "Severe plaque psoriasis",
+    "patient_name": "Chloe",
+    "patient_age": 29,
+    "patient_sex": "Female",
+    "visit_date": "2026-09-24",
+    "clinician": "Dr. Vance, Dermatology",
+    "match": "skyrizi",
+    "symptoms": "Severe plaque psoriasis on elbows, knees, and scalp. Failed clobetasol and UV light therapy.",
+    "suggested_specialty": "dermatology",
+    "suggested_specialty_label": "Dermatology",
+    "transcript": "Dr. Vance: Good morning, Chloe. I’m Dr. Vance. Nice to meet you.\n\nChloe: Hi. Before we start — I’m recording this on my phone. I always mix up the medication names. Is that okay?\n\nDr. Vance: Yeah, that’s fine. Totally fine. So I was looking at your chart. You’ve been dealing with plaque psoriasis for a while. How’s it looking today?\n\nChloe: Honestly, it’s pretty bad. It’s on my elbows, my knees, my scalp. It cracks and bleeds when I bend my arms. I’d say it’s covering… maybe fifteen percent of my body?\n\nDr. Vance: I’m sorry. That sounds really painful. Are you still using the clobetasol your primary care doctor prescribed?\n\nChloe: Yeah. Twice a day, for like three months. And I did two months of the UV light therapy downtown. The light just dried me out. The ointment isn’t doing anything anymore.\n\nDr. Vance: Okay. Clobetasol is a strong topical steroid. Three months of that plus phototherapy, and it’s still this widespread — we’re past the conservative stuff. I want to start a biologic injection called Skyrizi. It targets the protein that’s driving the inflammation.\n\nChloe: I’ve seen the commercials. Isn’t that really expensive? My insurance fights me on everything.\n\nDr. Vance: They’ll want a prior authorization. That’s pretty standard for biologics. They usually want proof you tried cheaper things first. You’ve done high-potency topical steroids and phototherapy, and both failed. That’s the step therapy they look for. We’ll write the PA and attach your treatment history. My staff can start that today.",
+    "soap": {
+      "subjective": "29F with long-standing plaque psoriasis. Reports plaques on elbows, knees, and scalp covering about 15% BSA; cracks and bleeds with motion. Used clobetasol BID for three months and completed two months of UV phototherapy without lasting improvement.",
+      "objective": "No new labs in this visit. Extent and failed topical plus phototherapy are from the patient’s report. [NEEDS VERIFICATION] body-surface estimate.",
+      "assessment": "Severe plaque psoriasis not controlled on high-potency topical steroid and phototherapy.",
+      "plan_summary": "Start Skyrizi (risankizumab); prior authorization likely. Document failed clobetasol and phototherapy. Follow up after the PA."
+    },
+    "plan": [
+      {
+        "id": "plan-rx-skyrizi",
+        "type": "rx",
+        "description": "Start Skyrizi (risankizumab) biologic injection",
+        "code": "J2327",
+        "pa_required": true,
+        "notes": "Step therapy documented: failed clobetasol and phototherapy. PA is not a paid claim."
+      },
+      {
+        "id": "plan-rx-clobetasol",
+        "type": "rx",
+        "description": "Continue clobetasol until the biologic is approved",
+        "code": null,
+        "pa_required": false,
+        "notes": "Bridge only. Not a dose change."
+      },
+      {
+        "id": "plan-fu-derm",
+        "type": "follow_up",
+        "description": "Dermatology follow-up after PA outcome",
+        "code": null,
+        "pa_required": false,
+        "notes": "Clinic submits the PA. CareLoop does not file it."
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "label": "Demo 2",
+    "title": "Low back pain with sciatica",
+    "patient_name": "Sarah",
+    "patient_age": 41,
+    "patient_sex": "Female",
+    "visit_date": "2026-09-24",
+    "clinician": "Dr. Aris, Orthopedics",
+    "match": "meloxicam",
+    "symptoms": "Lower back pain with sharp electrical pain down the right leg. Failed six weeks of PT and meloxicam.",
+    "suggested_specialty": "orthopedics",
+    "suggested_specialty_label": "Orthopedics",
+    "transcript": "Dr. Aris: Morning, Sarah. It’s been about two months since we started the meloxicam and physical therapy. How are you holding up?\n\nSarah: Not great, honestly. PT helped a little at first. But the last three weeks I’ve had this sharp, electrical pain shooting down my right leg into my calf. I can barely sit at my desk. It’s waking me up at night.\n\nDr. Aris: I’m sorry. That’s new — the pain going down the leg. How many PT sessions did you actually get through?\n\nSarah: Twelve. Twice a week for six weeks, like you asked. And I’m still taking the meloxicam every morning. It barely takes the edge off. I even added Tylenol on top of it.\n\nDr. Aris: Okay. Pain shooting down the leg like that is often a pinched nerve — lumbar radiculopathy. You’ve done six weeks of PT and a prescription NSAID without much improvement, so we need a better look at the discs. I’m going to order an MRI of your lumbar spine, no contrast.\n\nSarah: Will insurance actually cover that? I know MRIs are expensive, and my plan denies everything.\n\nDr. Aris: They’ll probably flag it for prior authorization. A lot of plans want to see that you tried conservative care first. We’ve got that here — six weeks of PT, still on meloxicam, not better. That usually meets their step-therapy rules. My team can send the PA today with this visit note.",
+    "soap": {
+      "subjective": "41F with ongoing low-back pain, now with three weeks of sharp electrical pain down the right leg into the calf. Completed 12 PT sessions over six weeks. Continues daily meloxicam; added OTC acetaminophen. Pain limits sitting and wakes her at night.",
+      "objective": "No imaging on file yet. Neurologic exam not documented in this transcript. [NEEDS VERIFICATION] strength, reflexes, and straight-leg raise.",
+      "assessment": "Lumbar radiculopathy suspected after failed conservative care. MRI indicated to evaluate discs. Not a diagnosis until imaging and clinician review.",
+      "plan_summary": "Order lumbar MRI without contrast; PA likely. Continue current conservative measures until imaging. Follow up on results."
+    },
+    "plan": [
+      {
+        "id": "plan-img-mri",
+        "type": "imaging",
+        "description": "MRI lumbar spine without contrast",
+        "code": "72148",
+        "pa_required": true,
+        "notes": "Failed six weeks of PT and NSAID. PA is not a paid claim."
+      },
+      {
+        "id": "plan-rx-meloxicam",
+        "type": "rx",
+        "description": "Continue meloxicam as tolerated",
+        "code": null,
+        "pa_required": false,
+        "notes": "No dose change in this visit."
+      },
+      {
+        "id": "plan-fu-ortho",
+        "type": "follow_up",
+        "description": "Review MRI results in clinic",
+        "code": null,
+        "pa_required": false,
+        "notes": "Clinic submits the imaging PA. CareLoop does not file it."
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "label": "Demo 3",
+    "title": "Chronic migraine",
+    "patient_name": "Elena",
+    "patient_age": 36,
+    "patient_sex": "Female",
+    "visit_date": "2026-09-24",
+    "clinician": "Dr. Thorne, Neurology",
+    "match": "topamax",
+    "symptoms": "Chronic migraine. Headaches most days, failed sumatriptan and Topamax.",
+    "suggested_specialty": "neurology",
+    "suggested_specialty_label": "Neurology",
+    "transcript": "Dr. Thorne: Hi Elena, I’m Dr. Thorne. Welcome to neurology. I see your primary care doctor sent you over.\n\nElena: Hi. Really quickly — I’m using an app on my phone to record this. When I get a bad headache I get brain fog and forget everything. Is it okay if I leave it running?\n\nDr. Thorne: Yes. That’s a good idea, especially here. Leave it on. So the referral says severe headaches. Walk me through a typical month right now.\n\nElena: It’s a lot. Out of thirty days I probably have a headache on twenty of them. Ten or twelve turn into full migraines — nauseous, lights bother me, I have to sit in a dark room. I’m missing work.\n\nDr. Thorne: I’m sorry. That’s a heavy load. What have you already tried?\n\nElena: Sumatriptan when they start. It barely touches them now, and if I take it too often I get rebound headaches. Last year she put me on Topamax every day. I lasted four months. I felt like a zombie. Couldn’t concentrate, so I stopped.\n\nDr. Thorne: Yeah. Topamax does that for a lot of people. If you’re over fifteen headache days a month, that fits chronic migraine. The oral meds either aren’t working or the side effects were too much, so I want to talk about Botox injections. We do them here every twelve weeks.\n\nElena: I’ve read about that. My insurance is… not great. Are they going to fight me on it?\n\nDr. Thorne: They’ll want a prior authorization. Plans often treat Botox as cosmetic unless we show medical necessity. They look for step therapy — cheaper pills first. You’ve got the headache-day count, you failed an abortive with sumatriptan, and you couldn’t stay on Topamax. We’ll send the PA with that history today.",
+    "soap": {
+      "subjective": "36F referred for headaches. About 20 headache days per month; 10–12 migraine days with nausea and photophobia. Sumatriptan now poorly effective; frequent use causes rebound. Trial of topiramate (Topamax) for four months stopped for cognitive side effects.",
+      "objective": "Neurologic exam not documented in this transcript. [NEEDS VERIFICATION] exam and headache diary if available.",
+      "assessment": "Chronic migraine by reported headache-day count after failed abortive and preventive orals. Botox is a next-step option pending clinician confirmation and PA.",
+      "plan_summary": "OnabotulinumtoxinA (Botox) every 12 weeks; PA required. Document failed sumatriptan and topiramate. Follow up after the first treatment cycle."
+    },
+    "plan": [
+      {
+        "id": "plan-rx-botox",
+        "type": "rx",
+        "description": "Start onabotulinumtoxinA (Botox) for chronic migraine",
+        "code": "64615",
+        "pa_required": true,
+        "notes": "Failed sumatriptan and topiramate. Insurers may treat this as cosmetic without a PA. PA is not a paid claim."
+      },
+      {
+        "id": "plan-rx-sumatriptan",
+        "type": "rx",
+        "description": "Continue sumatriptan as a rescue, limited days per month",
+        "code": null,
+        "pa_required": false,
+        "notes": "Watch for medication-overuse headache."
+      },
+      {
+        "id": "plan-fu-neuro",
+        "type": "follow_up",
+        "description": "Neurology follow-up after first Botox cycle",
+        "code": null,
+        "pa_required": false,
+        "notes": "Clinic submits the PA. CareLoop does not file it."
+      }
+    ]
+  }
+]

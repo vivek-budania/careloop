@@ -80,8 +80,9 @@ Generated markdown/PDF from the care record. Rules:
 
 ## Do not put on `visits`
 
+- In-progress / upcoming journeys (`openVisits`) and visit-day **new symptoms** (`journey.new_symptoms`) — these stay in the patient-shell `localStorage` thread for now
 - Full **transcripts** / audio / STT blobs (scribe fixture or `/scribe/transcribe`)
-- Medicines, Rx SIG, refill state
+- Prescriptions / medicines, Rx SIG, refill state
 - Tests, lab PDFs, results interpretation
 - Claims, EOB, CARC/RARC
 - PA / appeal letter bodies or watermarks

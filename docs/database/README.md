@@ -67,8 +67,10 @@ Do not invent these tables in migrations:
 
 | Missing | Where it lives today | Notes |
 |---------|----------------------|--------|
-| Medicines / doses / refill | `localStorage` in the patient shell | Stream E later |
-| Tests / lab results | Shell + mock test doc | Not a coverage object |
+| Prescriptions / doses / refill | `localStorage` in the patient shell (☰ **Prescriptions**) | Stream E later; no table yet |
+| Test records / lab results | Shell + mock test doc | Not a coverage object |
+| New symptoms at check-in | `localStorage` `journey.new_symptoms` | Not a `visits` column yet |
+| Open / upcoming visits | `localStorage` `openVisits` | Persist to `visits` only after the journey is completed |
 | Claims / EOB | Insurance screen: Coming soon | Separate from PA |
 | PA / appeal / demand letters | `/letters` + HITL; watermarked drafts | Not stored as rows |
 | Transcripts | Scribe fixture / STT API | Do not dump onto `insurance` |

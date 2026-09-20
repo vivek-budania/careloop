@@ -15,3 +15,17 @@ a.link svg{width:15px}
 @keyframes record-pulse{70%{box-shadow:0 0 0 8px rgba(186,89,63,0)}100%{box-shadow:0 0 0 0 rgba(186,89,63,0)}}
 /* Keep clickable via input.click() — pointer-events:none breaks Upload on some browsers */
 #visit-audio{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.visit-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;position:relative;z-index:1}
+.hero .visit-hero-actions .btn{margin-top:0}
+.visit-row-wrap{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.visit-row-wrap .visit-row{border-bottom:0;flex:1;min-width:0}
+.visit-delete{color:var(--muted);flex-shrink:0}
+.visit-delete:hover{color:var(--coral)}
+.zip-search{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:18px 0 8px}
+.zip-search .field{margin:0;flex:1;min-width:140px}
+.demo-picks{display:flex;flex-wrap:wrap;gap:8px}
+#test-attach-file{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+dialog:has(.test-preview){max-width:720px}
+.test-preview{margin:12px 0;max-height:60vh;overflow:auto}
+.test-preview-img{display:block;width:100%;border-radius:8px;background:#fff}
+.test-preview-frame{display:block;width:100%;min-height:420px;border:0;border-radius:8px;background:#fff}
