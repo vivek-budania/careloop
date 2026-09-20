@@ -197,6 +197,7 @@ const CareLoop = {
       prescriptions: returning ? this.seedPrescriptions() : [],
       testRecords: returning ? this.seedTestRecords() : [],
       pendingCare: null,
+      reminders: [],
     };
   },
 
@@ -222,6 +223,248 @@ const CareLoop = {
       preview: 'sample',
       notes: 'Sample result document.',
     }];
+  },
+
+  reminderId() {
+    return `rem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  },
+
+  remindersList() {
+    return Array.isArray(this.thread.reminders) ? this.thread.reminders : [];
+  },
+
+  reminderForSource(kind, sourceId) {
+    return this.remindersList().find((row) => row.kind === kind && row.source_id === sourceId && row.status !== 'removed') || null;
+  },
+
+  reminderKindLabel(kind) {
+    return ({
+      visit: 'Upcoming visit',
+      dose: 'Medicine dose',
+      refill: 'Refill',
+      test: 'Lab / test',
+    })[kind] || 'Reminder';
+  },
+
+  reminderDefaultWhen(kind) {
+    const d = new Date();
+    if (kind === 'dose') {
+      d.setDate(d.getDate() + 1);
+      d.setHours(8, 0, 0, 0);
+    } else if (kind === 'refill') {
+      d.setDate(d.getDate() + 7);
+      d.setHours(9, 0, 0, 0);
+    } else if (kind === 'test') {
+      d.setDate(d.getDate() + 3);
+      d.setHours(10, 0, 0, 0);
+    } else {
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 30, 0, 0);
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  },
+
+  formatReminderWhen(value) {
+    if (!value) return 'Time not set';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  },
+
+  reminderChannelsLabel(row) {
+    const parts = [];
+    if (row.channels && row.channels.email) parts.push('Email');
+    if (row.channels && row.channels.calendar) parts.push('Calendar');
+    return parts.length ? parts.join(' · ') : 'No channel';
+  },
+
+  reminderPingButton(kind, sourceId, title, detail = '', when = '') {
+    const existing = this.reminderForSource(kind, sourceId);
+    const label = existing ? 'Edit reminder' : 'Set reminder';
+    const attrs = [
+      `data-rem-kind="${this.esc(kind)}"`,
+      `data-rem-source="${this.esc(sourceId)}"`,
+      `data-rem-title="${this.esc(title)}"`,
+      `data-rem-detail="${this.esc(detail || '')}"`,
+      `data-rem-when="${this.esc(when || this.reminderDefaultWhen(kind))}"`,
+    ].join(' ');
+    return `${this.btn(`${this.icon('bell')} ${label}`, 'reminder-setup', 'secondary', attrs)}${existing ? `<small style="display:block;margin-top:6px">${this.esc(this.reminderChannelsLabel(existing))} · ${this.esc(this.formatReminderWhen(existing.when))}</small>` : ''}`;
+  },
+
+  openReminderSetup({ kind, sourceId, title, detail, when }) {
+    const existing = this.reminderForSource(kind, sourceId);
+    const email = existing?.email || this.thread.patient?.email || 'jane.doe@example.com';
+    const whenValue = existing?.when || when || this.reminderDefaultWhen(kind);
+    const emailOn = existing ? Boolean(existing.channels?.email) : true;
+    const calOn = existing ? Boolean(existing.channels?.calendar) : true;
+    this.modal(
+      existing ? 'Update this reminder' : 'Set a reminder',
+      `<p>${this.esc(title)}</p>
+      <p style="font-size:12px;margin-top:8px">${this.esc(this.reminderKindLabel(kind))}${detail ? ` · ${this.esc(detail)}` : ''}</p>
+      <form id="reminder-form" class="mt">
+        <input type="hidden" name="kind" value="${this.esc(kind)}">
+        <input type="hidden" name="source_id" value="${this.esc(sourceId)}">
+        <input type="hidden" name="title" value="${this.esc(title)}">
+        <input type="hidden" name="detail" value="${this.esc(detail || '')}">
+        <label class="field">When<input type="datetime-local" name="when" value="${this.esc(whenValue)}" required></label>
+        <label class="field">Email for pings<input type="email" name="email" value="${this.esc(email)}" required></label>
+        <div class="reminder-channels">
+          <label class="check"><input type="checkbox" name="channel_email" ${emailOn ? 'checked' : ''}> Email ping</label>
+          <label class="check"><input type="checkbox" name="channel_calendar" ${calOn ? 'checked' : ''}> Add to calendar (.ics)</label>
+        </div>
+        <p style="font-size:11px;margin-top:12px">Demo only. CareLoop stores the reminder here and can open a calendar file or mailto draft — it does not send live email.</p>
+      </form>`,
+      this.btn('Cancel', 'close', 'secondary')
+        + (existing ? this.btn('Remove', 'reminder-remove', 'coral', `data-rem-id="${this.esc(existing.id)}"`) : '')
+        + this.btn(existing ? 'Save reminder' : 'Save reminder', 'reminder-save'),
+    );
+  },
+
+  saveReminderFromForm() {
+    const form = document.getElementById('reminder-form');
+    if (!form) {
+      this.toast('Reminder form not found.');
+      return;
+    }
+    const data = new FormData(form);
+    const kind = String(data.get('kind') || '').trim();
+    const sourceId = String(data.get('source_id') || '').trim();
+    const title = String(data.get('title') || '').trim();
+    const detail = String(data.get('detail') || '').trim();
+    const when = String(data.get('when') || '').trim();
+    const email = String(data.get('email') || '').trim();
+    const channelEmail = form.querySelector('[name="channel_email"]')?.checked;
+    const channelCalendar = form.querySelector('[name="channel_calendar"]')?.checked;
+    if (!kind || !sourceId || !title || !when) {
+      this.toast('Add a time for this reminder.');
+      return;
+    }
+    if (!channelEmail && !channelCalendar) {
+      this.toast('Pick email, calendar, or both.');
+      return;
+    }
+    if (channelEmail && !email) {
+      this.toast('Add an email for pings.');
+      return;
+    }
+    const existing = this.reminderForSource(kind, sourceId);
+    const row = {
+      id: existing?.id || this.reminderId(),
+      kind,
+      source_id: sourceId,
+      title,
+      detail,
+      when,
+      email,
+      channels: { email: Boolean(channelEmail), calendar: Boolean(channelCalendar) },
+      status: 'active',
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const others = this.remindersList().filter((item) => !(item.kind === kind && item.source_id === sourceId));
+    this.saveThread({ reminders: [row, ...others] });
+    this.closeModal();
+    if (channelCalendar) this.downloadReminderIcs(row);
+    if (channelEmail) {
+      this.toast(`Reminder saved · email ping queued for ${email}`);
+    } else {
+      this.toast('Reminder saved · calendar file ready');
+    }
+    this.render();
+  },
+
+  removeReminder(id) {
+    const next = this.remindersList().filter((row) => row.id !== id);
+    this.saveThread({ reminders: next });
+    this.closeModal();
+    this.toast('Reminder removed.');
+    this.render();
+  },
+
+  icsStamp(value) {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  },
+
+  downloadReminderIcs(row) {
+    const start = this.icsStamp(row.when);
+    if (!start) return;
+    const endDate = new Date(row.when);
+    endDate.setMinutes(endDate.getMinutes() + 30);
+    const end = this.icsStamp(endDate.toISOString());
+    const summary = String(row.title || 'CareLoop reminder').replace(/\n/g, ' ');
+    const description = [
+      row.detail || '',
+      `CareLoop ${this.reminderKindLabel(row.kind)} reminder.`,
+      'Demo calendar file — not a live clinic notification.',
+    ].filter(Boolean).join('\\n');
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//CareLoop//Reminders//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${row.id}@careloop.local`,
+      `DTSTAMP:${this.icsStamp(new Date().toISOString())}`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${summary}`,
+      `DESCRIPTION:${description}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `careloop-${row.kind}-${row.source_id}.ics`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+
+  openReminderMailto(row) {
+    if (!row?.email) {
+      this.toast('No email on this reminder.');
+      return;
+    }
+    const subject = encodeURIComponent(`CareLoop reminder: ${row.title}`);
+    const body = encodeURIComponent(
+      `${row.title}\n${this.formatReminderWhen(row.when)}\n${row.detail || ''}\n\nDemo draft only — CareLoop does not send live email.`,
+    );
+    window.location.href = `mailto:${encodeURIComponent(row.email)}?subject=${subject}&body=${body}`;
+  },
+
+  reminders() {
+    const list = this.remindersList()
+      .filter((row) => row.status !== 'removed')
+      .slice()
+      .sort((a, b) => String(a.when || '').localeCompare(String(b.when || '')));
+    const rows = list.length
+      ? list.map((row) => {
+        const actions = [
+          this.btn('Edit', 'reminder-setup', 'secondary', [
+            `data-rem-kind="${this.esc(row.kind)}"`,
+            `data-rem-source="${this.esc(row.source_id)}"`,
+            `data-rem-title="${this.esc(row.title)}"`,
+            `data-rem-detail="${this.esc(row.detail || '')}"`,
+            `data-rem-when="${this.esc(row.when || '')}"`,
+          ].join(' ')),
+          row.channels?.calendar ? this.btn('Calendar', 'reminder-calendar', 'secondary', `data-rem-id="${this.esc(row.id)}"`) : '',
+          row.channels?.email ? this.btn('Email draft', 'reminder-email', 'secondary', `data-rem-id="${this.esc(row.id)}"`) : '',
+          this.btn('Remove', 'reminder-remove', 'secondary', `data-rem-id="${this.esc(row.id)}"`),
+        ].filter(Boolean).join('');
+        return `<div class="task-row" style="flex-wrap:wrap;align-items:flex-start"><span class="tile-icon">${this.icon(row.kind === 'visit' || row.kind === 'test' ? 'calendar' : (row.kind === 'refill' ? 'file' : 'pill'))}</span><div style="flex:1;min-width:180px"><small>${this.esc(this.reminderKindLabel(row.kind))} · ${this.esc(this.reminderChannelsLabel(row))}</small><h3 style="margin-top:6px">${this.esc(row.title)}</h3><p style="font-size:12px">${this.esc(this.formatReminderWhen(row.when))}${row.detail ? ` · ${this.esc(row.detail)}` : ''}</p>${row.channels?.email ? `<small>Email · ${this.esc(row.email || '')}</small>` : ''}</div><div class="row" style="flex-wrap:wrap">${actions}</div></div>`;
+      }).join('')
+      : `<div class="empty">${this.icon('bell')}<h2>No reminders yet.</h2><p>Set a ping from Upcoming visits, Prescriptions, Test records, or a refill note. Email and calendar stay in one place here.</p></div>`;
+    return `<div class="narrow">${this.head('Reminders.', 'One list for visit, medicine, refill, and lab pings — email and calendar.')}<section class="card journey-panel"><div class="section-heading"><h2>Your pings</h2>${this.tag(`${list.length} active`, list.length ? '' : 'gray')}</div><p style="font-size:12px;margin-bottom:18px">Set reminders on the care screens. Everything you save shows up here.</p>${rows}<div class="rule"></div><div class="row" style="flex-wrap:wrap">${this.btn('Upcoming visits', 'upcoming', 'secondary')}${this.btn('Prescriptions', 'prescriptions', 'secondary')}${this.btn('Test records', 'test-records', 'secondary')}</div></section></div>`;
   },
 
   careKey(name) {
@@ -700,6 +943,7 @@ const CareLoop = {
     if (!Array.isArray(t.testRecords)) {
       t.testRecords = (t.visits || []).some((v) => v.id === 'seed') ? this.seedTestRecords() : [];
     }
+    if (!Array.isArray(t.reminders)) t.reminders = [];
     if (t.pendingCare === undefined) t.pendingCare = null;
     if (Array.isArray(t.prescriptions)) {
       t.prescriptions = this.mergeCareItems([], t.prescriptions.map((item) => this.tidyCareItem(item)));
@@ -919,7 +1163,7 @@ const CareLoop = {
         : 'Confirmed · tap to check in')
       : (row.doctor || 'Clinician not chosen yet');
     const title = this.visitTitle(row);
-    return `<div class="visit-row-wrap"><button class="visit-row" ${openAttr}="${this.esc(row.id)}" type="button"><div class="tile-icon">${this.icon(kind === 'upcoming' ? 'calendar' : 'file')}</div><div><small>${this.esc(when)}</small><h3>${this.esc(title)}</h3><small>${this.esc(kind === 'upcoming' ? `${row.doctor || 'Clinician'} · ${status}` : status)}</small></div>${current ? this.tag('This visit') : this.icon('arrow')}</button><button type="button" class="icon-btn visit-delete" data-action="ask-delete-visit" data-visit-id="${this.esc(row.id)}" aria-label="Delete ${this.esc(title)}">${this.icon('trash')}</button></div>`;
+    return `<div class="visit-row-wrap"><button class="visit-row" ${openAttr}="${this.esc(row.id)}" type="button"><div class="tile-icon">${this.icon(kind === 'upcoming' ? 'calendar' : 'file')}</div><div><small>${this.esc(when)}</small><h3>${this.esc(title)}</h3><small>${this.esc(kind === 'upcoming' ? `${row.doctor || 'Clinician'} · ${status}` : status)}</small></div>${current ? this.tag('This visit') : this.icon('arrow')}</button><div class="visit-row-actions">${kind === 'upcoming' ? this.reminderPingButton('visit', row.id, title, `${row.doctor || 'Clinician'} · ${row.slot || 'Time TBD'}`, this.reminderDefaultWhen('visit')) : ''}<button type="button" class="icon-btn visit-delete" data-action="ask-delete-visit" data-visit-id="${this.esc(row.id)}" aria-label="Delete ${this.esc(title)}">${this.icon('trash')}</button></div></div>`;
   },
 
   askDeleteVisit(id) {
@@ -939,7 +1183,10 @@ const CareLoop = {
   deleteOpenVisit(id) {
     const remaining = this.openJourneys().filter((row) => row.id !== id);
     const active = this.thread.journey;
-    const patch = { openVisits: remaining };
+    const patch = {
+      openVisits: remaining,
+      reminders: this.remindersList().filter((row) => !(row.kind === 'visit' && row.source_id === id)),
+    };
     if (active && active.id === id) {
       this.clearVisitRuntime();
       patch.journey = remaining[0] ? { ...remaining[0] } : null;
@@ -1271,6 +1518,14 @@ const CareLoop = {
         ? (s.testRecords || []).map((row) => `- ${row.name} · ${row.kind || 'record'} · ${row.status || ''}${row.date ? ` · ${row.date}` : ''}${row.notes ? ` — ${row.notes}` : ''}`).join('\n')
         : 'None on file.',
       '',
+      '## Reminders',
+      this.remindersList().filter((row) => row.status !== 'removed').length
+        ? this.remindersList()
+          .filter((row) => row.status !== 'removed')
+          .map((row) => `- ${this.reminderKindLabel(row.kind)} · ${row.title} · ${this.formatReminderWhen(row.when)} · ${this.reminderChannelsLabel(row)}${row.channels?.email && row.email ? ` (${row.email})` : ''}`)
+          .join('\n')
+        : 'None on file.',
+      '',
       '## Follow-up',
       'Discuss a follow-up visit in 3 months with the clinic.',
       '',
@@ -1569,6 +1824,7 @@ const CareLoop = {
       ['Today', 'home'],
       ['Past visits', 'history'],
       ['Upcoming visits', 'calendar'],
+      ['Reminders', 'bell'],
       ['Prescriptions', 'pill'],
       ['Test records', 'test'],
       ['Insurance', 'shield'],
@@ -1578,7 +1834,7 @@ const CareLoop = {
     const crumb = this.view === 'Journey'
       ? ((this.thread.journey && this.thread.journey.step >= 4) ? 'Visit day' : 'Your visit')
       : this.view === 'Setup' ? 'Getting started' : this.view === 'Followups' ? 'Follow-ups' : this.view === 'History' ? 'Past visits' : this.view;
-    const navActive = ['Today', 'Past visits', 'History', 'Upcoming visits', 'Prescriptions', 'Test records', 'Insurance', 'Profile'].includes(this.view)
+    const navActive = ['Today', 'Past visits', 'History', 'Upcoming visits', 'Reminders', 'Prescriptions', 'Test records', 'Insurance', 'Profile'].includes(this.view)
       ? (this.view === 'History' ? 'Past visits' : this.view)
       : '';
     document.getElementById('app').innerHTML = `<button class="overlay" data-action="menu" aria-label="Close navigation"></button><aside class="sidebar">${this.logo()}<span class="eyebrow">Your space</span><nav class="nav" aria-label="Main navigation">${destinations.map(([n, i]) => `<button type="button" data-nav="${n}" class="${navActive === n ? 'active' : ''}" ${navActive === n ? 'aria-current="page"' : ''}>${this.icon(i)}${n}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="profile-mini"><button type="button" class="profile-mini-main" data-nav="Profile" aria-label="Open profile"><div class="avatar">${this.esc(this.initials(name))}</div><div><strong style="font-size:12px">${this.esc(name)}</strong><small>My personal care space</small></div></button><button type="button" class="logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></aside><div class="shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open navigation">${this.icon('menu')}</button><span class="mobile-brand">careloop.</span><div class="breadcrumb">My care <span>/</span><strong>${this.esc(crumb)}</strong></div><div class="topright"><span class="demo-badge"><span class="dot"></span> DEMO MODE</span><button class="icon-btn" aria-label="Notifications" data-action="notifications">${this.icon('bell')}</button><div class="account-chip"><button class="avatar" data-nav="Profile" aria-label="Open profile">${this.esc(this.initials(name))}</button><button type="button" class="logout topbar-logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></header><main>${content}<footer class="footer"><span>Your care, connected. &nbsp; ♡</span><span>Fictional data · No live care or insurance actions</span></footer></main></div>`;
@@ -1703,7 +1959,8 @@ const CareLoop = {
     } else {
       list = rows.map((row) => this.visitRowCard(row, 'upcoming')).join('');
     }
-    return `<div class="narrow">${this.head('Upcoming visits.', 'Confirmed appointments after you save a request. Check in here when you arrive.')}<section class="card journey-panel">${list}</section></div>`;
+    const remCount = this.remindersList().filter((row) => row.kind === 'visit' && row.status !== 'removed').length;
+    return `<div class="narrow">${this.head('Upcoming visits.', 'Confirmed appointments after you save a request. Check in here when you arrive.')}<section class="card journey-panel">${list}<div class="rule"></div><p style="font-size:12px">${remCount ? `${remCount} visit reminder${remCount === 1 ? '' : 's'} on file.` : 'Set an email or calendar ping on a visit so you do not miss check-in.'} ${this.link('View all reminders', 'reminders')}</p></section></div>`;
   },
 
   suggestedSpecialty() {
@@ -2750,16 +3007,17 @@ const CareLoop = {
   prescriptions() {
     const list = this.thread.prescriptions || [];
     const rows = list.length
-      ? list.map((rx) => `<div class="task-row" style="flex-wrap:wrap"><span class="tile-icon peach">${this.icon('pill')}</span><div style="flex:1"><h3>${this.esc(rx.name)}</h3><p style="font-size:12px">${this.esc(rx.notes || '')}</p><small>${this.esc(rx.status || 'active')}${rx.source === 'visit' ? ' · from a visit' : ''}</small></div></div>`).join('')
+      ? list.map((rx) => `<div class="task-row" style="flex-wrap:wrap;align-items:flex-start"><span class="tile-icon peach">${this.icon('pill')}</span><div style="flex:1;min-width:160px"><h3>${this.esc(rx.name)}</h3><p style="font-size:12px">${this.esc(rx.notes || '')}</p><small>${this.esc(rx.status || 'active')}${rx.source === 'visit' ? ' · from a visit' : ''}</small></div><div>${this.reminderPingButton('dose', rx.id || this.careKey(rx.name), `${rx.name} dose`, rx.notes || 'Medicine reminder', this.reminderDefaultWhen('dose'))}</div></div>`).join('')
       : '<p style="font-size:12px">No prescriptions on file yet. Finish an upcoming visit to add medicines to take or buy.</p>';
     const scheduled = list.some((rx) => rx.schedule);
     const doses = scheduled
-      ? `${[['morning', '8:00 AM', 'Morning dose'], ['evening', '8:00 PM', 'Evening dose']].map(([key, time, title]) => `<div class="task-row" style="flex-wrap:wrap"><div style="flex:1"><small>${time}</small><h3 style="margin-top:6px">${title}</h3>${this.tag(this.thread.doses[key], this.thread.doses[key] === 'missed' ? 'peach' : '')}</div>${this.btn('Taken', 'dose', 'secondary', `data-dose="${key}" data-status="taken"`)}${this.btn('Missed', 'dose', 'secondary', `data-dose="${key}" data-status="missed"`)}</div>`).join('')}`
+      ? `${[['morning', '8:00 AM', 'Morning dose'], ['evening', '8:00 PM', 'Evening dose']].map(([key, time, title]) => `<div class="task-row" style="flex-wrap:wrap;align-items:flex-start"><div style="flex:1"><small>${time}</small><h3 style="margin-top:6px">${title}</h3>${this.tag(this.thread.doses[key], this.thread.doses[key] === 'missed' ? 'peach' : '')}</div><div class="row" style="flex-wrap:wrap">${this.btn('Taken', 'dose', 'secondary', `data-dose="${key}" data-status="taken"`)}${this.btn('Missed', 'dose', 'secondary', `data-dose="${key}" data-status="missed"`)}${this.reminderPingButton('dose', `schedule-${key}`, `Metformin ${title.toLowerCase()}`, time, this.reminderDefaultWhen('dose'))}</div></div>`).join('')}`
       : '';
+    const refillExisting = this.reminderForSource('refill', 'metformin-refill');
     const refillNote = list.length
-      ? `<p class="mt">Prepare a refill request for an existing medicine.</p><div class="mt">${this.btn(this.thread.refill ? 'View refill draft' : 'Draft refill request', 'refill', 'secondary')}</div>`
+      ? `<p class="mt">Prepare a refill request for an existing medicine.</p><div class="mt row" style="flex-wrap:wrap">${this.btn(this.thread.refill ? 'View refill draft' : 'Draft refill request', 'refill', 'secondary')}${this.reminderPingButton('refill', 'metformin-refill', 'Metformin refill', 'About 12 days of supply remaining on the sample record', this.reminderDefaultWhen('refill'))}</div>${refillExisting ? '' : '<p style="font-size:11px;margin-top:10px">Refill pings live with your other reminders.</p>'}`
       : '<p class="mt">Add a medicine from a visit first, then you can draft a refill request here.</p>';
-    return `${this.head('Prescriptions.', 'Medicines from your visits — what to keep taking, and what to pick up.')}<div class="grid"><section class="card"><div class="section-heading"><h2>On your list</h2>${this.tag(`${list.length} on file`, 'gray')}</div>${rows}${doses}</section><div class="stack"><section class="card insurance-mini"><div class="eyebrow">A little ahead of time</div><h2 class="mt">Refill note</h2>${refillNote}</section></div></div>`;
+    return `${this.head('Prescriptions.', 'Medicines from your visits — what to keep taking, and what to pick up.')}<div class="grid"><section class="card"><div class="section-heading"><h2>On your list</h2>${this.tag(`${list.length} on file`, 'gray')}</div>${rows}${doses}</section><div class="stack"><section class="card insurance-mini"><div class="eyebrow">A little ahead of time</div><h2 class="mt">Refill note</h2>${refillNote}<div class="mt">${this.link('View all reminders', 'reminders')}</div></section></div></div>`;
   },
 
   tests() {
@@ -2777,9 +3035,9 @@ const CareLoop = {
       }).join('')
       : '<p style="font-size:12px">No past results on file yet. Upload a PDF or picture, or finish a visit and update test records.</p>';
     const plannedRows = planned.length
-      ? planned.map((row) => `<div class="task-row" style="flex-wrap:wrap"><span class="tile-icon">${this.icon(row.kind === 'appointment' ? 'calendar' : 'test')}</span><div style="flex:1"><h3>${this.esc(row.name)}</h3><p style="font-size:12px">${this.esc(row.lab || '')}${row.lab && (row.date || row.time) ? ' · ' : ''}${this.esc([row.date, row.time].filter(Boolean).join(' · '))}</p><small>${this.esc(row.status || 'To schedule')}${row.notes ? ` · ${this.esc(row.notes)}` : ''}${row.source === 'visit' ? ' · from a visit' : ''}</small></div>${this.btn('Attach result', 'attach-test', 'secondary', `data-test-id="${this.esc(row.id)}"`)}</div>`).join('')
+      ? planned.map((row) => `<div class="task-row" style="flex-wrap:wrap;align-items:flex-start"><span class="tile-icon">${this.icon(row.kind === 'appointment' ? 'calendar' : 'test')}</span><div style="flex:1;min-width:160px"><h3>${this.esc(row.name)}</h3><p style="font-size:12px">${this.esc(row.lab || '')}${row.lab && (row.date || row.time) ? ' · ' : ''}${this.esc([row.date, row.time].filter(Boolean).join(' · '))}</p><small>${this.esc(row.status || 'To schedule')}${row.notes ? ` · ${this.esc(row.notes)}` : ''}${row.source === 'visit' ? ' · from a visit' : ''}</small></div><div class="row" style="flex-wrap:wrap">${this.btn('Attach result', 'attach-test', 'secondary', `data-test-id="${this.esc(row.id)}"`)}${this.reminderPingButton('test', row.id, row.name, [row.lab, row.date, row.time].filter(Boolean).join(' · '), row.date ? `${row.date}T${(row.time || '10:00').length === 5 ? row.time || '10:00' : '10:00'}` : this.reminderDefaultWhen('test'))}</div></div>`).join('')
       : '<p style="font-size:12px">No lab appointments or visit tests yet. Record one below, or finish an upcoming visit.</p>';
-    return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
+    return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"><div class="mt">${this.link('View all reminders', 'reminders')}</div></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete. You can add an email or calendar ping afterward.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
   },
 
   insurance() {
@@ -2811,6 +3069,7 @@ const CareLoop = {
       History: () => this.history(),
       'Past visits': () => this.history(),
       'Upcoming visits': () => this.upcoming(),
+      Reminders: () => this.reminders(),
       Prescriptions: () => this.prescriptions(),
       'Test records': () => this.testRecords(),
       Medicines: () => this.prescriptions(),
@@ -3240,12 +3499,47 @@ const CareLoop = {
         await this.logout();
         break;
       case 'notifications':
-        this.modal(
-          'Nothing lost in the shuffle.',
-          `<p>Your evening metformin dose is ${this.esc(this.thread.doses.evening)}. Your clinic packet is ready to prepare.</p>`,
-          this.btn('View prescriptions', 'prescriptions'),
-        );
+      case 'reminders':
+        this.closeModal();
+        this.navigate('Reminders');
         break;
+      case 'reminder-setup':
+        this.openReminderSetup({
+          kind: d.remKind,
+          sourceId: d.remSource,
+          title: d.remTitle,
+          detail: d.remDetail,
+          when: d.remWhen,
+        });
+        break;
+      case 'reminder-save':
+        this.saveReminderFromForm();
+        break;
+      case 'reminder-remove': {
+        const remId = d.remId;
+        if (!remId) break;
+        this.removeReminder(remId);
+        break;
+      }
+      case 'reminder-calendar': {
+        const row = this.remindersList().find((item) => item.id === d.remId);
+        if (!row) {
+          this.toast('Reminder not found.');
+          break;
+        }
+        this.downloadReminderIcs(row);
+        this.toast('Calendar file downloaded.');
+        break;
+      }
+      case 'reminder-email': {
+        const row = this.remindersList().find((item) => item.id === d.remId);
+        if (!row) {
+          this.toast('Reminder not found.');
+          break;
+        }
+        this.openReminderMailto(row);
+        break;
+      }
       case 'today':
         this.closeModal();
         this.navigate('Today');

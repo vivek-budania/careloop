@@ -27,10 +27,19 @@ a.link svg{width:15px}
 #visit-audio{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 .visit-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;position:relative;z-index:1}
 .hero .visit-hero-actions .btn{margin-top:0}
-.visit-row-wrap{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.visit-row-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
 .visit-row-wrap .visit-row{border-bottom:0;flex:1;min-width:0}
 .visit-delete{color:var(--muted);flex-shrink:0}
 .visit-delete:hover{color:var(--coral)}
+.visit-row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;padding:0 0 12px;width:100%}
+.visit-row-actions .btn{min-height:36px;padding:8px 12px;font-size:11px}
+.visit-row-actions small{width:100%;text-align:right}
+.reminder-channels{display:grid;gap:10px;margin-top:8px}
+.reminder-channels .check{margin:0}
+@media(min-width:900px){
+  .visit-row-actions{width:auto;max-width:220px;padding:8px 0;justify-content:flex-end}
+  .visit-row-actions small{text-align:left}
+}
 .zip-search{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:18px 0 8px}
 .zip-search .field{margin:0;flex:1;min-width:140px}
 .demo-picks{display:flex;flex-wrap:wrap;gap:8px}
