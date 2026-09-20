@@ -1066,12 +1066,9 @@ const CareLoop = {
 
   setupNotice() {
     const xai = (this.demoEnv && this.demoEnv.xai) || {};
-    const gemini = (this.demoEnv && this.demoEnv.gemini) || {};
     const ocr = xai.configured
       ? 'Read uploaded images uses XAI_API_KEY on this host. It copies printed fields only and does not invent missing copays.'
-      : gemini.configured
-        ? 'Read uploaded images can use Gemini as a fallback. It copies printed fields only and does not invent missing copays.'
-        : 'Read uploaded images needs XAI_API_KEY on this host or in Vercel. Use the sample card until then.';
+      : 'Read uploaded images needs XAI_API_KEY on this host or in Vercel. Use the sample card until then.';
     return (
       'Demo eligibility only. This does not verify real coverage or decide benefits. '
       + `Estimates are not a bill. ${ocr}`
@@ -1083,7 +1080,6 @@ const CareLoop = {
     const session = env.session || {};
     const supabase = env.supabase || session.supabase || {};
     const stedi = env.stedi || {};
-    const gemini = env.gemini || {};
     const groq = env.groq || {};
     const xai = env.xai || {};
     const vercel = env.vercel || {};
@@ -1101,29 +1097,23 @@ const CareLoop = {
         detail: stedi.message || 'STEDI_API_KEY is not loaded on this host yet.',
       },
       {
-        name: 'Gemini letters',
-        tag: gemini.configured ? 'loaded' : 'not set',
-        tagType: gemini.configured ? '' : 'peach',
-        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet. Used for /letters drafts; image JSON prefers XAI_API_KEY.',
-      },
-      {
         name: 'Groq fallback',
         tag: groq.configured ? 'loaded' : 'optional',
         tagType: groq.configured ? '' : 'gray',
         detail: groq.message || 'Add GROQ_API_KEY the same way when you have it.',
       },
       {
-        name: 'xAI image JSON + STT',
+        name: 'xAI letters + image JSON + STT',
         tag: xai.configured ? 'loaded' : 'not set',
         tagType: xai.configured ? '' : 'peach',
-        detail: xai.message || 'Add XAI_API_KEY the same way. Used to turn uploaded images into JSON, and for visit speech-to-text.',
+        detail: xai.message || 'Add XAI_API_KEY the same way. Used for /letters drafts, uploaded images into JSON, and visit speech-to-text.',
       },
       {
         name: 'Vercel',
         tag: 'slots',
         tagType: 'gray',
         detail: vercel.message || (
-          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY, and XAI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
+          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, and XAI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
         ),
       },
     ];
@@ -1953,7 +1943,7 @@ const CareLoop = {
       : live && source === 'llm'
         ? 'Drafted from your transcribed visit. Nothing becomes an order without clinician review.'
         : live
-          ? 'Your recording was transcribed. Sumy summarizes it; SOAP may still use the sample note until Gemini can draft from the live text.'
+          ? 'Your recording was transcribed. Sumy summarizes it; SOAP may still use the sample note until xAI can draft from the live text.'
           : 'Draft summary from this visit. Nothing becomes an order without clinician review.';
     const demo = this.usesDemoTranscript();
     const fallback = {
@@ -2014,7 +2004,7 @@ const CareLoop = {
           const result = await API.draftScribe({ transcript, use_seeded: false });
           this.encounter = result.encounter || result;
         } catch (err) {
-          this.toast(`${err.message} Using a seeded SOAP until Gemini can draft from your recording.`);
+          this.toast(`${err.message} Using a seeded SOAP until xAI can draft from your recording.`);
           const result = await API.draftScribe({ transcript, use_seeded: true, demo_id: demoId });
           this.encounter = result.encounter || result;
         }

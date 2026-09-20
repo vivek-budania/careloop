@@ -63,7 +63,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 | Layer | Technology |
 |--------|-------------|
 | Backend | Python + FastAPI (`backend/main.py`) |
-| LLM | Gemini primary (`google-generativeai`); optional Groq fallback |
+| LLM | xAI Grok (`XAI_API_KEY`); optional Groq text fallback |
 | Frontend | Vanilla HTML/CSS/JS (`frontend/`) — ivory/sage/terracotta patient UI |
 | Data today | Embedded JSON (ICD-10, CPT, CARC/RARC) |
 
@@ -80,7 +80,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 ├── backend/
 │   ├── main.py             # All routes; mounts static; serves index.html
 │   ├── config.py           # Keys, model names, DRAFT_WATERMARK, national stats
-│   ├── llm.py              # Gemini + optional Groq; watermark on generate()
+│   ├── llm.py              # xAI + optional Groq; watermark on generate()
 │   ├── prompts.py          # PA, appeal, demand, denial-parse (zero-hallucination)
 │   ├── risk_engine.py      # Deterministic heuristic scorer (no LLM)
 │   └── data/               # icd10_codes.json, cpt_codes.json, denial_reasons.json
@@ -122,9 +122,9 @@ Load-bearing. Do not weaken them when adding the journey.
 
 Commands match [`plan.md`](plan.md) and [`CLAUDE.md`](CLAUDE.md).
 
-### 1. Gemini API key
+### 1. xAI API key
 
-[Google AI Studio](https://aistudio.google.com/apikey) → Create API Key (free; no credit card).
+Already on Vercel as `XAI_API_KEY`. Local: [console.x.ai](https://console.x.ai) → create a key and inject it at launch. Seeded transcripts and the Jane Doe sample card work without it.
 
 ### 2. Environment
 
@@ -134,10 +134,9 @@ cp .env.example .env
 #   SUPABASE_URL=https://your-project.supabase.co
 #   SUPABASE_ANON_KEY=your_anon_key_here
 #   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here   # server-only; never frontend JS
-#   XAI_API_KEY=                          # image → JSON + visit STT (already on Vercel)
-#   GEMINI_API_KEY=your_key_here          # /letters; fallback image JSON
+#   XAI_API_KEY=                          # letters + image JSON + visit STT (already on Vercel)
 #   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
-#   GROQ_API_KEY=                         # optional letter fallback; add when you have it
+#   GROQ_API_KEY=                         # optional letter fallback if xAI is down
 #   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
 ```
 
@@ -160,7 +159,7 @@ Log in as **`jane` / `demo`**. **I’m returning** seeds **Aetna / Jane Doe** vi
 
 Patient-facing **visual mockups** (static clickthrough): **http://localhost:8080/mockups/**. Text walkthrough: **[`workflow.md`](workflow.md)**.
 
-Letter endpoints return HTTP 500 with setup instructions if `GEMINI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require Gemini.
+Letter endpoints return HTTP 500 with setup instructions if `XAI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require xAI.
 
 ### Useful curls (Authorization core)
 
@@ -175,7 +174,7 @@ curl -s -X POST http://localhost:8080/api/risk-score \
 curl -s http://localhost:8080/api/national-stats
 ```
 
-PA / parse / appeal / demand need a real Gemini key. Example bodies are in [`plan.md`](plan.md) (Sreekar — Authorization curls). Isolation curls for store/coverage/history are in the same file under each owner.
+PA / parse / appeal / demand need a real `XAI_API_KEY`. Example bodies are in [`plan.md`](plan.md) (Sreekar — Authorization curls). Isolation curls for store/coverage/history are in the same file under each owner.
 
 ---
 
