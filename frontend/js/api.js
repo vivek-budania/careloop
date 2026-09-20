@@ -231,21 +231,15 @@ const API = {
 
   async extractImage(file) {
     const url = `${this.BASE_URL}/api/careloop/extract-image`;
-    const headers = {};
-    const token = this.getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-
     const form = new FormData();
     form.append('file', file);
 
     const response = await fetch(url, {
       method: 'POST',
-      headers,
       body: form,
       credentials: 'same-origin',
     });
     if (response.status === 401) {
-      this.setToken('');
       if (window.App && typeof App.showLogin === 'function') App.showLogin();
     }
     if (!response.ok) {
@@ -259,21 +253,15 @@ const API = {
 
   async transcribeScribeAudio(file) {
     const url = `${this.BASE_URL}/api/careloop/scribe/transcribe`;
-    const headers = {};
-    const token = this.getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-
     const form = new FormData();
     form.append('file', file);
 
     const response = await fetch(url, {
       method: 'POST',
-      headers,
       body: form,
       credentials: 'same-origin',
     });
     if (response.status === 401) {
-      this.setToken('');
       if (window.App && typeof App.showLogin === 'function') App.showLogin();
     }
     if (!response.ok) {
