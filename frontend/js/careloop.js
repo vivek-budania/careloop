@@ -1753,7 +1753,7 @@ const CareLoop = {
         ? `<div class="document"><div><h3>When you booked</h3><p class="symptom-booked">${this.esc(j.symptoms)}</p></div></div>`
         : '';
       const logBlock = log.length
-        ? `<div class="symptom-log">${log.map((entry) => `<article class="symptom-log-item"><time>${this.esc(this.formatStamp(entry.at))}${entry.source ? ` · ${this.esc(entry.source)}` : ''}</time><p>${this.esc(entry.text)}</p></article>`).join('')}</div>`
+        ? `<div class="symptom-log">${log.map((entry) => `<article class="symptom-log-item"><time>${this.esc(this.formatStamp(entry.at))}${entry.source ? ` · ${this.esc(entry.source)}` : ''}</time><p class="symptom-note">${this.esc(entry.text)}</p></article>`).join('')}</div>`
         : '<p class="symptom-empty">No new symptoms added yet. Each note is saved with a timestamp so it stays distinct from what you booked.</p>';
       return `${tabs}<div class="eyebrow">Visit day</div><h2 class="mt">Any new symptoms before check-in?</h2><p>Add what changed since you booked. Each note is appended with a time so we can tell it apart from the original reason. This is optional — you can skip it and check in.</p>${booked}<h3 class="mt">New since booking</h3>${logBlock}<div class="chips">${['Worse than before', 'New rash', 'Fever', 'Headache', 'Nausea', 'Shortness of breath', 'Something else'].map((n) => `<button type="button" class="chip" data-new-symptom="${n}">${n}</button>`).join('')}</div><label class="field">Add another note<textarea id="new-symptoms">${this.esc(extra)}</textarea></label>${this.btn('Add this note', 'append-symptom', 'secondary')}${this.recordControls('day-symptoms')}${source}<div class="notice">${this.esc(this.audioDisclaimer())}</div>`;
     }

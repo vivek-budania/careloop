@@ -37,9 +37,9 @@ dialog:has(.test-preview){max-width:720px}
 .symptom-log-item{padding:14px 0;border-bottom:1px solid var(--line)}
 .symptom-log-item:last-child{border-bottom:0}
 .symptom-log-item time{display:block;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-.symptom-log-item p{font-size:18px;line-height:1.5;color:var(--ink)}
-.symptom-noted{font-size:16px;line-height:1.5;color:var(--ink);margin:8px 0 0}
-#new-symptoms{font-size:18px;line-height:1.5;min-height:130px}
+.symptom-log-item p,.symptom-log-item p.symptom-note{font:22px/1.45 var(--serif);color:var(--ink)}
+.symptom-noted{font:22px/1.45 var(--serif);color:var(--ink);margin:8px 0 0}
+#new-symptoms{font-size:20px;line-height:1.45;min-height:140px}
 .acceptance{margin:22px 0;padding:18px;border:1px solid #dce1d2;border-radius:10px;background:#f4f6ee}
 .acceptance-meter{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
 .acceptance-meter strong{font:42px var(--serif);color:var(--green)}
