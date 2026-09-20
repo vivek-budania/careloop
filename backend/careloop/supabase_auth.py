@@ -221,7 +221,32 @@ def sign_up_user(
             },
         },
     )
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+
+    normalized = dict(data)
+    user_dict = None
+    if isinstance(data.get("user"), dict):
+        user_dict = data["user"]
+    elif isinstance(data.get("data"), dict) and isinstance(data["data"].get("user"), dict):
+        user_dict = data["data"]["user"]
+    elif isinstance(data.get("session"), dict) and isinstance(data["session"].get("user"), dict):
+        user_dict = data["session"]["user"]
+    elif data.get("id"):
+        user_dict = data
+
+    if isinstance(user_dict, dict):
+        normalized["user"] = user_dict
+        uid = str(user_dict.get("id") or "").strip()
+        if uid:
+            normalized["id"] = uid
+
+    if data.get("access_token"):
+        normalized["access_token"] = str(data["access_token"]).strip()
+    elif isinstance(data.get("session"), dict) and data["session"].get("access_token"):
+        normalized["access_token"] = str(data["session"]["access_token"]).strip()
+
+    return normalized
 
 
 def delete_auth_user(user_id: str) -> None:
@@ -243,18 +268,23 @@ def create_profile(
     last_name: str,
     date_of_birth: str,
 ) -> dict:
-    rows = _rest_insert(
-        "profiles",
-        {
-            "id": user_id,
-            "username": username,
-            "email": email,
-            "first_name": first_name or None,
-            "last_name": last_name or None,
-            "date_of_birth": date_of_birth,
-        },
-        service_role_key(),
-    )
+    body = {
+        "id": user_id,
+        "username": username,
+        "email": email,
+        "first_name": first_name or None,
+        "last_name": last_name or None,
+        "date_of_birth": date_of_birth,
+    }
+    try:
+        rows = _rest_insert("profiles", body, service_role_key())
+    except ValueError as exc:
+        err_msg = str(exc).lower()
+        if "date_of_birth" in err_msg or "column" in err_msg:
+            body_without_dob = {k: v for k, v in body.items() if k != "date_of_birth"}
+            rows = _rest_insert("profiles", body_without_dob, service_role_key())
+        else:
+            raise
     if not isinstance(rows, list) or not rows:
         raise ValueError("Supabase did not return the created profile.")
     return rows[0]
