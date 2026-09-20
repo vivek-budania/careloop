@@ -10,14 +10,14 @@ Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**
 
 **Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. Do **not** put Provider or Patient Advocate letter forms in the nav.
 
-**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Image → JSON uses `XAI_API_KEY` (Vercel slot) first, Gemini fallback — cards, doctor pages, lab pages; no letter watermark, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Gemini / Groq / xAI / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
+**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Letters, image → JSON, and visit STT use `XAI_API_KEY` (Vercel slot) — cards, doctor pages, lab pages; no letter watermark on JSON, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Groq / xAI / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
 ## Commands
 
 ```bash
 # Setup
 cp .env.example .env
-echo "GEMINI_API_KEY=your_key_here" > .env   # free key: https://aistudio.google.com/apikey
+# XAI_API_KEY is already on Vercel. Seeded transcript / sample card work without it.
 pip3 install -r requirements.txt
 
 # Run (serves both API and frontend at http://localhost:8080)
@@ -30,10 +30,10 @@ There is no test suite, linter, or build step configured in this repo.
 
 **Backend** (`backend/`) is a single FastAPI app (`main.py`) — no routers/blueprints, all endpoints defined directly on `app`. It also mounts `frontend/css` and `frontend/js` as static dirs and serves `frontend/index.html` at `/`.
 
-Request flow for all AI-generated documents (PA letters, appeals, demand letters, denial parsing) follows the same shape: Pydantic request model in `main.py` → builds a user-message string from the request fields → `backend/llm.py`'s `generate()`/`generate_json()` → wraps `google-generativeai` (Gemini) with the corresponding system prompt from `backend/prompts.py`.
+Request flow for all AI-generated documents (PA letters, appeals, demand letters, denial parsing) follows the same shape: Pydantic request model in `main.py` → builds a user-message string from the request fields → `backend/llm.py`'s `generate()`/`generate_json()` → xAI chat completions (`XAI_API_KEY`) with the corresponding system prompt from `backend/prompts.py`.
 
-- `backend/config.py` — loads `GEMINI_API_KEY` from `.env`, defines the model name (`gemini-2.0-flash`) and the `DRAFT_WATERMARK` string stamped onto every generated document.
-- `backend/llm.py` — `generate()` (temp 0.3, prepends/appends the watermark) for free-text letters; `generate_json()` (temp 0.1, no watermark) for structured extraction. Image JSON uses `XAI_API_KEY` first (`https://api.x.ai/v1/chat/completions`), then Gemini. Text JSON/letters still use Gemini, then Groq.
+- `backend/config.py` — loads `XAI_API_KEY` from the process env, defines chat/vision model names and the `DRAFT_WATERMARK` string stamped onto every generated document.
+- `backend/llm.py` — `generate()` (temp 0.3, prepends/appends the watermark) for free-text letters; `generate_json()` (temp 0.1, no watermark) for structured extraction. Both use `XAI_API_KEY` (`https://api.x.ai/v1/chat/completions`). Optional Groq text fallback if xAI is down.
 - `backend/prompts.py` — one system prompt per document type (`PA_SYSTEM_PROMPT`, `APPEAL_SYSTEM_PROMPT`, `DEMAND_SYSTEM_PROMPT`, `DENIAL_PARSE_PROMPT`). All enforce a **Zero Hallucination Protocol**: never fabricate medical/legal facts, only use user-supplied information, tag uncertain claims with `[NEEDS VERIFICATION]`. When editing generation logic, preserve this pattern — it's the core safety mechanism of the product, and `main.py` surfaces `[NEEDS VERIFICATION]` as a `warnings` entry in the `GeneratedDocument` response.
 - `backend/risk_engine.py` — pure deterministic heuristic scorer (no LLM, no ML). `calculate_risk_score()` looks up ICD-10/CPT category risk weights (`HIGH_RISK_CPT_CATEGORIES`, `HIGH_SCRUTINY_ICD_CATEGORIES`, `RISKY_COMBOS`), applies modifiers for prior auth / clinical notes / emergency status, and returns a 0-100 score plus human-readable `factors` and `recommendations`. Category names here must stay in sync with the `category` field values in `backend/data/*.json`.
 - `backend/data/*.json` — embedded reference data (ICD-10 codes, CPT/HCPCS codes, CARC/RARC denial reason codes). Loaded fresh from disk on every request (`_load_json`/`_load_*_codes`), not cached — this is a deliberate MVP simplicity tradeoff given the small dataset size.

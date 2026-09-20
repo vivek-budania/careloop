@@ -7,21 +7,19 @@ from dotenv import load_dotenv
 # into the image. A laptop `.env` is only a fallback (gitignored).
 load_dotenv(override=False)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-flash-lite-latest"
-
 # Stedi *test* key. Prefer the container env at launch. Never commit this value.
 # Production Stedi keys are out of scope.
 STEDI_API_KEY = os.getenv("STEDI_API_KEY", "")
 
-# Backup LLM, used automatically if Gemini fails (quota exceeded, outage, etc.)
+# Optional text fallback if xAI is down. Not required if XAI_API_KEY works.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
 
-# Optional xAI Grok: visit speech-to-text and image → JSON (cards, prescriptions).
+# xAI Grok: letters, image → JSON, and visit speech-to-text. Already on Vercel.
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
 XAI_STT_URL = os.getenv("XAI_STT_URL", "https://api.x.ai/v1/stt")
 XAI_CHAT_URL = os.getenv("XAI_CHAT_URL", "https://api.x.ai/v1/chat/completions")
+XAI_CHAT_MODEL = os.getenv("XAI_CHAT_MODEL", "grok-2-1212")
 XAI_VISION_MODEL = os.getenv("XAI_VISION_MODEL", "grok-2-vision-1212")
 
 
@@ -40,44 +38,31 @@ def demo_env_status() -> dict:
     from backend.careloop import auth as careloop_auth
     from backend.careloop import supabase_auth as careloop_supabase
 
-    gemini_on = _key_loaded(GEMINI_API_KEY)
     groq_on = _key_loaded(GROQ_API_KEY)
     xai_on = _key_loaded(XAI_API_KEY)
     return {
         "session": careloop_auth.session_status(),
         "supabase": careloop_supabase.status(),
         "stedi": careloop_stedi.status(),
-        "gemini": {
-            "configured": gemini_on,
-            "used_for": "Letter drafts at /letters; fallback if xAI image JSON is unavailable",
-            "message": (
-                "GEMINI_API_KEY is loaded. Letter drafts at /letters still need human review. "
-                "Image JSON uses XAI_API_KEY first; Gemini is the fallback."
-            ) if gemini_on else (
-                "GEMINI_API_KEY is not set. Letter drafts at /letters need this key. "
-                "Image JSON still prefers XAI_API_KEY. The Jane Doe sample card works without either. "
-                "Add it on the host or in Vercel, then Redeploy."
-            ),
-        },
         "groq": {
             "configured": groq_on,
-            "used_for": "Optional letter fallback",
+            "used_for": "Optional letter fallback if xAI is down",
             "message": (
-                "GROQ_API_KEY is loaded as a Gemini fallback."
+                "GROQ_API_KEY is loaded as an xAI text fallback."
                 if groq_on
                 else "GROQ_API_KEY is optional. Add it the same way when you have it."
             ),
         },
         "xai": {
             "configured": xai_on,
-            "used_for": "Image → JSON (cards, prescriptions, lab pages) + visit speech-to-text",
+            "used_for": "Letter drafts, image → JSON, and visit speech-to-text",
             "message": (
-                "XAI_API_KEY is loaded. Uploaded images can be read into JSON, "
-                "and visit scribe can transcribe audio."
+                "XAI_API_KEY is loaded. Letter drafts, uploaded images, and visit scribe use xAI. "
+                "Letters still need human review."
                 if xai_on
                 else (
                     "XAI_API_KEY is not set. Fixture sample card and seeded transcripts still work. "
-                    "Add it on this host or in Vercel, then Redeploy."
+                    "Letter drafts at /letters need this key. Add it on this host or in Vercel, then Redeploy."
                 )
             ),
         },
@@ -85,8 +70,8 @@ def demo_env_status() -> dict:
             "entrypoint": "backend.main:app",
             "message": (
                 "Vercel reads SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, "
-                "STEDI_API_KEY, GEMINI_API_KEY, and optional GROQ_API_KEY, "
-                "XAI_API_KEY, and SESSION_SECRET from Project Settings → Environment Variables "
+                "STEDI_API_KEY, XAI_API_KEY, and optional GROQ_API_KEY "
+                "and SESSION_SECRET from Project Settings → Environment Variables "
                 "(Production + Preview), then Redeploy. Cursor/cloud-agent env does not "
                 "reach Vercel. Never put service_role in frontend JS. Do not replace / with a JSON stub."
             ),
