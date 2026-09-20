@@ -1557,17 +1557,13 @@ const CareLoop = {
   },
 
   async restoreSession() {
-    if (!API.getToken()) {
-      this.renderLogin();
-      return;
-    }
     try {
       App.user = await API.me();
       await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       this.syncPatientName();
       this.render();
     } catch (err) {
-      API.setToken('');
+      App.user = null;
       this.renderLogin();
     }
   },
@@ -1605,7 +1601,6 @@ const CareLoop = {
   },
 
   async startSession(result, mode, profile = null) {
-    API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
       this.thread = this.seedThread('first');
@@ -1661,7 +1656,6 @@ const CareLoop = {
     } catch (err) {
       /* still clear local session */
     }
-    API.setToken('');
     App.user = null;
     try {
       localStorage.removeItem(this.COVERAGE_KEY);
@@ -3057,7 +3051,7 @@ const CareLoop = {
   },
 
   render() {
-    if (!API.getToken()) {
+    if (!App.user) {
       this.renderLogin();
       return;
     }

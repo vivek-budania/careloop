@@ -9,14 +9,15 @@ const App = {
   page: document.body?.dataset?.page || 'careloop',
 
   showLogin() {
+    this.user = null;
     if (window.CareLoop && typeof CareLoop.renderLogin === 'function') {
       CareLoop.renderLogin();
       return;
     }
-    API.setToken('');
   },
 
   init() {
+    API.clearLegacyToken();
     this.setupHITLModal();
     if (this.page === 'letters') {
       this.setupLettersNav();
@@ -41,14 +42,13 @@ const App = {
   },
 
   async restoreLettersSession() {
-    if (!API.getToken()) return;
     try {
       const user = await API.me();
       this.user = user;
       const label = document.getElementById('nav-user-label');
       if (label) label.textContent = `${user.name} · letter drafts`;
     } catch (err) {
-      API.setToken('');
+      this.user = null;
     }
   },
 

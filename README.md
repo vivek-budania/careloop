@@ -133,10 +133,10 @@ cp .env.example .env
 #   XAI_API_KEY=                          # letters + image JSON + visit STT (already on Vercel)
 #   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
 #   GROQ_API_KEY=                         # optional letter fallback if xAI is down
-#   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
+#   SESSION_SECRET=                       # required for live auth; 32+ chars, server-only
 ```
 
-**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Signup creates Auth + `public.profiles`; login reads them. Hosted `visits` and `insurance` tables exist ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
+**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a random 32+ character `SESSION_SECRET` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Login sets a signed 30-day `HttpOnly` cookie; the browser does not store Supabase tokens in JavaScript. Signup creates Auth + `public.profiles`; login reads them. Hosted `visits` and `insurance` tables exist ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
 
 Same names on the **process/container at launch** or in **Vercel**. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
 
