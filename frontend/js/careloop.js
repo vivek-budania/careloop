@@ -6,27 +6,55 @@
 const patientSummaryCopy = (value) => {
   const raw = String(value || '').trim();
   const verification = [];
-  const textWithoutVerification = raw.replace(/\[NEEDS VERIFICATION\]\s*([^.!?]+(?:[.!?]|$))/gi, (_match, detail) => {
+  let text = raw.replace(/\[NEEDS VERIFICATION\]\s*([^.!?]+?)([.!?]|$)/gi, (_match, detail) => {
     const cleaned = String(detail || '').trim().replace(/[.!?]+$/, '');
     if (cleaned) verification.push(cleaned);
     return '';
   });
-  const glossary = [
-    [/\b(\d{1,3})F\s+with\b/g, '$1-year-old woman with'],
-    [/\bOTC\b/gi, 'over-the-counter'],
-    [/\bPT\b/g, 'physical therapy'],
-    [/\bPA\b/g, 'prior authorization (approval from your insurance plan)'],
-    [/\bNSAID\b/g, 'anti-inflammatory medicine (NSAID)'],
-    [/\bBID\b/g, 'twice a day'],
-    [/\bBP\b/g, 'blood pressure (BP)'],
-    [/\bHbA1c\b/g, 'A1c blood sugar test (HbA1c)'],
-    [/\bMRI\b/g, 'MRI scan'],
-    [/\blumbar radiculopathy\b/gi, 'possible irritation of a nerve in the lower back (lumbar radiculopathy)'],
-  ];
-  const text = glossary.reduce(
-    (copy, [pattern, replacement]) => copy.replace(pattern, replacement),
-    textWithoutVerification,
-  ).replace(/\s+([.,;:!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  text = text.replace(/([^.!?]+?)\s*\[NEEDS VERIFICATION\]\s*([.!?]|$)/gi, (_match, statement, punctuation) => {
+    const cleaned = String(statement || '').trim();
+    if (cleaned) verification.push(cleaned);
+    return `${statement}${punctuation}`;
+  });
+  text = text.replace(/\[NEEDS VERIFICATION\]/gi, () => {
+    verification.push('the related detail in this section');
+    return '';
+  });
+
+  const protectedTerms = [];
+  const protect = (pattern) => {
+    text = text.replace(pattern, (match) => {
+      const token = `__CARELOOP_TERM_${protectedTerms.length}__`;
+      protectedTerms.push(match);
+      return token;
+    });
+  };
+  protect(/\bblood pressure \(BP\)/gi);
+  protect(/\bA1c blood sugar test \(HbA1c\)/gi);
+  protect(/\banti-inflammatory medicine \(NSAID\)/gi);
+  protect(/\bMRI scan\b/gi);
+
+  text = text
+    .replace(/\b(\d{1,3})F\s+with\b/g, '$1-year-old woman with')
+    .replace(/\bOTC\b/gi, 'over-the-counter')
+    .replace(/\b(\d+)\s+PT\s+sessions?\b/g, '$1 physical therapy sessions')
+    .replace(/\bPT\s+sessions?\b/g, 'physical therapy sessions')
+    .replace(/\b(\d+)\s+weeks?\s+of\s+PT\b/g, '$1 weeks of physical therapy')
+    .replace(/\bfailed\s+PT\b/gi, 'failed physical therapy')
+    .replace(/\bPA\s+(likely|required|may be required)\b/gi, 'prior authorization (approval from your insurance plan) $1')
+    .replace(/\bafter the PA\b/gi, 'after the prior authorization')
+    .replace(/\bBID\b/g, 'twice a day')
+    .replace(/\bBP\b/g, 'blood pressure (BP)')
+    .replace(/\bHbA1c\b/g, 'A1c blood sugar test (HbA1c)')
+    .replace(/\bMRI\b(?!\s+scan\b)/g, 'MRI scan')
+    .replace(/\blumbar radiculopathy\b/gi, (match, offset, copy) => (
+      /^\s+suspected\b/i.test(copy.slice(offset + match.length))
+        ? match
+        : `${match} (irritation of a nerve in the lower back)`
+    ))
+    .replace(/\blumbar radiculopathy suspected\b/gi, 'lumbar radiculopathy is suspected (irritation of a nerve in the lower back)');
+  text = text.replace(/__CARELOOP_TERM_(\d+)__/g, (_match, index) => protectedTerms[Number(index)] || '');
+  text = text.replace(/\s+([.,;:!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
   return { text, verification };
 };
 
