@@ -160,10 +160,11 @@ Use whatever extractor is available; always the same `InsuranceProfile` JSON. Co
 | **Manual inputs + payer dropdown** | Source of truth the user typed | Always available. Required path if there is no image. |
 | **Fixture scan** (`image_note: fixture:front-of-card`) | Deterministic demo | Golden path; no API keys. |
 | **Azure Document Intelligence `prebuilt-healthInsuranceCard.us`** | Best dedicated **US card** model (insurer, member, group, Rx BIN/PCN, printed copays, per-field confidence) | Optional upgrade if someone adds an Azure key. Cards only — not SBCs or visit notes. |
-| **Gemini `generate_json()` (vision)** | Already in this repo; handles **card + SBC/EOB + prior-visit PDF/image** with one client | Default live extractor for the hackathon if a Gemini key exists. Same zero-hallucination rule as other JSON paths (no letter watermark). |
+| **xAI vision (`XAI_API_KEY`)** | Vercel env slot; `POST /api/careloop/extract-image` + Insurance scan | Default live extractor. Pulls a file, returns a JSON summary of printed parts. Same zero-hallucination rule (no letter watermark). |
+| **Gemini `generate_json()` (vision)** | Already in this repo | Fallback if xAI is down or unset. Same JSON shape. |
 | **AWS Textract / generic OCR** | Raw text or key-values; you still map to `InsuranceProfile` | Skip unless we are already on AWS. No US-card schema. |
 
-**Recommendation for this repo:** fixture + manual entry first; Gemini vision when a key is present (one stack for card, SBC, and prior-visit uploads); Azure card model only if we want higher card-field confidence and accept a second vendor.
+**Recommendation for this repo:** fixture + manual entry first; xAI vision (`XAI_API_KEY`) when a key is present (one stack for card, SBC, doctor pages, and lab uploads); Gemini as fallback; Azure card model only if we want higher card-field confidence and accept a second vendor.
 
 ### Coverage confirmation APIs (step 4a) — can we search, and what do we use?
 

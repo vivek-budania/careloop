@@ -65,7 +65,7 @@ Login does not read this table today (JWT/HMAC only). Intended returning path: s
 | Patient JWT on **save** (intended) | Upsert current row: payer + optional card fields + DOB. `confirmed_at` stays null. `eligibility_status` / money fields may stay null. |
 | Patient JWT on **Confirm** or **Refresh** | Same row: fill eligibility columns, `source`, `raw_eligibility`, set `confirmed_at = now()`, `is_current = true`. |
 | Dave APIs today | `coverage.py` in-process state + cookie. **Not this table.** |
-| Gemini vision | Returns JSON for the Insurance form only. Do not persist card **images**. JSON extract is not watermarked. |
+| xAI vision (`XAI_API_KEY`) | Returns JSON for printed card/SBC fields. Gemini fallback. Do not persist card **images**. JSON extract is not watermarked. |
 | `profiles` / login | Must not add insurance columns to `profiles`. |
 | Letters / claims UI | Must not write this table. |
 

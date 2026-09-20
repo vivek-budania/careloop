@@ -1,6 +1,6 @@
 """Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
 
-Optional Gemini vision on uploaded card/SBC (GEMINI_API_KEY at launch).
+Optional xAI vision on uploaded card/SBC (XAI_API_KEY at launch). Gemini fallback.
 Optional Stedi sandbox 270/271 (STEDI_API_KEY at launch). Aetna + Jane Doe /
 AETNA12345 is the canned sandbox member.
 """
@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 from backend.careloop import extract as careloop_extract
 from backend.careloop import stedi as careloop_stedi
+from backend.risk_engine import calculate_risk_score
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
@@ -155,6 +156,157 @@ def guess_specialty(symptoms: str = "", prior_visit_note: str = "") -> dict:
         "code": "pcp",
         "label": "Primary care",
         "reason": "No specialty keywords matched. Defaulting to primary care.",
+    }
+
+
+def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict]:
+    """Heuristic ICD-10 guess from free text. Not a diagnosis."""
+    blob = f"{symptoms} {prior_visit_note}".lower()
+    if _has_word(
+        blob,
+        ("diabetes", "a1c", "hba1c", "metformin", "glp", "insulin", "thirst", "endocrin"),
+    ):
+        return {
+            "code": "E11.9",
+            "description": "Type 2 diabetes mellitus without complications",
+            "reason": "Visit text looks like a diabetes follow-up. Code guess only — not a diagnosis.",
+        }
+    if _has_word(
+        blob,
+        ("psoriasis", "plaque", "clobetasol", "skyrizi", "biologic", "phototherapy", "dermatolog"),
+    ):
+        return {
+            "code": "L40.0",
+            "description": "Psoriasis vulgaris",
+            "reason": "Visit text looks like plaque psoriasis. Code guess only — not a diagnosis.",
+        }
+    if _has_word(
+        blob,
+        ("migraine", "botox", "topamax", "topiramate", "sumatriptan", "neurolog"),
+    ):
+        return {
+            "code": "G43.909",
+            "description": "Migraine, unspecified, not intractable, without status migrainosus",
+            "reason": "Visit text looks like migraine. Code guess only — not a diagnosis.",
+        }
+    if _has_word(blob, ("sciatica", "radiculopathy")):
+        return {
+            "code": "M54.41",
+            "description": "Lumbago with sciatica, right side",
+            "reason": "Visit text looks like sciatica. Code guess only — not a diagnosis.",
+        }
+    if _has_word(blob, ("back", "spine", "lumbar", "meloxicam", "mri", "orthop")):
+        return {
+            "code": "M54.5",
+            "description": "Low back pain",
+            "reason": "Visit text looks like low-back pain. Code guess only — not a diagnosis.",
+        }
+    if _has_word(blob, ("headache",)):
+        return {
+            "code": "R51.9",
+            "description": "Headache, unspecified",
+            "reason": "Visit text mentions headache. Code guess only — not a diagnosis.",
+        }
+    if _has_word(blob, ("fatigue", "thirst")):
+        return {
+            "code": "R53.83",
+            "description": "Other fatigue",
+            "reason": "Visit text mentions fatigue. Code guess only — not a diagnosis.",
+        }
+    return None
+
+
+def infer_service_codes(
+    symptoms: str = "",
+    prior_visit_note: str = "",
+    *,
+    require_match: bool = False,
+) -> list[tuple[str, str]]:
+    """Pick mock CPT lines from visit text. Not a claim or an order."""
+    blob = f"{symptoms} {prior_visit_note}".lower()
+    diabetes = _has_word(blob, ("diabetes", "a1c", "hba1c", "metformin", "glp"))
+    new_patient = _has_word(blob, ("new patient", "first visit")) or "never seen" in blob
+    urgent = _has_word(blob, ("chest", "shortness", "emergency", "urgent"))
+    imaging = _has_word(blob, ("mri", "radiculopathy", "sciatica", "lumbar"))
+    specialist = _has_word(
+        blob,
+        ("psoriasis", "migraine", "botox", "skyrizi", "neurolog", "dermatolog", "orthop"),
+    )
+    codes: list[tuple[str, str]] = []
+    if diabetes:
+        codes.append(("99214", "office"))
+        codes.append(("83036", "lab"))
+    elif imaging:
+        codes.append(("99214", "office"))
+        codes.append(("72148", "imaging"))
+    elif specialist or new_patient:
+        codes.append(("99214" if specialist else "99203", "office"))
+    elif urgent:
+        codes.append(("99214", "office"))
+    elif not require_match:
+        codes.append(("99213", "office"))
+    return codes
+
+
+def claim_acceptance_estimate(
+    *,
+    symptoms: str = "",
+    prior_visit_note: str = "",
+    cpt_code: str = "",
+    icd10_code: str = "",
+    has_prior_auth: bool = False,
+    has_clinical_notes: bool = True,
+    is_emergency: bool = False,
+) -> dict:
+    """Invert DenialShield denial risk into a claim-acceptance percent.
+
+    Higher original score = more denial risk. Acceptance = 100 − that score.
+    Estimate only — not a coverage decision, approval, or paid claim.
+    """
+    guessed = guess_icd10(symptoms, prior_visit_note)
+    icd = (icd10_code or "").strip() or ((guessed or {}).get("code") or "")
+    cpt = (cpt_code or "").strip()
+    if not cpt:
+        inferred = infer_service_codes(symptoms, prior_visit_note, require_match=True)
+        if not inferred:
+            inferred = infer_service_codes(symptoms, prior_visit_note, require_match=False)
+        cpt = inferred[0][0] if inferred else ""
+    if not icd or not cpt:
+        return {
+            "available": False,
+            "acceptance_percent": None,
+            "denial_risk": None,
+            "disclaimer": (
+                "Not enough coded information yet to estimate claim acceptance. "
+                "This is not a coverage decision."
+            ),
+        }
+    result = calculate_risk_score(
+        icd10_code=icd,
+        cpt_code=cpt,
+        has_prior_auth=has_prior_auth,
+        has_clinical_notes=has_clinical_notes,
+        is_emergency=is_emergency,
+    )
+    acceptance = max(0, min(100, 100 - int(result["score"])))
+    return {
+        "available": True,
+        "acceptance_percent": acceptance,
+        "denial_risk": result["score"],
+        "risk_level": result["risk_level"],
+        "color": result["color"],
+        "factors": result["factors"],
+        "recommendations": result["recommendations"],
+        "icd10_code": icd,
+        "cpt_code": cpt,
+        "icd10": result.get("icd10"),
+        "cpt": result.get("cpt"),
+        "guessed_icd": guessed,
+        "disclaimer": (
+            "Heuristic estimate that a later claim might be accepted — "
+            "not a coverage decision, approval, or paid claim. "
+            "Prior authorization is a separate event from a claim."
+        ),
     }
 
 
@@ -353,7 +505,7 @@ def scan_card(
     sbc_mime: str = "",
     sbc_filename: str = "",
 ) -> dict:
-    """Fixture scan, or Gemini vision when an image/PDF is attached."""
+    """Fixture scan, or xAI vision when an image/PDF is attached."""
     if card_image_b64 or sbc_image_b64:
         return _scan_uploaded(
             payer_name=payer_name,
@@ -452,7 +604,7 @@ def _scan_uploaded(
         value = extracted.get(key)
         if value:
             profile[key] = value
-    profile["scan_source"] = "gemini-vision"
+    profile["scan_source"] = "xai-vision" if careloop_extract.xai_configured() else "gemini-vision"
     profile["printed_copay_pcp"] = extracted.get("printed_copay_pcp")
     profile["printed_copay_specialist"] = extracted.get("printed_copay_specialist")
     docs = []
@@ -661,7 +813,11 @@ def _line_cost(code: str, eligibility: dict, setting: str) -> dict:
     }
 
 
-def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
+def visit_guess(
+    symptoms: str = "",
+    prior_visit_note: str = "",
+    from_transcript: bool = False,
+) -> dict:
     state = _ensure_state()
     intake = state.get("intake") or {}
     symptoms = symptoms or intake.get("symptoms") or ""
@@ -673,39 +829,18 @@ def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
     if not eligibility:
         raise ValueError("Confirm coverage first.")
 
-    codes: list[tuple[str, str]] = []
-    diabetes = _has_word(blob, ("diabetes", "a1c", "hba1c", "metformin", "glp"))
-    new_patient = _has_word(blob, ("new patient", "first visit")) or "never seen" in blob
+    codes = infer_service_codes(symptoms, prior_text, require_match=from_transcript)
     urgent = _has_word(blob, ("chest", "shortness", "emergency", "urgent"))
-
-    imaging = _has_word(blob, ("mri", "radiculopathy", "sciatica", "lumbar"))
-    specialist = _has_word(
-        blob,
-        ("psoriasis", "migraine", "botox", "skyrizi", "neurolog", "dermatolog", "orthop"),
-    )
-
-    if diabetes:
-        codes.append(("99214", "office"))
-        codes.append(("83036", "lab"))
-    elif imaging:
-        codes.append(("99214", "office"))
-        codes.append(("72148", "imaging"))
-    elif specialist or new_patient:
-        codes.append(("99214" if specialist else "99203", "office"))
-    elif urgent:
-        codes.append(("99214", "office"))
-    else:
-        codes.append(("99213", "office"))
-
     lines = [_line_cost(code, eligibility, setting) for code, setting in codes]
-    if urgent:
+    if urgent and lines:
         lines[0]["description"] += " [NEEDS VERIFICATION — urgency inferred from free text]"
 
-    total_low = round(sum(line["patient_owes_low"] for line in lines), 2)
-    total_high = round(sum(line["patient_owes_high"] for line in lines), 2)
+    total_low = round(sum(line["patient_owes_low"] for line in lines), 2) if lines else 0
+    total_high = round(sum(line["patient_owes_high"] for line in lines), 2) if lines else 0
 
     estimate = {
         "is_guess": True,
+        "from_transcript": bool(from_transcript),
         "disclaimer": (
             "Guess only — not a bill, quote, or coverage decision. "
             "Allowed amounts and remaining deductible are mocked."
@@ -715,6 +850,11 @@ def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
         "patient_owes_high": total_high,
         "warnings": [],
     }
+    if from_transcript and not lines:
+        estimate["warnings"].append(
+            "No billable service could be pulled from this transcript yet. "
+            "Estimated costs stay empty instead of a demo boilerplate."
+        )
     if "[NEEDS VERIFICATION" in json.dumps(lines):
         estimate["warnings"].append(
             "At least one visit type was inferred from symptoms. A clinician should confirm."
@@ -722,6 +862,15 @@ def visit_guess(symptoms: str = "", prior_visit_note: str = "") -> dict:
     suggestion = guess_specialty(symptoms, prior_text)
     estimate["suggested_specialty"] = suggestion["code"]
     estimate["suggested_specialty_label"] = suggestion["label"]
+    first_cpt = lines[0]["code"] if lines else ""
+    estimate["claim_acceptance"] = claim_acceptance_estimate(
+        symptoms=symptoms,
+        prior_visit_note=prior_text,
+        cpt_code=first_cpt,
+        has_clinical_notes=True,
+        has_prior_auth=False,
+        is_emergency=urgent,
+    )
     state["visit_cost_estimate"] = estimate
     merged_intake = {**intake, "symptoms": symptoms or intake.get("symptoms") or ""}
     merged_intake["suggested_specialty"] = suggestion["code"]

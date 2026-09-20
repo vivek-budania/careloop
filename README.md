@@ -134,7 +134,8 @@ cp .env.example .env
 #   SUPABASE_URL=https://your-project.supabase.co
 #   SUPABASE_ANON_KEY=your_anon_key_here
 #   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here   # server-only; never frontend JS
-#   GEMINI_API_KEY=your_key_here          # Insurance OCR + /letters
+#   XAI_API_KEY=                          # image → JSON + visit STT (already on Vercel)
+#   GEMINI_API_KEY=your_key_here          # /letters; fallback image JSON
 #   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
 #   GROQ_API_KEY=                         # optional letter fallback; add when you have it
 #   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
