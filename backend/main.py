@@ -811,6 +811,9 @@ if os.path.isdir(FRONTEND_DIR):
     _mockups = os.path.join(FRONTEND_DIR, "mockups")
     if os.path.isdir(_mockups):
         app.mount("/mockups", StaticFiles(directory=_mockups, html=True), name="mockups")
+    _images = os.path.join(FRONTEND_DIR, "images")
+    if os.path.isdir(_images):
+        app.mount("/images", StaticFiles(directory=_images), name="images")
 
     @app.get("/")
     def serve_frontend():
