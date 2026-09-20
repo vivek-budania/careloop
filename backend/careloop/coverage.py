@@ -1097,6 +1097,24 @@ def _coords_for_zip(zip_code: str) -> tuple[tuple[float, float], bool]:
     return ZIP_COORDS["94110"], True
 
 
+def _clinician_payload(doc: dict, origin: tuple[float, float], payer_name: str) -> dict:
+    miles = _haversine_miles(origin, (doc["lat"], doc["lng"]))
+    in_network = payer_name in (doc.get("networks") or []) if payer_name else False
+    return {
+        "npi": doc["npi"],
+        "name": doc["name"],
+        "specialty": doc["specialty"],
+        "specialty_label": doc["specialty_label"],
+        "address": f"{doc['address']}, {doc['city']}, {doc['state']} {doc['zip']}",
+        "zip": doc["zip"],
+        "phone": doc["phone"],
+        "accepting_new_patients": doc["accepting_new_patients"],
+        "miles": miles,
+        "in_network": in_network,
+        "networks": doc["networks"],
+    }
+
+
 def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     state = _ensure_state()
     profile = state.get("profile") or {}
@@ -1110,24 +1128,17 @@ def search_network(specialty: str = "pcp", zip_code: str = "") -> dict:
     for doc in _network():
         if spec not in ("any", "") and doc.get("specialty") != spec:
             continue
-        miles = _haversine_miles(origin, (doc["lat"], doc["lng"]))
-        in_network = payer_name in (doc.get("networks") or []) if payer_name else False
-        results.append({
-            "npi": doc["npi"],
-            "name": doc["name"],
-            "specialty": doc["specialty"],
-            "specialty_label": doc["specialty_label"],
-            "address": f"{doc['address']}, {doc['city']}, {doc['state']} {doc['zip']}",
-            "zip": doc["zip"],
-            "phone": doc["phone"],
-            "accepting_new_patients": doc["accepting_new_patients"],
-            "miles": miles,
-            "in_network": in_network,
-            "networks": doc["networks"],
-        })
+        results.append(_clinician_payload(doc, origin, payer_name))
     results.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
     nearby_radius = 40
     nearby = [row for row in results if row["miles"] <= nearby_radius]
+    if not nearby:
+        fallback = [_clinician_payload(doc, origin, payer_name) for doc in _network()]
+        fallback = [row for row in fallback if row["miles"] <= nearby_radius]
+        fallback.sort(key=lambda row: (not row["in_network"], row["miles"], row["name"]))
+        if fallback:
+            results = fallback
+            nearby = fallback
     payload = {
         "zip": zip_code,
         "specialty": spec,

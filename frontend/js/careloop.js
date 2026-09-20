@@ -7,6 +7,7 @@ const CareLoop = {
   THREAD_KEY: 'careloop-patient-thread-v2',
   COVERAGE_KEY: 'careloop-coverage-v1',
   GOLDEN_PAYER: 'Aetna',
+  EXAMPLE_ZIP: '94110',
   view: 'Today',
   historyTab: 'visits',
   selectedVisit: null,
@@ -1853,7 +1854,7 @@ const CareLoop = {
     const complete = j?.completed;
     const c = this.coverageLabel();
     const first = this.firstName();
-    return `<section class="greeting"><div><div class="eyebrow">Thursday, September 24</div><h1>A little clarity, ${this.esc(first)}.</h1><p>Here’s where things stand — and what comes next.</p></div><div class="date">${this.icon('calendar')} Your personal care space</div></section><div class="grid"><div class="stack"><section class="card hero"><div class="eyebrow">${complete ? 'One step forward' : 'Your next step'}</div><h2>${complete ? 'Your visit, all in one place.' : j ? 'Let’s pick up where you left off.' : 'Let’s make your next visit easier.'}</h2><p>${complete ? 'Your summary and next steps are saved. Take your story with you to the next visit.' : 'A few details now. A clearer conversation with your doctor later.'}</p>${this.visitHeroActions()}${this.art()}</section>${this.openVisitsPanel()}${this.upcomingVisitCard(j, c)}<section class="card"><div class="section-heading"><h2>A few things for today</h2><small>Small steps count.</small></div>${this.todayTaskRows(j)}</section></div><div class="stack"><section class="card"><div class="progress-top"><h2>Your care journey</h2>${this.tag('In progress', 'gray')}</div><ol class="timeline"><li><span class="point">${c ? '✓' : '1'}</span><div><h3>${c ? 'Insurance added' : 'Add insurance, if you like'}</h3><p>${c ? `${this.esc(c.payer)} · ${this.esc(c.status)}` : 'Optional. You can still start a visit.'}</p></div></li><li><span class="point ${complete ? '' : 'now'}">${complete ? '✓' : '2'}</span><div><h3>${complete ? 'Your visit is saved' : 'Prepare for your visit'}</h3><p>${complete ? 'Summary available in your history' : 'Share what’s on your mind.'}</p>${this.tag(complete ? 'Saved' : 'Your next step', complete ? '' : 'peach')}</div></li><li><span class="point ${complete ? 'now' : 'empty'}">3</span><div><h3>Visit &amp; care plan</h3><p>${complete ? 'Clinic reviews your next steps.' : 'A clear summary. A plan to review.'}</p></div></li><li><span class="point empty">4</span><div><h3>Keep your care moving</h3><p>Tests, medicines, and follow-ups.</p></div></li></ol></section><section class="card insurance-mini"><div class="row"><span class="eyebrow">Your coverage</span>${this.icon('shield')}</div><h3>${c ? `${this.esc(c.payer)} · ${this.esc(c.plan || '')}` : 'No insurance on file'}</h3><p>${c ? 'Coverage on file.' : 'Add a plan for estimated costs.'}</p>${c ? `<div class="row"><div><span class="money">${c.status === 'active' ? this.money(c.copay) : '—'}</span><small>&nbsp; est. PCP copay</small></div></div><div class="rule"></div>` : ''}${this.link('View insurance', 'insurance')}</section></div></div>`;
+    return `<section class="greeting"><div><div class="eyebrow">Thursday, September 24</div><h1>A little clarity, ${this.esc(first)}.</h1><p>Here’s where things stand — and what comes next.</p></div><div class="date">${this.icon('calendar')} Your personal care space</div></section><div class="grid"><div class="stack"><section class="card hero"><div class="eyebrow">${complete ? 'One step forward' : 'Your next step'}</div><h2>${complete ? 'Your visit, all in one place.' : j ? 'Let’s pick up where you left off.' : 'Let’s make your next visit easier.'}</h2><p>${complete ? 'Your summary and next steps are saved. Take your story with you to the next visit.' : 'A few details now. A clearer conversation with your doctor later.'}</p>${this.visitHeroActions()}${this.art()}</section>${this.openVisitsPanel()}${this.upcomingVisitCard(j, c)}<section class="card"><div class="section-heading"><h2>A few things for today</h2><small>Small steps count.</small></div>${this.todayTaskRows(j)}</section></div><div class="stack"><section class="card"><div class="progress-top"><h2>Your care journey</h2>${this.tag('In progress', 'gray')}</div><ol class="timeline"><li><span class="point">${c ? '✓' : '1'}</span><div><h3>${c ? 'Insurance added' : 'Add insurance, if you like'}</h3><p>${c ? `${this.esc(c.payer)} · ${this.esc(c.status)}` : 'Optional. You can still start a visit.'}</p></div></li><li><span class="point ${complete ? '' : 'now'}">${complete ? '✓' : '2'}</span><div><h3>${complete ? 'Your visit is saved' : 'Prepare for your visit'}</h3><p>${complete ? 'Summary available in your history' : 'Share what’s on your mind.'}</p>${this.tag(complete ? 'Saved' : 'Your next step', complete ? '' : 'peach')}</div></li><li><span class="point ${complete ? 'now' : 'empty'}">3</span><div><h3>Visit &amp; care plan</h3><p>${complete ? 'Clinic reviews your next steps.' : 'A clear summary. A plan to review.'}</p></div></li><li><span class="point empty">4</span><div><h3>Keep your care moving</h3><p>Tests, medicines, and follow-ups.</p></div></li></ol></section><section class="card insurance-mini"><div class="row"><span class="eyebrow">Your coverage</span>${this.icon('shield')}</div><h3>${c ? `${this.esc(c.payer)} · ${this.esc(c.plan || '')}` : 'No insurance on file'}</h3><p>${c ? 'Coverage on file.' : 'Add a plan for estimated costs.'}</p>${c ? `<div class="row"><div><span class="money">${c.status === 'active' ? this.money(c.copay) : '—'}</span><small>&nbsp; est. PCP copay</small></div></div><div class="rule"></div>` : this.btn('Try a sample card', 'sample-card')}${this.link('View insurance', 'insurance')}</section></div></div>`;
   },
 
   setup() {
@@ -1959,14 +1960,56 @@ const CareLoop = {
       || 'pcp';
   },
 
+  exampleZipClinicians() {
+    const payer = (this.coverageSnap && this.coverageSnap.profile && this.coverageSnap.profile.payer_name) || '';
+    const rows = [
+      { npi: '1111111112', name: 'Dr. Priya Shah', specialty: 'pcp', specialty_label: 'Family Medicine (PCP)', address: '1200 Potrero Ave, San Francisco, CA 94110', zip: '94110', phone: '415-555-0101', accepting_new_patients: true, miles: 0, networks: ['Mock Payer', 'Aetna', 'UnitedHealthcare', 'Blue Cross Blue Shield', 'Medicare'] },
+      { npi: '1444444448', name: 'Dr. Wei Chen', specialty: 'pcp', specialty_label: 'Family Medicine (PCP)', address: '899 Valencia St, San Francisco, CA 94110', zip: '94110', phone: '415-555-0199', accepting_new_patients: false, miles: 0.8, networks: ['Mock Payer', 'Aetna', 'Cigna', 'Medicare'] },
+      { npi: '1222222224', name: 'Dr. James Okonkwo', specialty: 'pcp', specialty_label: 'Internal Medicine (PCP)', address: '4333 17th St, San Francisco, CA 94117', zip: '94117', phone: '415-555-0144', accepting_new_patients: true, miles: 1.7, networks: ['Mock Payer', 'Cigna', 'Aetna', 'Medicare'] },
+      { npi: '1333333336', name: 'Dr. Elena Ruiz', specialty: 'endocrinology', specialty_label: 'Endocrinology', address: '45 Castro St, San Francisco, CA 94103', zip: '94103', phone: '415-555-0188', accepting_new_patients: true, miles: 1.6, networks: ['Mock Payer', 'Aetna', 'UnitedHealthcare', 'Blue Cross Blue Shield'] },
+      { npi: '1999999991', name: 'Dr. Helen Thorne', specialty: 'neurology', specialty_label: 'Neurology', address: '1100 Van Ness Ave, San Francisco, CA 94109', zip: '94109', phone: '415-555-0333', accepting_new_patients: true, miles: 2.6, networks: ['Mock Payer', 'Aetna', 'Blue Cross Blue Shield', 'UnitedHealthcare'] },
+      { npi: '1777777777', name: 'Dr. Avery Vance', specialty: 'dermatology', specialty_label: 'Dermatology', address: '450 Sutter St, San Francisco, CA 94108', zip: '94108', phone: '415-555-0311', accepting_new_patients: true, miles: 2.9, networks: ['Mock Payer', 'Aetna', 'Blue Cross Blue Shield', 'Cigna'] },
+      { npi: '1888888889', name: 'Dr. Samira Aris', specialty: 'orthopedics', specialty_label: 'Orthopedics', address: '2100 Webster St, San Francisco, CA 94115', zip: '94115', phone: '415-555-0322', accepting_new_patients: true, miles: 3.1, networks: ['Mock Payer', 'Aetna', 'UnitedHealthcare', 'Medicare'] },
+    ];
+    return rows.map((doc) => ({
+      ...doc,
+      in_network: Boolean(payer) && (doc.networks || []).includes(payer),
+    }));
+  },
+
+  cliniciansForZip(zip, specialty, live) {
+    const example = !zip || zip === this.EXAMPLE_ZIP;
+    const hardcoded = this.exampleZipClinicians();
+    const incoming = Array.isArray(live) ? live : [];
+    if (!example) return incoming.length ? incoming : hardcoded;
+    const byNpi = new Map(incoming.map((row) => [String(row.npi), row]));
+    const merged = hardcoded.map((doc) => {
+      const liveRow = byNpi.get(String(doc.npi));
+      return liveRow ? { ...doc, ...liveRow, miles: doc.miles, address: liveRow.address || doc.address } : doc;
+    });
+    const spec = String(specialty || '').toLowerCase();
+    if (!spec || spec === 'any') return merged;
+    const matched = merged.filter((row) => String(row.specialty || '').toLowerCase() === spec);
+    const rest = merged.filter((row) => String(row.specialty || '').toLowerCase() !== spec);
+    return matched.concat(rest);
+  },
+
   async loadNetwork() {
     const zip = this.visitZip();
     const j = this.thread.journey || {};
     const specialty = j.network_specialty === 'any' ? 'any' : this.suggestedSpecialty();
+    const fallback = this.cliniciansForZip(zip, specialty, []);
     try {
       const payload = await API.searchNetwork(specialty, zip);
-      this.networkMeta = payload;
-      this.clinicians = payload.clinicians || [];
+      this.clinicians = this.cliniciansForZip(zip, specialty, payload.clinicians || []);
+      this.networkMeta = {
+        ...(payload || {}),
+        zip: zip || this.EXAMPLE_ZIP,
+        nearby_radius_miles: (payload && payload.nearby_radius_miles) || 40,
+        clinicians: this.clinicians,
+        nearby: this.clinicians,
+        nearby_count: this.clinicians.length,
+      };
       if (payload.specialty_label && specialty !== 'any') {
         this.saveThread({
           journey: {
@@ -1977,8 +2020,16 @@ const CareLoop = {
         });
       }
     } catch (err) {
-      this.clinicians = [];
-      this.networkMeta = null;
+      this.clinicians = fallback;
+      this.networkMeta = {
+        zip: zip || this.EXAMPLE_ZIP,
+        specialty,
+        nearby_radius_miles: 40,
+        nearby_count: fallback.length,
+        zip_fallback_used: Boolean(zip) && zip !== this.EXAMPLE_ZIP,
+        clinicians: fallback,
+        nearby: fallback,
+      };
       this.toast(err.message);
     }
   },
@@ -2085,8 +2136,9 @@ const CareLoop = {
     const any = j.network_specialty === 'any';
     const radius = this.networkMeta?.nearby_radius_miles || 40;
     const fallback = Boolean(this.networkMeta?.zip_fallback_used);
-    const nearby = (this.networkMeta?.nearby || this.clinicians.filter((doc) => Number(doc.miles) <= radius)).slice(0, 6);
-    const farther = this.clinicians.filter((doc) => !nearby.some((row) => row.npi === doc.npi)).slice(0, 4);
+    const nearbyAll = this.networkMeta?.nearby || this.clinicians.filter((doc) => Number(doc.miles) <= radius);
+    const nearby = nearbyAll.filter((doc) => Number(doc.miles) <= radius);
+    const farther = this.clinicians.filter((doc) => !nearby.some((row) => row.npi === doc.npi) && Number(doc.miles) > radius);
     const zipNote = fallback
       ? `ZIP ${this.esc(zip)} is not in the demo map, so distance is measured from 94110.`
       : `Distances are from ZIP ${this.esc(zip)}.`;
@@ -2096,7 +2148,7 @@ const CareLoop = {
     const c = this.coverageLabel();
     const insurance = c
       ? `<div class="document zip-confirm">${this.icon('shield')}<div><h3>I can see your insurance</h3><p>You’re on file with <strong>${this.esc(c.payer)}</strong>${c.plan ? ` · ${this.esc(c.plan)}` : ''}${c.member ? ` · member ${this.esc(c.member)}` : ''} · ${this.esc(c.status || 'saved')}. That’s the same plan on your Insurance tab.</p></div></div>`
-      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add a card or your plan details if you want estimated costs later.</div><div class="row" style="flex-wrap:wrap;margin:4px 0 12px">${this.btn('Add insurance', 'add-visit-insurance')}</div>`;
+      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add a card or your plan details if you want estimated costs later.</div><div class="row" style="flex-wrap:wrap;margin:4px 0 12px">${this.btn('Try a sample card', 'sample-card')}${this.btn('Add insurance', 'add-visit-insurance', 'secondary')}</div>`;
     const specReason = this.quietUserCopy(this.coverageSnap.intake?.suggested_specialty_reason)
       || 'Change the reason on the last step to change this filter.';
     return `<h2>Let’s take this one step at a time.</h2><p class="empathy">${this.esc(this.empathyForSymptoms(j.symptoms))}</p>${insurance}<div class="document mt"><div><h3>Who I would start with</h3><p>From what you shared, I’d look for a <strong>${this.esc(spec)}</strong> first. ${this.esc(specReason)}</p></div></div><div class="rule"></div><h3>Then we can search near you.</h3><p>Enter your ZIP so we can sort nearby clinicians by distance.</p><form id="zip-search-form" class="zip-search"><label class="field">ZIP code<input name="zip" value="${this.esc(zip)}" pattern="[0-9]{5}" maxlength="5" required></label><button class="btn secondary" type="submit">Search nearby</button></form><div class="row" style="flex-wrap:wrap;margin:12px 0 8px">${this.btn(any ? 'Use suggested specialty' : 'Suggested specialty ✓', 'network-suggested', any ? 'secondary' : '')}${this.btn(any ? 'Any specialty nearby ✓' : 'Any specialty nearby', 'network-any', any ? '' : 'secondary')}</div>${found}<h3 class="mt">Near ZIP ${this.esc(zip)}</h3>${this.doctorRows(nearby)}${farther.length ? `<h3 class="mt">Farther alternatives</h3><p style="font-size:12px">Farther than ${radius} miles.</p>${this.doctorRows(farther)}` : ''}`;
@@ -3032,7 +3084,7 @@ const CareLoop = {
   insurance() {
     const c = this.coverageLabel();
     if (!c) {
-      return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates.</p>${this.btn('Add insurance', 'update-insurance')}</section></div>`;
+      return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates.</p><div class="row" style="flex-wrap:wrap">${this.btn('Try a sample card', 'sample-card')}${this.btn('Add insurance', 'update-insurance', 'secondary')}</div></section></div>`;
     }
     const e = this.coverageSnap.eligibility || {};
     return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.displayName())}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(c.status, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'your plan')}</small></div></div>${this.eligibilityNote() ? `<div class="notice">${this.esc(this.eligibilityNote())}</div>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon</small></div></div></section></div>`;
@@ -3623,6 +3675,8 @@ const CareLoop = {
         this.render();
         break;
       case 'sample-card':
+        this.insuranceReturn = this.insuranceReturn || this.view !== 'Setup';
+        this.view = 'Setup';
         try {
           this.rememberCoverage(await API.scanCoverage({
             payer_name: this.GOLDEN_PAYER,
