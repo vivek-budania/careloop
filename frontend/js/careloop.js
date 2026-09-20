@@ -1948,6 +1948,36 @@ const CareLoop = {
     }).join('');
   },
 
+  transcriptMarkdown() {
+    const j = this.thread.journey || {};
+    const text = this.transcriptText();
+    const live = Boolean(this.liveTranscript());
+    const lines = ['# CareLoop · Visit transcript', '', `Patient: ${this.displayName()}`];
+    if (j.doctor) lines.push(`Clinician: ${j.doctor}`);
+    if (j.symptoms) lines.push(`Visit reason: ${j.symptoms}`);
+    lines.push('', '## Full conversation', '');
+    let hasUnresolved = false;
+    (text || '').split(/\n\n+/).forEach((block) => {
+      const line = block.replace(/\n/g, ' ').trim();
+      if (!line) return;
+      const m = line.match(/^([^:]{2,48}):\s*(.*)$/);
+      if (m) {
+        let label = m[1].trim();
+        if (live && /^SPEAKER(\s\d+)?$/.test(label)) {
+          label += '*';
+          hasUnresolved = true;
+        }
+        lines.push(`### ${label}`, m[2], '');
+      } else {
+        lines.push(line, '');
+      }
+    });
+    if (hasUnresolved) {
+      lines.push('---', '* Speaker role could not be confidently identified as Doctor or Patient.');
+    }
+    return lines.join('\n');
+  },
+
   transcriptBody() {
     const live = this.liveTranscript();
     const demo = this.usesDemoTranscript();
@@ -2051,7 +2081,10 @@ const CareLoop = {
       ['A', 'What to review', soap.assessment || fallback.assessment || 'No assessment could be drafted from this transcript yet.'],
       ['P', 'Suggested next steps', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
     ];
-    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Mark this summary as reviewed.</label>`;
+    const transcriptActions = this.transcriptText()
+      ? `<div class="mt">${this.btn(`${this.icon('download')} Download full transcript (PDF)`, 'export-transcript-pdf', 'secondary')}</div>`
+      : '';
+    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}${transcriptActions}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Mark this summary as reviewed.</label>`;
   },
 
   async loadScribeFixture() {
@@ -3479,6 +3512,14 @@ const CareLoop = {
             await API.downloadHistoryPdf(markdown, 'CareLoop history packet');
           }
           this.toast('PDF packet downloaded.');
+        } catch (err) {
+          this.toast(err.message);
+        }
+        break;
+      case 'export-transcript-pdf':
+        try {
+          await API.downloadHistoryPdf(this.transcriptMarkdown(), 'CareLoop visit transcript', 'visit-transcript.pdf');
+          this.toast('Full transcript downloaded.');
         } catch (err) {
           this.toast(err.message);
         }
