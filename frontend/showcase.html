@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CareLoop connects coverage, visits, care plans, insurance actions, and follow-ups in one patient journey.">
+  <title>CareLoop — One thread through care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/showcase.css">
+</head>
+<body>
+  <header class="nav" id="top">
+    <a class="brand" href="#top" aria-label="CareLoop"><svg class="brand-loop" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 7c-5-8-15-4-13 3 2 6 8 9 14 6 6-3 6-12 0-13-5-1-8 5-6 11 2 6 10 8 15 2"/></svg>careloop<span class="brand-dot">.</span></a>
+    <nav><a href="#problem">Why CareLoop</a><a href="#journey">Journey</a><a href="#technology">Technology</a></nav>
+    <a class="button button-small" href="/">Open live demo <span>↗</span></a>
+  </header>
+
+  <main>
+    <section class="hero shell">
+      <div class="eyebrow"><span></span> Built at HopHacks 2026</div>
+      <h1>Your care shouldn’t<br><em>restart at every step.</em></h1>
+      <p class="hero-copy">CareLoop connects coverage, appointments, clinical notes, costs, medications, authorizations, and follow-ups into one understandable patient journey.</p>
+      <div class="hero-actions"><a class="button" href="/">Experience CareLoop <span>↗</span></a><a class="text-link" href="#journey">Follow Jane’s journey ↓</a></div>
+      <div class="thread-card">
+        <div class="thread-line"></div>
+        <div class="thread-step active"><span>✓</span><b>Coverage</b><small>Active plan</small></div>
+        <div class="thread-step"><span>02</span><b>Find care</b><small>In network</small></div>
+        <div class="thread-step"><span>03</span><b>Visit</b><small>Context ready</small></div>
+        <div class="thread-step"><span>04</span><b>Care plan</b><small>Next steps</small></div>
+        <div class="thread-step"><span>05</span><b>Follow-up</b><small>Nothing lost</small></div>
+      </div>
+    </section>
+
+    <section class="problem" id="problem">
+      <div class="shell split-heading">
+        <div><div class="eyebrow light"><span></span> The problem</div><h2>Patients have become the<br><em>integration layer.</em></h2></div>
+        <p>Healthcare is a chain of handoffs. Records, coverage, appointments, prescriptions, and next steps live in different places—leaving the patient to carry context between them.</p>
+      </div>
+      <div class="orbit shell">
+        <div class="orbit-card one"><b>Insurance portal</b><small>Coverage & claims</small></div>
+        <div class="orbit-card two"><b>Clinic portal</b><small>Notes & messages</small></div>
+        <div class="orbit-card three"><b>Pharmacy</b><small>Prescriptions</small></div>
+        <div class="orbit-card four"><b>Scheduling</b><small>Appointments</small></div>
+        <div class="orbit-center"><span>Jane</span><b>“What happens next?”</b></div>
+        <svg viewBox="0 0 900 410" aria-hidden="true"><path d="M150 70C300 170 320 150 450 205M750 70C600 170 570 150 450 205M150 340C300 250 325 270 450 205M750 340C610 255 575 270 450 205"/></svg>
+      </div>
+    </section>
+
+    <section class="evidence shell">
+      <div class="eyebrow"><span></span> The evidence</div><h2>Fragmentation is not an edge case.</h2>
+      <div class="stats-grid">
+        <article class="stat-card featured"><div class="stat">59<span>%</span></div><p>of individuals had multiple online medical records or patient portals in 2024.</p><a href="https://healthit.gov/" target="_blank" rel="noopener">U.S. Office of the National Coordinator for Health IT ↗</a></article>
+        <article class="stat-card"><div class="stat">7<span>%</span></div><p>used an app or portal that organized records from multiple sources.</p><a href="https://healthit.gov/" target="_blank" rel="noopener">ONC patient portal data ↗</a></article>
+        <article class="stat-card"><div class="stat">35<span>%</span></div><p>of Medicare beneficiaries saw five or more physicians within one year.</p><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10923120/" target="_blank" rel="noopener">JAMA Health Forum ↗</a></article>
+      </div>
+      <p class="source-note">HL7’s FHIR standard also recognizes that distributed systems can hold separate, overlapping, and potentially contradictory records for the same patient. <a href="https://www.hl7.org/fhir/patient.html" target="_blank" rel="noopener">Read the specification ↗</a></p>
+    </section>
+
+    <section class="journey shell" id="journey">
+      <div class="section-intro"><div class="eyebrow"><span></span> One patient. One continuous thread.</div><h2>Follow Jane through CareLoop.</h2><p>At every step, CareLoop answers three questions: what happened, what is waiting, and who acts next?</p></div>
+      <div class="journey-layout">
+        <div class="journey-nav" role="tablist">
+          <button class="journey-tab active" data-step="0"><span>01</span><b>Understand coverage</b><small>Turn a card into a clear coverage snapshot.</small></button>
+          <button class="journey-tab" data-step="1"><span>02</span><b>Find appropriate care</b><small>Match the visit reason to in-network options.</small></button>
+          <button class="journey-tab" data-step="2"><span>03</span><b>Understand the visit</b><small>Transform conversation into a reviewable summary.</small></button>
+          <button class="journey-tab" data-step="3"><span>04</span><b>See what comes next</b><small>Costs, medicines, tests, and responsibilities.</small></button>
+          <button class="journey-tab" data-step="4"><span>05</span><b>Carry context forward</b><small>A shareable history for the next visit.</small></button>
+        </div>
+        <div class="product-stage">
+          <div class="browser"><i></i><i></i><i></i><span>careloop.health/jane</span></div>
+          <div class="screen active" data-screen="0"><div class="screen-top"><span>Insurance</span><span class="green">● Active</span></div><h3>Your coverage, in plain language.</h3><div class="insurance-card"><small>AETNA · PPO GOLD</small><strong>Jane Doe</strong><span>AETNA12345</span></div><div class="info-row"><span>Primary care visit</span><b>$30 copay</b></div><div class="info-row"><span>In-network deductible</span><b>$500 remaining</b></div><p class="fine">Estimate only. Confirmed from the plan snapshot on file.</p></div>
+          <div class="screen" data-screen="1"><div class="screen-top"><span>Doctor suggestions</span><span>94110</span></div><h3>In-network care for a diabetes follow-up.</h3><div class="doctor-card"><span class="avatar">ER</span><div><b>Dr. Elena Ruiz</b><small>Endocrinology · 1.8 miles</small></div><span class="network">In network</span></div><div class="slots"><span>Thu 10:30</span><span>Thu 2:00</span><span>Fri 9:15</span></div></div>
+          <div class="screen" data-screen="2"><div class="screen-top"><span>Visit summary</span><span class="orange">Awaiting review</span></div><h3>A clinical draft Jane can understand.</h3><div class="soap"><b>S</b><p>Increased thirst and fatigue since the last visit.</p></div><div class="soap"><b>O</b><p>Current medication and prior history captured.</p></div><div class="soap"><b>P</b><p>HbA1c test and medication review suggested.</p></div><p class="fine">Draft only—nothing becomes final without clinician review.</p></div>
+          <div class="screen" data-screen="3"><div class="screen-top"><span>Your next steps</span><span>3 actions</span></div><h3>Everyone knows what they own.</h3><div class="action-row"><span>YOU</span><p>Complete HbA1c test</p><b>Next</b></div><div class="action-row"><span>CLINIC</span><p>Review visit summary</p><b>Waiting</b></div><div class="action-row"><span>INSURER</span><p>Review authorization if needed</p><b>Later</b></div></div>
+          <div class="screen" data-screen="4"><div class="screen-top"><span>For the clinic</span><span>Shareable</span></div><h3>Context ready for the next visit.</h3><div class="packet"><span>CARELOOP VISIT PACKET</span><b>Jane Doe</b><small>Coverage snapshot · Visit summaries · Medicines · Tests · Open actions</small><button>Create patient packet</button></div></div>
+          <div class="stage-controls"><button id="prev-step" aria-label="Previous">←</button><span id="step-count">01 / 05</span><button id="next-step" aria-label="Next">→</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="comparison"><div class="shell"><div class="section-intro"><div class="eyebrow light"><span></span> The difference</div><h2>From scattered steps to one story.</h2></div><div class="compare-grid"><div class="compare before"><h3>Without CareLoop</h3><ul><li>Information across multiple portals</li><li>Unclear in-network status</li><li>Medical language without context</li><li>Uncertain costs and next actions</li><li>History repeated at every visit</li></ul></div><div class="compare after"><h3>With CareLoop</h3><ul><li>One longitudinal patient thread</li><li>Coverage context before booking</li><li>A patient-readable visit summary</li><li>Clear estimates and ownership</li><li>A shareable history for future care</li></ul></div></div></div></section>
+
+    <section class="technology shell" id="technology">
+      <div class="section-intro"><div class="eyebrow"><span></span> Thoughtful intelligence</div><h2>AI translates and organizes.<br><em>People stay in control.</em></h2></div>
+      <div class="tech-grid"><article><span>01</span><h3>See</h3><p>Read an insurance card and convert it into structured information for review.</p></article><article><span>02</span><h3>Listen</h3><p>Turn a visit conversation into a patient-readable clinical draft.</p></article><article><span>03</span><h3>Connect</h3><p>Carry evidence from the encounter into costs, authorizations, and follow-ups.</p></article><article><span>04</span><h3>Protect</h3><p>Keep clinician and patient approval at consequential decision points.</p></article></div>
+      <div class="stack"><span>FastAPI</span><span>Supabase</span><span>Gemini</span><span>Stedi</span><span>Groq</span><span>Vanilla JS</span></div>
+    </section>
+
+    <section class="safety shell"><div><div class="eyebrow"><span></span> Designed with boundaries</div><h2>Trust is a feature.</h2></div><div class="safety-list"><p>✓ No autonomous diagnosis</p><p>✓ No invented eligibility or copays</p><p>✓ Estimates are clearly labeled</p><p>✓ Clinician review before finalization</p><p>✓ Human approval before letter download</p><p>✓ Synthetic patient data in the demo</p></div></section>
+
+    <section class="built shell"><div class="section-intro"><div class="eyebrow"><span></span> Built during HopHacks</div><h2>Functional depth, honestly labeled.</h2></div><div class="build-grid"><article><span class="pill live">Live</span><h3>Patient journey</h3><p>Coverage intake, clinician search, booking, visit flow, SOAP draft, costs, care plan, and history.</p></article><article><span class="pill live">Live</span><h3>Human-reviewed letters</h3><p>Prior-authorization and appeal drafts with risk scoring, watermarks, and approval gates.</p></article><article><span class="pill prototype">Prototype</span><h3>External connections</h3><p>Sandbox eligibility and AI extraction demonstrate how real systems can connect safely.</p></article></div></section>
+
+    <section class="future"><div class="shell"><div class="section-intro"><div class="eyebrow light"><span></span> Future expansion</div><h2>From understanding the journey<br>to coordinating it.</h2></div><div class="future-grid"><article><h3>Pharmacy checkout</h3><p>Partner with CVS and other pharmacies to securely share clinician-approved prescriptions and enable easier ordering, delivery, or pickup.</p></article><article><h3>Insurance claims agent</h3><p>With patient authorization, communicate with insurers, explain status, gather documents, track actions, and prepare responses for review.</p></article><article><h3>Appointment agent</h3><p>Find in-network providers, compare availability, schedule or reschedule visits, prepare documents, and coordinate follow-ups.</p></article><article><h3>Automated check-in</h3><p>Automate check-in across hospital and physician websites or digital intake forms, eliminating repetitive paperwork and clipboard friction.</p></article><article><h3>Insurance tie-ups & discounts</h3><p>Partner directly with insurers to unlock pre-negotiated visit rates, member-exclusive discounts, and lower immediate out-of-pocket costs.</p></article><article><h3>Multi-factor security</h3><p>Incorporate biometric and hardware-backed multi-factor authentication (MFA) to strictly safeguard patient health records and coverage profiles.</p></article></div></div></section>
+
+    <section class="final-cta shell"><div class="loop-mark"><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 7c-5-8-15-4-13 3 2 6 8 9 14 6 6-3 6-12 0-13-5-1-8 5-6 11 2 6 10 8 15 2"/></svg></div><p>One patient. One thread. Nothing lost between visits.</p><h2>See the complete CareLoop journey.</h2><div class="hero-actions"><a class="button" href="/">Open live demo ↗</a><a class="text-link" href="https://github.com/vivek-budania/careloop" target="_blank" rel="noopener">View GitHub ↗</a></div></section>
+  </main>
+  <footer><a class="brand" href="#top" aria-label="CareLoop"><svg class="brand-loop" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 7c-5-8-15-4-13 3 2 6 8 9 14 6 6-3 6-12 0-13-5-1-8 5-6 11 2 6 10 8 15 2"/></svg>careloop<span class="brand-dot">.</span></a><p>Built at Johns Hopkins University for HopHacks 2026.</p><a href="#top">Back to top ↑</a></footer>
+  <script src="/js/showcase.js"></script>
+</body>
+</html>
