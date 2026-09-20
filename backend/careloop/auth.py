@@ -1,4 +1,4 @@
-"""CareLoop login. Prefer Supabase Auth + public.profiles; mock JSON is fallback.
+"""CareLoop login/signup. Prefer Supabase Auth + public.profiles; mock login is fallback.
 
 Not production HIPAA. Tokens are stateless so Vercel workers can authorize
 coverage routes: either a Supabase access JWT, or the legacy HMAC app token.
@@ -11,7 +11,9 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
+from datetime import date
 from typing import Optional
 
 from fastapi import Header, HTTPException, Request
@@ -29,6 +31,14 @@ ROLE_TABS = {
     "advocate": ["careloop", "claims"],
     "demo": ["careloop", "claims"],
 }
+
+
+class SignupUnavailableError(ValueError):
+    pass
+
+
+class SignupConflictError(ValueError):
+    pass
 
 
 def _users() -> list[dict]:
@@ -79,7 +89,7 @@ def session_status() -> dict:
             "signed": True,
             "provider": "supabase",
             "custom_secret": custom,
-            "used_for": "Supabase Auth JWT after profiles username lookup",
+            "used_for": "Supabase Auth signup/login + profiles username lookup",
             "message": sb["message"],
             "supabase": sb,
         }
@@ -153,6 +163,106 @@ def login(username: str, password: str) -> dict:
     if supabase_auth.configured():
         return _login_supabase(username, password)
     return _login_mock(username.lower(), password)
+
+
+def signup(
+    *,
+    username: str,
+    full_name: str,
+    email: str,
+    password: str,
+    date_of_birth: str,
+) -> dict:
+    if not supabase_auth.configured():
+        raise SignupUnavailableError(
+            "Live signup requires the server-side Supabase environment variables."
+        )
+
+    username = (username or "").strip().lower()
+    full_name = " ".join((full_name or "").strip().split())
+    email = (email or "").strip().lower()
+    password = password or ""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,29}", username):
+        raise ValueError("Username must be 3–30 characters using letters, numbers, dots, dashes, or underscores.")
+    if len(full_name) < 2 or any(ch.isdigit() for ch in full_name) or not any(ch.isalpha() for ch in full_name):
+        raise ValueError("Enter your name without numbers.")
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]{2,}", email):
+        raise ValueError("Enter a valid email address.")
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    try:
+        born = date.fromisoformat(date_of_birth)
+    except (TypeError, ValueError):
+        raise ValueError("Enter a valid date of birth.") from None
+    today = date.today()
+    if born >= today:
+        raise ValueError("Date of birth must be in the past.")
+    try:
+        oldest = today.replace(year=today.year - 120)
+    except ValueError:
+        oldest = today.replace(year=today.year - 120, day=28)
+    if born < oldest:
+        raise ValueError("Check the year in your date of birth.")
+
+    try:
+        if supabase_auth.profile_by_username(username):
+            raise SignupConflictError("That username is already in use.")
+        if supabase_auth.profile_by_email(email):
+            raise SignupConflictError("An account already exists for that email address.")
+    except SignupConflictError:
+        raise
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
+
+    parts = full_name.split(" ", 1)
+    first_name = parts[0]
+    last_name = parts[1] if len(parts) > 1 else ""
+    try:
+        signup_result = supabase_auth.sign_up_user(
+            email=email,
+            password=password,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+        )
+    except ValueError as exc:
+        message = str(exc).lower()
+        if "already" in message or "registered" in message or "duplicate" in message:
+            raise SignupConflictError("An account already exists for that email address.") from None
+        raise ValueError("Could not create the account in Supabase Auth.") from None
+
+    auth_user = signup_result.get("user") if isinstance(signup_result, dict) else None
+    auth_user = auth_user if isinstance(auth_user, dict) else {}
+    user_id = (auth_user.get("id") or "").strip()
+    if not user_id:
+        raise ValueError("Supabase Auth did not return a user id.")
+    try:
+        profile = supabase_auth.create_profile(
+            user_id=user_id,
+            username=username,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            date_of_birth=born.isoformat(),
+        )
+    except ValueError as exc:
+        try:
+            supabase_auth.delete_auth_user(user_id)
+        except ValueError:
+            raise ValueError(
+                "Could not create the profile row, and the incomplete Auth account could not be removed."
+            ) from None
+        message = str(exc).lower()
+        if "duplicate" in message or "unique" in message:
+            raise SignupConflictError("That username or email is already in use.") from None
+        raise ValueError("Could not create the profile row.") from None
+
+    token = (signup_result.get("access_token") or "").strip()
+    return {
+        "token": token,
+        "user": public_user_from_profile(profile),
+        "requires_email_confirmation": not bool(token),
+    }
 
 
 def _login_mock(username: str, password: str) -> dict:

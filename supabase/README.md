@@ -4,7 +4,7 @@ Checked-in SQL for the **hosted** CareLoop Supabase project. This folder is the 
 
 ## Hosted project (required)
 
-CareLoop login and these tables live on the existing cloud project (URL in [`.env.example`](../.env.example) as `SUPABASE_URL`). You do **not** need the Supabase CLI, Docker, or `supabase start` to run the app.
+CareLoop signup/login and these tables live on the existing cloud project (URL in [`.env.example`](../.env.example) as `SUPABASE_URL`). You do **not** need the Supabase CLI, Docker, or `supabase start` to run the app.
 
 Server-side env (never frontend JS, never commit real values):
 
@@ -12,7 +12,7 @@ Server-side env (never frontend JS, never commit real values):
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-Login still uses **Auth + `public.profiles` only**. See [`docs/database/`](../docs/database/README.md).
+Signup and login use **Auth + `public.profiles` only**. Signup uses the normal Auth signup endpoint, then the server service role creates the matching profile. See [`docs/database/`](../docs/database/README.md).
 
 ## Layout
 
@@ -41,6 +41,8 @@ Only if you are standing up a **new** Supabase project or comparing a blank sche
 3. Seed Auth + a `profiles` row separately (demo: username `jane`, email `jane@careloop.local`). There is **no** `login` table.
 
 Do not paste `service_role` keys into this repo, chat, or frontend JS.
+
+`20260919103000_add_profile_date_of_birth.sql` must be applied before deploying the self-serve signup endpoint; otherwise the profile insert intentionally fails and the newly created Auth user is rolled back.
 
 ## Table docs (source of truth for columns)
 

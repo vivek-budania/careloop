@@ -163,6 +163,10 @@ const API = {
     return this.post('/api/careloop/login', { username, password });
   },
 
+  signup(data) {
+    return this.post('/api/careloop/signup', data);
+  },
+
   logout() {
     return this.post('/api/careloop/logout', {});
   },

@@ -9,8 +9,8 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 | Layer | What is true today |
 |-------|-------------------|
 | Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance` |
-| Running app | Login reads **Auth + `profiles`**. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
-| This docs PR | Schema + SQL only. **Do not** wire coverage APIs or change login. |
+| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
+| This signup PR | Adds self-serve Auth + profile creation only. Coverage and clinical data flows are unchanged. |
 
 ## ER (what exists)
 
@@ -30,6 +30,7 @@ erDiagram
     text email UK
     text first_name
     text last_name
+    date date_of_birth
     timestamptz created_at
   }
   VISITS {
@@ -84,6 +85,8 @@ Do not invent these tables in migrations:
 3. Auth password grant with that row’s **email**.
 4. Response token is the Supabase access JWT (or HMAC `v1.` when Supabase env is unset).
 
+Self-serve signup calls Supabase Auth’s normal signup endpoint, inserts the matching `profiles` row server-side (including validated `date_of_birth`), and follows the hosted project’s email-confirmation setting.
+
 Seeded live user: username `jane`, email `jane@careloop.local`, password `demo`. See [`AGENTS.md`](../../AGENTS.md).
 
 ## First visit vs returning (intended when coverage is stored)
@@ -99,7 +102,7 @@ No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a 
 
 | Table | Writers | Readers |
 |-------|---------|---------|
-| `profiles` | Dashboard seed (and optional later self-serve). Login does **not** insert. | Login (service_role); patient JWT may select/update **own** row |
+| `profiles` | Dashboard seed or `/api/careloop/signup` (server service role after Auth signup). Login does **not** insert. | Login (service_role); patient JWT may select/update **own** row |
 | `visits` | Patient JWT after a visit is saved to History | Owner only (`auth.uid() = user_id`) |
 | `insurance` | Patient JWT on Insurance save / Confirm / Refresh | Owner only; returning login reads `is_current` |
 

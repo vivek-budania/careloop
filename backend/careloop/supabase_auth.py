@@ -53,10 +53,10 @@ def status() -> dict:
         "url_set": url_on,
         "anon_set": _usable(anon_key()),
         "service_role_set": _usable(service_role_key()),
-        "used_for": "Login only (Auth + public.profiles). No insurance or meds tables.",
+        "used_for": "Login + signup (Auth + public.profiles). No insurance or meds tables.",
         "message": (
-            "Supabase login is loaded. Username looks up public.profiles, then Auth "
-            "signs in with that email. Coverage still uses the returned token."
+            "Supabase login and signup are loaded. Signup creates an Auth user and matching "
+            "public.profiles row; login resolves username to the Auth email."
             if on
             else (
                 "SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are required "
@@ -113,6 +113,16 @@ def _rest(path: str, params: dict, key: str) -> Any:
     return _request("GET", f"{supabase_url()}/rest/v1/{path}?{query}", key=key)
 
 
+def _rest_insert(path: str, body: dict, key: str) -> Any:
+    return _request(
+        "POST",
+        f"{supabase_url()}/rest/v1/{path}",
+        key=key,
+        body=body,
+        extra_headers={"Prefer": "return=representation"},
+    )
+
+
 def profile_by_username(username: str) -> Optional[dict]:
     needle = (username or "").strip()
     if not needle:
@@ -149,6 +159,25 @@ def profile_by_id(user_id: str) -> Optional[dict]:
     return rows[0]
 
 
+def profile_by_email(email: str) -> Optional[dict]:
+    needle = (email or "").strip().lower()
+    if not needle:
+        return None
+    escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = _rest(
+        "profiles",
+        {
+            "select": "id,username,email,first_name,last_name,created_at",
+            "email": f"ilike.{escaped}",
+            "limit": "1",
+        },
+        service_role_key(),
+    )
+    if not isinstance(rows, list) or not rows:
+        return None
+    return rows[0]
+
+
 def list_profiles() -> list[dict]:
     rows = _rest(
         "profiles",
@@ -168,6 +197,67 @@ def password_sign_in(email: str, password: str) -> dict:
         key=anon_key(),
         body={"email": email, "password": password},
     )
+
+
+def sign_up_user(
+    *,
+    email: str,
+    password: str,
+    username: str,
+    first_name: str,
+    last_name: str,
+) -> dict:
+    data = _request(
+        "POST",
+        f"{supabase_url()}/auth/v1/signup",
+        key=anon_key(),
+        body={
+            "email": email,
+            "password": password,
+            "data": {
+                "username": username,
+                "first_name": first_name,
+                "last_name": last_name,
+            },
+        },
+    )
+    return data if isinstance(data, dict) else {}
+
+
+def delete_auth_user(user_id: str) -> None:
+    if not user_id:
+        return
+    _request(
+        "DELETE",
+        f"{supabase_url()}/auth/v1/admin/users/{urllib.parse.quote(user_id)}",
+        key=service_role_key(),
+    )
+
+
+def create_profile(
+    *,
+    user_id: str,
+    username: str,
+    email: str,
+    first_name: str,
+    last_name: str,
+    date_of_birth: str,
+) -> dict:
+    rows = _rest_insert(
+        "profiles",
+        {
+            "id": user_id,
+            "username": username,
+            "email": email,
+            "first_name": first_name or None,
+            "last_name": last_name or None,
+            "date_of_birth": date_of_birth,
+        },
+        service_role_key(),
+    )
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Supabase did not return the created profile.")
+    return rows[0]
 
 
 def auth_user(access_token: str) -> Optional[dict]:

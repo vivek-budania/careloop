@@ -1048,8 +1048,12 @@ const CareLoop = {
     }
   },
 
-  async login(username, password, mode, profile = null) {
+  async login(username, password, mode) {
     const result = await API.login(username, password);
+    return this.startSession(result, mode);
+  },
+
+  async startSession(result, mode, profile = null) {
     API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
@@ -1150,7 +1154,7 @@ const CareLoop = {
 
   renderSignup() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your information stays in this interactive demo.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">UI demo only · No real account is created.</p></form></section></div>`;
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your account is secured by Supabase Auth.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><div class="signup-grid"><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Username<input name="username" autocomplete="username" placeholder="yourname" maxlength="30" required></label></div><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">Creates a CareLoop demo account · Never use real medical information.</p></form></section></div>`;
     const form = document.getElementById('signup-form');
     const passwordInput = form.password;
     const errBox = document.getElementById('signup-error');
@@ -1205,6 +1209,11 @@ const CareLoop = {
         showSignupError('Enter a valid email address, like name@example.com.', form.email);
         return;
       }
+      const username = form.username.value.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)) {
+        showSignupError('Use 3–30 letters, numbers, dots, dashes, or underscores.', form.username);
+        return;
+      }
       if (form.password.value.length < 8) {
         showSignupError('Password must be at least 8 characters.', form.password);
         return;
@@ -1221,7 +1230,14 @@ const CareLoop = {
       submit.disabled = true;
       submit.textContent = 'CREATING YOUR CARE SPACE…';
       try {
-        await this.login('jane', 'demo', 'first', {
+        const result = await API.signup({
+          username,
+          full_name: fullName,
+          email,
+          password: form.password.value,
+          date_of_birth: form.dateOfBirth.value,
+        });
+        this.renderSignupSuccess(result, {
           name: fullName,
           email,
           dateOfBirth: form.dateOfBirth.value,
@@ -1232,6 +1248,22 @@ const CareLoop = {
         submit.disabled = false;
         submit.innerHTML = `CREATE MY CARE SPACE ${this.icon('arrow')}`;
       }
+    });
+  },
+
+  renderSignupSuccess(result, profile) {
+    const app = document.getElementById('app');
+    const needsEmail = Boolean(result.requires_email_confirmation);
+    const username = result.user?.username || '';
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>${needsEmail ? 'One quick email check, then your journey can begin.' : 'Your account is created. Continue when you’re ready.'}</p>${this.art()}<small>CareLoop keeps account passwords in Supabase Auth, never in the profile table.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>${needsEmail ? 'Check your email.' : 'Welcome to CareLoop.'}</h2><p>${needsEmail ? `We sent a verification link to <strong>${this.esc(profile.email)}</strong>. After verifying, return and log in with <strong>${this.esc(username)}</strong>.` : `Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.`}</p>${needsEmail ? '<button type="button" class="btn pill full" data-signup-action="login">BACK TO LOGIN</button>' : `<button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button>`}<p class="fine-print">Your password is managed only by Supabase Auth.</p></div></section></div>`;
+    const button = app.querySelector('[data-signup-action]');
+    button.addEventListener('click', async () => {
+      if (button.dataset.signupAction === 'login') {
+        this.renderLogin();
+        return;
+      }
+      button.disabled = true;
+      await this.startSession(result, 'first', profile);
     });
   },
 
