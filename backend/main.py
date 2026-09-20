@@ -642,6 +642,32 @@ async def scribe_transcribe(
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
 
+@app.post("/api/careloop/extract-image")
+async def extract_image(
+    file: UploadFile = File(...),
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Read an uploaded photo/PDF into a JSON summary of the printed parts.
+
+    Uses XAI_API_KEY (Grok vision) first, then Gemini if needed.
+    Copy-only — does not invent drugs, IDs, or copays.
+    """
+    from backend.careloop import extract as careloop_extract
+
+    data = await file.read()
+    try:
+        upload = careloop_extract.from_bytes(
+            data,
+            file.content_type or "",
+            file.filename or "upload",
+        )
+        return careloop_extract.extract_parts(upload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image extract failed: {e}")
+
+
 @app.post("/api/careloop/scribe/draft")
 def scribe_draft(
     req: ScribeDraftRequest,

@@ -426,6 +426,14 @@ const CareLoop = {
     this.toast(kind === 'rx' ? 'Prescription updated from after the visit.' : 'Test updated from after the visit.');
   },
 
+  extractedPartsBlock(extracted) {
+    if (!extracted || typeof extracted !== 'object') return '';
+    const parts = Array.isArray(extracted.parts) ? extracted.parts.filter((row) => row && (row.label || row.value)) : [];
+    if (!parts.length) return '';
+    const rows = parts.slice(0, 12).map((row) => `<li><strong>${this.esc(row.label || 'Field')}</strong> ${this.esc(row.value || '')}</li>`).join('');
+    return `<ul class="extract-parts mt">${rows}</ul>`;
+  },
+
   async applyDoctorScript(visitId, form) {
     const visit = (this.thread.visits || []).find((row) => row.id === visitId);
     if (!visit) {
@@ -443,6 +451,7 @@ const CareLoop = {
       return;
     }
     let script = visit.script || null;
+    let extracted = null;
     if (file) {
       try {
         const payload = await this.readDataUrl(file);
@@ -457,31 +466,37 @@ const CareLoop = {
         this.toast(err.message);
         return;
       }
+      extracted = await this.tryExtractImage(file, 'Could not read that page into JSON. You can still type the items.');
+      if (extracted) script.extracted = extracted;
     } else if (notes) {
       script = { ...(script || {}), notes, at: new Date().toISOString() };
     }
-    const incomingRx = rxLines.map((line) => {
-      const parsed = this.parseCareName(line);
+    const fromJsonRx = (extracted && extracted.prescriptions) || [];
+    const fromJsonTests = (extracted && extracted.tests) || [];
+    const incomingRx = (rxLines.length ? rxLines : fromJsonRx.map((row) => [row.name, row.notes].filter(Boolean).join(' '))).map((line) => {
+      const parsed = this.parseCareName(typeof line === 'string' ? line : (line && line.name) || '');
+      const extra = typeof line === 'string' ? '' : (line && line.notes) || '';
       return this.tidyCareItem({
         id: `rx-${this.careKey(parsed.name || line)}`,
-        name: parsed.name || line,
-        notes: [parsed.leftover, notes].filter(Boolean).join(' · '),
+        name: parsed.name || String(line || ''),
+        notes: [parsed.leftover, extra, notes].filter(Boolean).join(' · '),
         status: 'Updated after visit',
         source: 'doctor-script',
-        schedule: /metformin/i.test(parsed.name || line),
+        schedule: /metformin/i.test(parsed.name || String(line || '')),
       });
-    });
-    const incomingTests = testLines.map((line) => {
-      const parsed = this.parseCareName(line);
+    }).filter((item) => item.name);
+    const incomingTests = (testLines.length ? testLines : fromJsonTests.map((row) => [row.name, row.notes].filter(Boolean).join(' '))).map((line) => {
+      const parsed = this.parseCareName(typeof line === 'string' ? line : (line && line.name) || '');
+      const extra = typeof line === 'string' ? '' : (line && line.notes) || '';
       return {
         id: `test-${this.careKey(parsed.name || line)}`,
-        name: parsed.name || line,
-        notes: [parsed.leftover, notes].filter(Boolean).join(' · '),
+        name: parsed.name || String(line || ''),
+        notes: [parsed.leftover, extra, notes].filter(Boolean).join(' · '),
         status: 'Updated after visit',
         source: 'doctor-script',
         kind: 'order',
       };
-    });
+    }).filter((item) => item.name);
     const care = {
       prescriptions: this.mergeCareItems((visit.care && visit.care.prescriptions) || [], incomingRx),
       tests: this.mergeCareItems((visit.care && visit.care.tests) || [], incomingTests, { byKind: true }),
@@ -518,8 +533,17 @@ const CareLoop = {
       : `<img class="test-preview-img" alt="${this.esc(row.name)}" src="${row.dataUrl}">`;
     this.modal(
       this.esc(row.name),
-      `<div class="notice">Stored on this device only · not a verified medical record</div><div class="test-preview">${preview}</div><p style="font-size:12px">${this.esc(row.filename || '')}${row.date ? ` · ${this.esc(row.date)}` : ''}</p>`,
+      `<div class="notice">Stored on this device only · not a verified medical record. Copied printed parts only — CareLoop does not interpret labs.</div><div class="test-preview">${preview}</div><p style="font-size:12px">${this.esc(row.filename || '')}${row.date ? ` · ${this.esc(row.date)}` : ''}${row.extracted && row.extracted.document_type ? ` · read as ${this.esc(row.extracted.document_type)}` : ''}</p>${this.extractedPartsBlock(row.extracted)}`,
     );
+  },
+
+  async tryExtractImage(file, failToast) {
+    try {
+      return await API.extractImage(file);
+    } catch (err) {
+      this.toast(err.message || failToast || 'Could not read that page into JSON.');
+      return null;
+    }
   },
 
   async readDataUrl(file) {
@@ -542,6 +566,7 @@ const CareLoop = {
     }
     try {
       const payload = await this.readDataUrl(file);
+      const extracted = await this.tryExtractImage(file, 'Could not read printed parts. The file is still saved.');
       const list = (this.thread.testRecords || []).slice();
       const i = list.findIndex((row) => row.id === id);
       const next = {
@@ -556,6 +581,7 @@ const CareLoop = {
         filename: payload.filename,
         mime: payload.mime,
         dataUrl: payload.dataUrl,
+        extracted: extracted || null,
       };
       if (i >= 0) list[i] = { ...list[i], ...next };
       else list.unshift(next);
@@ -607,6 +633,7 @@ const CareLoop = {
     }
     try {
       const payload = await this.readDataUrl(file);
+      const extracted = await this.tryExtractImage(file, 'Could not read printed parts. The file is still saved.');
       this.saveThread({
         testRecords: [{
           id: this.newVisitId(),
@@ -619,6 +646,7 @@ const CareLoop = {
           filename: payload.filename,
           mime: payload.mime,
           dataUrl: payload.dataUrl,
+          extracted: extracted || null,
         }, ...(this.thread.testRecords || [])],
       });
       this.render();
@@ -1036,10 +1064,13 @@ const CareLoop = {
   },
 
   setupNotice() {
+    const xai = (this.demoEnv && this.demoEnv.xai) || {};
     const gemini = (this.demoEnv && this.demoEnv.gemini) || {};
-    const ocr = gemini.configured
-      ? 'Read uploaded images is available on this form. It copies printed fields only and does not invent missing copays.'
-      : 'Read uploaded images needs GEMINI_API_KEY on this host or in Vercel. Use the sample card until then.';
+    const ocr = xai.configured
+      ? 'Read uploaded images uses XAI_API_KEY on this host. It copies printed fields only and does not invent missing copays.'
+      : gemini.configured
+        ? 'Read uploaded images can use Gemini as a fallback. It copies printed fields only and does not invent missing copays.'
+        : 'Read uploaded images needs XAI_API_KEY on this host or in Vercel. Use the sample card until then.';
     return (
       'Demo eligibility only. This does not verify real coverage or decide benefits. '
       + `Estimates are not a bill. ${ocr}`
@@ -1069,10 +1100,10 @@ const CareLoop = {
         detail: stedi.message || 'STEDI_API_KEY is not loaded on this host yet.',
       },
       {
-        name: 'Gemini OCR + letters',
+        name: 'Gemini letters',
         tag: gemini.configured ? 'loaded' : 'not set',
         tagType: gemini.configured ? '' : 'peach',
-        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet.',
+        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet. Used for /letters drafts; image JSON prefers XAI_API_KEY.',
       },
       {
         name: 'Groq fallback',
@@ -1081,17 +1112,17 @@ const CareLoop = {
         detail: groq.message || 'Add GROQ_API_KEY the same way when you have it.',
       },
       {
-        name: 'xAI visit STT',
-        tag: xai.configured ? 'loaded' : 'optional',
-        tagType: xai.configured ? '' : 'gray',
-        detail: xai.message || 'Add XAI_API_KEY the same way when you have it. Record on the visit transcript step, or keep the sample conversation.',
+        name: 'xAI image JSON + STT',
+        tag: xai.configured ? 'loaded' : 'not set',
+        tagType: xai.configured ? '' : 'peach',
+        detail: xai.message || 'Add XAI_API_KEY the same way. Used to turn uploaded images into JSON, and for visit speech-to-text.',
       },
       {
         name: 'Vercel',
         tag: 'slots',
         tagType: 'gray',
         detail: vercel.message || (
-          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
+          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY, and XAI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
         ),
       },
     ];
@@ -2374,9 +2405,9 @@ const CareLoop = {
       ? tests.map((item) => `<div class="document mt visit-care-item"><span class="tile-icon">${this.icon('test')}</span><div style="flex:1"><h3>${this.esc(item.name)}</h3><small>${this.esc(item.status || '')}${item.place || item.lab ? ` · ${this.esc(item.place || item.lab)}` : ''}</small>${this.visitCareItemForm(v.id, 'test', item)}</div></div>`).join('')
       : '<p style="font-size:12px">No tests on this visit yet. Add them from a doctor’s page below.</p>';
     const script = v.script
-      ? `<div class="notice green">Doctor’s page on file: ${this.esc(v.script.filename || 'uploaded page')}${v.script.at ? ` · ${this.esc(this.formatStamp(v.script.at))}` : ''}</div>`
+      ? `<div class="notice green">Doctor’s page on file: ${this.esc(v.script.filename || 'uploaded page')}${v.script.at ? ` · ${this.esc(this.formatStamp(v.script.at))}` : ''}${v.script.extracted && v.script.extracted.document_type ? ` · read as ${this.esc(v.script.extracted.document_type)}` : ''}</div>${this.extractedPartsBlock(v.script.extracted)}`
       : '';
-    return `<button class="back" data-action="history-back" type="button">${this.icon('back')}Past visits</button><h2>${this.esc(v.reason)}</h2><p class="mt">${this.esc(v.date)} · ${this.esc(v.doctor)}</p><div class="rule"></div>${[['What happened', v.summary], ...(extra ? [['New symptoms at check-in', extra]] : []), ['Coverage at this visit', `${v.coverage} · mock snapshot`]].map(([t, p]) => `<h3 class="mt">${t}</h3><p style="font-size:12px;margin-top:7px">${this.esc(p)}</p>`).join('')}<div class="notice">Prior authorization: not submitted. Claim: not submitted. These are separate insurance events. PA ≠ claim.</div><div class="rule"></div><h3>Update from a doctor’s prescription</h3><p class="mt" style="font-size:12px">Upload the page you were given, then list each medicine or test from that page. This updates this past visit — not a real e-prescribe.</p>${script}<form id="visit-script-form" data-visit-id="${this.esc(v.id)}"><label class="field">Doctor’s page (PDF or picture)<input type="file" id="visit-script-file" accept="image/*,.pdf,application/pdf"></label><label class="field">Prescriptions on that page (one per line)<textarea name="rx" rows="3" placeholder="Metformin 1000 mg twice daily"></textarea></label><label class="field">Tests needed (one per line)<textarea name="tests" rows="3" placeholder="HbA1c"></textarea></label><label class="field">Notes from after the visit<textarea name="notes" rows="2" placeholder="Pharmacy, fasting, follow-up date"></textarea></label><button class="btn" type="submit">Update this visit from the page</button></form><div class="rule"></div><h3>Prescriptions from this visit</h3>${rxBlock}<div class="rule"></div><h3>Tests needed</h3>${testBlock}<div class="mt">${this.btn('View in clinic packet', 'packet')}</div>`;
+    return `<button class="back" data-action="history-back" type="button">${this.icon('back')}Past visits</button><h2>${this.esc(v.reason)}</h2><p class="mt">${this.esc(v.date)} · ${this.esc(v.doctor)}</p><div class="rule"></div>${[['What happened', v.summary], ...(extra ? [['New symptoms at check-in', extra]] : []), ['Coverage at this visit', `${v.coverage} · mock snapshot`]].map(([t, p]) => `<h3 class="mt">${t}</h3><p style="font-size:12px;margin-top:7px">${this.esc(p)}</p>`).join('')}<div class="notice">Prior authorization: not submitted. Claim: not submitted. These are separate insurance events. PA ≠ claim.</div><div class="rule"></div><h3>Update from a doctor’s prescription</h3><p class="mt" style="font-size:12px">Upload the page you were given. We’ll read it into a JSON summary of the printed parts, or you can type each medicine or test yourself. This updates this past visit — not a real e-prescribe.</p>${script}<form id="visit-script-form" data-visit-id="${this.esc(v.id)}"><label class="field">Doctor’s page (PDF or picture)<input type="file" id="visit-script-file" accept="image/*,.pdf,application/pdf"></label><label class="field">Prescriptions on that page (one per line)<textarea name="rx" rows="3" placeholder="Metformin 1000 mg twice daily"></textarea></label><label class="field">Tests needed (one per line)<textarea name="tests" rows="3" placeholder="HbA1c"></textarea></label><label class="field">Notes from after the visit<textarea name="notes" rows="2" placeholder="Pharmacy, fasting, follow-up date"></textarea></label><button class="btn" type="submit">Update this visit from the page</button></form><div class="rule"></div><h3>Prescriptions from this visit</h3>${rxBlock}<div class="rule"></div><h3>Tests needed</h3>${testBlock}<div class="mt">${this.btn('View in clinic packet', 'packet')}</div>`;
   },
 
   history() {
@@ -2435,7 +2466,7 @@ const CareLoop = {
     const plannedRows = planned.length
       ? planned.map((row) => `<div class="task-row" style="flex-wrap:wrap"><span class="tile-icon">${this.icon(row.kind === 'appointment' ? 'calendar' : 'test')}</span><div style="flex:1"><h3>${this.esc(row.name)}</h3><p style="font-size:12px">${this.esc(row.lab || '')}${row.lab && (row.date || row.time) ? ' · ' : ''}${this.esc([row.date, row.time].filter(Boolean).join(' · '))}</p><small>${this.esc(row.status || 'To schedule')}${row.notes ? ` · ${this.esc(row.notes)}` : ''}${row.source === 'visit' ? ' · from a visit' : ''}</small></div>${this.btn('Attach result', 'attach-test', 'secondary', `data-test-id="${this.esc(row.id)}"`)}</div>`).join('')
       : '<p style="font-size:12px">No lab appointments or visit tests yet. Record one below, or finish an upcoming visit.</p>';
-    return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test. CareLoop does not interpret labs.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete. This does not book a real appointment.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
+    return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test. We’ll copy printed parts into JSON. CareLoop does not interpret labs.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete. This does not book a real appointment.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
   },
 
   insurance() {

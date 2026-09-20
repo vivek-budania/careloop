@@ -1,7 +1,7 @@
-"""Card / SBC image readability. Gemini vision → InsuranceProfile JSON.
+"""Image readability. xAI vision (XAI_API_KEY) → JSON, Gemini fallback.
 
-No letter watermark. Never invent copays or member IDs. Fixture scan stays
-in coverage.scan_card for the no-key golden path.
+No letter watermark. Never invent copays, member IDs, drugs, or results.
+Fixture scan stays in coverage.scan_card for the no-key golden path.
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ import os
 import re
 from typing import Any, Optional
 
-from backend.config import GEMINI_API_KEY
+from backend.config import GEMINI_API_KEY, XAI_API_KEY
 from backend.llm import generate_json
-from backend.prompts import CARD_EXTRACT_PROMPT
+from backend.prompts import CARD_EXTRACT_PROMPT, DOCUMENT_PARTS_PROMPT
 
 ALLOWED_MIMES = {
     "image/jpeg",
@@ -39,9 +39,25 @@ PROFILE_KEYS = (
 )
 
 
+def _key_on(value: str) -> bool:
+    raw = (value or "").strip()
+    return bool(raw) and raw not in (
+        "your_api_key_here",
+        "your_key_here",
+        "your_xai_api_key_here",
+    )
+
+
+def xai_configured() -> bool:
+    return _key_on(os.getenv("XAI_API_KEY") or XAI_API_KEY or "")
+
+
 def gemini_configured() -> bool:
-    key = (os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY or "").strip()
-    return bool(key) and key != "your_api_key_here"
+    return _key_on(os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY or "")
+
+
+def vision_configured() -> bool:
+    return xai_configured() or gemini_configured()
 
 
 def decode_upload(b64: str, mime: str, filename: str) -> dict:
@@ -67,6 +83,12 @@ def decode_upload(b64: str, mime: str, filename: str) -> dict:
     if len(data) > MAX_BYTES:
         raise ValueError("Upload is too large (max 8MB).")
     return {"mime_type": mime, "data": data, "filename": filename or "upload"}
+
+
+def from_bytes(data: bytes, mime: str, filename: str) -> dict:
+    if not data:
+        raise ValueError("Uploaded file was empty.")
+    return decode_upload(base64.b64encode(data).decode("ascii"), mime, filename)
 
 
 def _clean_text(value: Any) -> str:
@@ -129,9 +151,9 @@ def extract_documents(
     card: Optional[dict] = None,
     sbc: Optional[dict] = None,
 ) -> dict:
-    if not gemini_configured():
+    if not vision_configured():
         raise ValueError(
-            "GEMINI_API_KEY is not set. Inject it at container launch to read "
+            "XAI_API_KEY is not set. Add it on this host or in Vercel to read "
             "uploaded cards, or use Load sample card for the fixture path."
         )
     media = []
@@ -155,3 +177,71 @@ def extract_documents(
         return parse_extracted(raw)
     except (json.JSONDecodeError, ValueError) as exc:
         raise ValueError("Could not parse card fields from the model output.") from exc
+
+
+def _strip_fence(raw: str) -> str:
+    blob = (raw or "").strip()
+    if blob.startswith("```"):
+        blob = re.sub(r"^```(?:json)?\s*", "", blob)
+        blob = re.sub(r"\s*```$", "", blob)
+    return blob
+
+
+def extract_parts(upload: dict) -> dict:
+    """Pull a file and return a JSON summary of the printed parts."""
+    if not vision_configured():
+        raise ValueError(
+            "XAI_API_KEY is not set. Add it on this host or in Vercel to read uploaded images."
+        )
+    media = [{"mime_type": upload["mime_type"], "data": upload["data"]}]
+    name = upload.get("filename") or "upload"
+    user_message = (
+        f"Summarize every printed part of the attached file ({name}). "
+        "Return JSON only. Use only visible text."
+    )
+    raw = generate_json(DOCUMENT_PARTS_PROMPT, user_message, media=media)
+    try:
+        parsed = json.loads(_strip_fence(raw))
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError("Could not parse a JSON summary from the upload.") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Extractor did not return a JSON object.")
+    parts = parsed.get("parts") or []
+    if not isinstance(parts, list):
+        parts = []
+    prescriptions = parsed.get("prescriptions") or []
+    tests = parsed.get("tests") or []
+    insurance = parsed.get("insurance") if isinstance(parsed.get("insurance"), dict) else {}
+    return {
+        "source": "xai-vision" if xai_configured() else "gemini-vision",
+        "document_type": _clean_text(parsed.get("document_type")) or "other",
+        "title": _clean_text(parsed.get("title")),
+        "filename": name,
+        "parts": [
+            {
+                "label": _clean_text(item.get("label") if isinstance(item, dict) else ""),
+                "value": _clean_text(item.get("value") if isinstance(item, dict) else item),
+            }
+            for item in parts
+            if item
+        ],
+        "prescriptions": [
+            {
+                "name": _clean_text(item.get("name") if isinstance(item, dict) else item),
+                "notes": _clean_text(item.get("notes") if isinstance(item, dict) else ""),
+            }
+            for item in (prescriptions if isinstance(prescriptions, list) else [])
+            if item
+        ],
+        "tests": [
+            {
+                "name": _clean_text(item.get("name") if isinstance(item, dict) else item),
+                "notes": _clean_text(item.get("notes") if isinstance(item, dict) else ""),
+            }
+            for item in (tests if isinstance(tests, list) else [])
+            if item
+        ],
+        "insurance": {key: _clean_text(insurance.get(key)) for key in ("payer_name", "member_name", "member_id", "group_number", "date_of_birth")},
+        "unreadable": [str(item) for item in (parsed.get("unreadable") or []) if item],
+        "warnings": [str(item) for item in (parsed.get("warnings") or []) if item],
+    }
