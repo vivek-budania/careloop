@@ -50,6 +50,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+COVERAGE_COOKIE_TTL_SEC = 60 * 60 * 12
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -201,26 +203,28 @@ def require_coverage_user(
 def _set_session_cookies(
     response: JSONResponse,
     request: Request,
-    token: Optional[str] = None,
+    session_token: Optional[str] = None,
 ) -> JSONResponse:
     secure = careloop_auth.cookie_secure(request)
-    if token is not None:
+    if session_token is not None:
         response.set_cookie(
-            "careloop_token",
-            token,
-            httponly=False,
+            careloop_auth.SESSION_COOKIE,
+            session_token,
+            httponly=True,
             samesite="lax",
             secure=secure,
-            max_age=60 * 60 * 12,
+            max_age=careloop_auth.SESSION_TTL_SEC,
             path="/",
         )
+        # Remove the old JavaScript-readable token cookie after the next login.
+        response.delete_cookie("careloop_token", path="/")
     response.set_cookie(
         "careloop_coverage",
         careloop_coverage.encode_state_cookie(),
         httponly=True,
         samesite="lax",
         secure=secure,
-        max_age=60 * 60 * 12,
+        max_age=COVERAGE_COOKIE_TTL_SEC,
         path="/",
     )
     return response
@@ -228,6 +232,14 @@ def _set_session_cookies(
 
 def coverage_json(payload: dict, request: Request) -> JSONResponse:
     return _set_session_cookies(JSONResponse(payload), request)
+
+
+def _browser_session_token(result: dict) -> str:
+    return careloop_auth.issue_token(
+        result["user"]["username"],
+        provider=result.get("session_provider") or "mock",
+        user_id=result.get("session_user_id") or "",
+    )
 
 # ---------------------------------------------------------------------------
 # API Endpoints
@@ -422,10 +434,14 @@ def careloop_auth_accounts():
 def careloop_login(req: LoginRequest, request: Request):
     try:
         result = careloop_auth.login(req.username, req.password)
+    except careloop_auth.SessionUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     careloop_coverage.bind_user(result["user"]["username"])
-    return _set_session_cookies(JSONResponse(result), request, result["token"])
+    payload = {"user": result["user"]}
+    session_token = _browser_session_token(result)
+    return _set_session_cookies(JSONResponse(payload), request, session_token)
 
 
 @app.post("/api/careloop/signup")
@@ -440,14 +456,19 @@ def careloop_signup(req: SignupRequest, request: Request):
         )
     except careloop_auth.SignupUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    except careloop_auth.SessionUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     except careloop_auth.SignupConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    if result.get("token"):
-        careloop_coverage.bind_user(result["user"]["username"])
-        return _set_session_cookies(JSONResponse(result), request, result["token"])
-    return JSONResponse(result)
+    careloop_coverage.bind_user(result["user"]["username"])
+    payload = {
+        "user": result["user"],
+        "requires_email_confirmation": False,
+    }
+    session_token = _browser_session_token(result)
+    return _set_session_cookies(JSONResponse(payload), request, session_token)
 
 
 @app.post("/api/careloop/logout")
@@ -456,9 +477,10 @@ def careloop_logout(request: Request, authorization: Optional[str] = Header(defa
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip()
     if not token:
-        token = request.cookies.get("careloop_token")
+        token = request.cookies.get(careloop_auth.SESSION_COOKIE)
     careloop_auth.logout(token)
     response = JSONResponse({"ok": True})
+    response.delete_cookie(careloop_auth.SESSION_COOKIE, path="/")
     response.delete_cookie("careloop_token", path="/")
     response.delete_cookie("careloop_coverage", path="/")
     return response

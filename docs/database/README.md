@@ -83,9 +83,9 @@ Do not invent these tables in migrations:
 1. User types username + password (`jane` / `demo`).
 2. Server looks up `public.profiles` by **username** (service_role, bypasses RLS).
 3. Auth password grant with that row’s **email**.
-4. Response token is the Supabase access JWT (or HMAC `v1.` when Supabase env is unset).
+4. Server issues a signed 30-day `HttpOnly` app-session cookie; the Supabase access token is not exposed to browser JavaScript.
 
-Self-serve signup calls Supabase Auth’s normal signup endpoint, inserts the matching `profiles` row server-side (including validated `date_of_birth`), and follows the hosted project’s email-confirmation setting.
+Self-serve signup uses the server-only Supabase Admin API with `email_confirm: true`, which creates the Auth user without sending a verification email. The server then inserts the matching `profiles` row (including validated `date_of_birth`) and starts the browser session immediately.
 
 Seeded live user: username `jane`, email `jane@careloop.local`, password `demo`. See [`AGENTS.md`](../../AGENTS.md).
 

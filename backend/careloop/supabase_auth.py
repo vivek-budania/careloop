@@ -199,7 +199,7 @@ def password_sign_in(email: str, password: str) -> dict:
     )
 
 
-def sign_up_user(
+def create_confirmed_auth_user(
     *,
     email: str,
     password: str,
@@ -209,12 +209,13 @@ def sign_up_user(
 ) -> dict:
     data = _request(
         "POST",
-        f"{supabase_url()}/auth/v1/signup",
-        key=anon_key(),
+        f"{supabase_url()}/auth/v1/admin/users",
+        key=service_role_key(),
         body={
             "email": email,
             "password": password,
-            "data": {
+            "email_confirm": True,
+            "user_metadata": {
                 "username": username,
                 "first_name": first_name,
                 "last_name": last_name,
@@ -240,11 +241,6 @@ def sign_up_user(
         uid = str(user_dict.get("id") or "").strip()
         if uid:
             normalized["id"] = uid
-
-    if data.get("access_token"):
-        normalized["access_token"] = str(data["access_token"]).strip()
-    elif isinstance(data.get("session"), dict) and data["session"].get("access_token"):
-        normalized["access_token"] = str(data["session"]["access_token"]).strip()
 
     return normalized
 

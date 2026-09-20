@@ -5,15 +5,13 @@
 
 const API = {
   BASE_URL: '',  // Same origin — served by FastAPI
-  TOKEN_KEY: 'careloop_token',
 
-  getToken() {
-    return localStorage.getItem(this.TOKEN_KEY) || '';
-  },
-
-  setToken(token) {
-    if (token) localStorage.setItem(this.TOKEN_KEY, token);
-    else localStorage.removeItem(this.TOKEN_KEY);
+  clearLegacyToken() {
+    try {
+      localStorage.removeItem('careloop_token');
+    } catch (err) {
+      /* storage may be unavailable; the server cookie remains authoritative */
+    }
   },
 
   /**
@@ -22,8 +20,6 @@ const API = {
   async request(endpoint, options = {}) {
     const url = `${this.BASE_URL}${endpoint}`;
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-    const token = this.getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
 
     const config = {
       ...options,
@@ -35,7 +31,6 @@ const API = {
       const response = await fetch(url, config);
 
       if (response.status === 401 && !endpoint.includes('/login')) {
-        this.setToken('');
         if (window.App && typeof App.showLogin === 'function') {
           App.showLogin();
         }
@@ -205,8 +200,6 @@ const API = {
   async fetchHistoryPdf(markdown, title = 'CareLoop history packet') {
     const url = `${this.BASE_URL}/api/careloop/history/pdf`;
     const headers = { 'Content-Type': 'application/json' };
-    const token = this.getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -215,7 +208,6 @@ const API = {
       credentials: 'same-origin',
     });
     if (response.status === 401) {
-      this.setToken('');
       if (window.App && typeof App.showLogin === 'function') App.showLogin();
     }
     if (!response.ok) {

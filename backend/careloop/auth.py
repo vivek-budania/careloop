@@ -1,7 +1,7 @@
-"""CareLoop login/signup. Prefer Supabase Auth + public.profiles; mock login is fallback.
+"""CareLoop login/signup and signed browser sessions.
 
-Not production HIPAA. Tokens are stateless so Vercel workers can authorize
-coverage routes: either a Supabase access JWT, or the legacy HMAC app token.
+Not production HIPAA. Signed app sessions are stateless so Vercel workers can
+authorize coverage routes; Supabase bearer tokens remain supported for API clients.
 """
 
 from __future__ import annotations
@@ -21,8 +21,9 @@ from fastapi import Header, HTTPException, Request
 from backend.careloop import supabase_auth
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-TOKEN_TTL_SEC = 60 * 60 * 12
-# Demo fallback only. Set SESSION_SECRET on Vercel if you want to rotate.
+SESSION_TTL_SEC = 60 * 60 * 24 * 30
+SESSION_COOKIE = "careloop_session"
+# Demo fallback only. Live Supabase sessions require SESSION_SECRET.
 _DEMO_SECRET = "careloop-demo-session"
 
 ROLE_TABS = {
@@ -38,6 +39,10 @@ class SignupUnavailableError(ValueError):
 
 
 class SignupConflictError(ValueError):
+    pass
+
+
+class SessionUnavailableError(ValueError):
     pass
 
 
@@ -76,21 +81,44 @@ def public_user_from_profile(row: dict) -> dict:
 
 
 def _secret() -> bytes:
-    raw = (os.getenv("SESSION_SECRET") or _DEMO_SECRET).strip()
+    raw = (os.getenv("SESSION_SECRET") or "").strip()
+    if supabase_auth.configured():
+        if len(raw) < 32:
+            raise SessionUnavailableError(
+                "Live sessions require a server-side SESSION_SECRET of at least 32 characters."
+            )
+        return raw.encode("utf-8")
+    raw = raw or _DEMO_SECRET
     return raw.encode("utf-8")
+
+
+def _custom_session_secret_ready() -> bool:
+    return len((os.getenv("SESSION_SECRET") or "").strip()) >= 32
+
+
+def _require_live_session_secret() -> None:
+    if supabase_auth.configured() and not _custom_session_secret_ready():
+        raise SessionUnavailableError(
+            "Live sessions require a server-side SESSION_SECRET of at least 32 characters."
+        )
 
 
 def session_status() -> dict:
     sb = supabase_auth.status()
-    custom = bool((os.getenv("SESSION_SECRET") or "").strip())
+    custom = _custom_session_secret_ready()
     if sb["configured"]:
         return {
-            "configured": True,
+            "configured": custom,
             "signed": True,
             "provider": "supabase",
             "custom_secret": custom,
-            "used_for": "Supabase Auth signup/login + profiles username lookup",
-            "message": sb["message"],
+            "session_days": 30,
+            "used_for": "Supabase Auth signup/login + 30-day HttpOnly app session",
+            "message": (
+                sb["message"] + " Browser sessions use a 30-day HttpOnly cookie."
+                if custom
+                else "Set SESSION_SECRET to at least 32 characters before using live Supabase sessions."
+            ),
             "supabase": sb,
         }
     return {
@@ -98,9 +126,10 @@ def session_status() -> dict:
         "signed": True,
         "provider": "mock",
         "custom_secret": custom,
-        "used_for": "Mock login tokens (username + expiry only) until Supabase env is set",
+        "session_days": 30,
+        "used_for": "Mock login + 30-day HttpOnly app session until Supabase env is set",
         "message": (
-            "Supabase login keys are not loaded. Mock jane/demo still signs an HMAC token. "
+            "Supabase login keys are not loaded. Mock jane/demo still signs an HMAC session cookie. "
             + sb["message"]
         ),
         "supabase": sb,
@@ -116,16 +145,30 @@ def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + pad)
 
 
-def issue_token(username: str) -> str:
+def issue_token(
+    username: str,
+    *,
+    provider: str = "mock",
+    user_id: str = "",
+) -> str:
+    if provider not in {"mock", "supabase"}:
+        raise ValueError("Unknown session provider.")
+    if provider == "supabase" and not user_id:
+        raise ValueError("Supabase sessions require a user id.")
     payload = json.dumps(
-        {"u": username, "exp": int(time.time()) + TOKEN_TTL_SEC},
+        {
+            "u": username,
+            "p": provider,
+            "uid": user_id,
+            "exp": int(time.time()) + SESSION_TTL_SEC,
+        },
         separators=(",", ":"),
     ).encode("utf-8")
     sig = hmac.new(_secret(), payload, hashlib.sha256).digest()
     return f"v1.{_b64(payload)}.{_b64(sig)}"
 
 
-def parse_token(token: Optional[str]) -> Optional[str]:
+def parse_session_token(token: Optional[str]) -> Optional[dict]:
     if not token or not token.startswith("v1."):
         return None
     try:
@@ -138,9 +181,25 @@ def parse_token(token: Optional[str]) -> Optional[str]:
         if int(data.get("exp") or 0) < int(time.time()):
             return None
         username = (data.get("u") or "").strip()
-        return username or None
+        provider = (data.get("p") or "mock").strip()
+        if not username or provider not in {"mock", "supabase"}:
+            return None
+        user_id = (data.get("uid") or "").strip()
+        if provider == "supabase" and not user_id:
+            return None
+        return {
+            "username": username,
+            "provider": provider,
+            "user_id": user_id,
+        }
     except Exception:
         return None
+
+
+def parse_token(token: Optional[str]) -> Optional[str]:
+    """Return the username for legacy callers that only need token validity."""
+    session = parse_session_token(token)
+    return session["username"] if session else None
 
 
 def list_accounts() -> list[dict]:
@@ -161,6 +220,7 @@ def login(username: str, password: str) -> dict:
     username = (username or "").strip()
     password = password or ""
     if supabase_auth.configured():
+        _require_live_session_secret()
         return _login_supabase(username, password)
     return _login_mock(username.lower(), password)
 
@@ -177,6 +237,7 @@ def signup(
         raise SignupUnavailableError(
             "Live signup requires the server-side Supabase environment variables."
         )
+    _require_live_session_secret()
 
     username = (username or "").strip().lower()
     full_name = " ".join((full_name or "").strip().split())
@@ -218,7 +279,7 @@ def signup(
     first_name = parts[0]
     last_name = parts[1] if len(parts) > 1 else ""
     try:
-        signup_result = supabase_auth.sign_up_user(
+        signup_result = supabase_auth.create_confirmed_auth_user(
             email=email,
             password=password,
             username=username,
@@ -234,8 +295,7 @@ def signup(
             raise ValueError(raw_msg) from None
         raise ValueError("Could not create the account in Supabase Auth.") from None
 
-    # Robust user_id extraction: GoTrue may return the user object directly at root,
-    # nested under 'user', or within 'data' / 'session'.
+    # GoTrue deployments may wrap the created user differently.
     user_id = ""
     if isinstance(signup_result, dict):
         if signup_result.get("id"):
@@ -252,33 +312,6 @@ def signup(
             s_user = signup_result["session"].get("user")
             if isinstance(s_user, dict) and s_user.get("id"):
                 user_id = str(s_user["id"]).strip()
-
-    # Check for empty identities list (Supabase GoTrue returns HTTP 200 with identities=[] when user already exists)
-    user_obj = signup_result.get("user") if isinstance(signup_result.get("user"), dict) else signup_result
-    identities = user_obj.get("identities") if isinstance(user_obj, dict) else None
-    if identities is not None and isinstance(identities, list) and len(identities) == 0:
-        existing_profile = supabase_auth.profile_by_email(email) or (
-            supabase_auth.profile_by_id(user_id) if user_id else None
-        )
-        if existing_profile:
-            raise SignupConflictError("An account already exists for that email address.")
-
-        # Incomplete/orphaned Auth user from an interrupted signup: clean up and retry once
-        if user_id:
-            try:
-                supabase_auth.delete_auth_user(user_id)
-                signup_result = supabase_auth.sign_up_user(
-                    email=email,
-                    password=password,
-                    username=username,
-                    first_name=first_name,
-                    last_name=last_name,
-                )
-                user_id = str(signup_result.get("id") or (signup_result.get("user") or {}).get("id") or "").strip()
-            except Exception:
-                raise SignupConflictError("An account already exists for that email address.")
-        else:
-            raise SignupConflictError("An account already exists for that email address.")
 
     if not user_id:
         raise ValueError("Supabase Auth did not return a user id.")
@@ -303,16 +336,11 @@ def signup(
             raise SignupConflictError("That username or email is already in use.") from None
         raise ValueError(f"Could not create the profile row: {exc}") from None
 
-    token = ""
-    if isinstance(signup_result, dict):
-        if signup_result.get("access_token"):
-            token = str(signup_result["access_token"]).strip()
-        elif isinstance(signup_result.get("session"), dict) and signup_result["session"].get("access_token"):
-            token = str(signup_result["session"]["access_token"]).strip()
     return {
-        "token": token,
         "user": public_user_from_profile(profile),
-        "requires_email_confirmation": not bool(token),
+        "requires_email_confirmation": False,
+        "session_provider": "supabase",
+        "session_user_id": (profile.get("id") or user_id).strip(),
     }
 
 
@@ -324,7 +352,12 @@ def _login_mock(username: str, password: str) -> dict:
     if not match:
         raise ValueError("Unknown username or password.")
     pub = public_user(match)
-    return {"token": issue_token(match["username"]), "user": pub}
+    return {
+        "token": issue_token(match["username"]),
+        "user": pub,
+        "session_provider": "mock",
+        "session_user_id": "",
+    }
 
 
 def _login_supabase(username: str, password: str) -> dict:
@@ -341,7 +374,12 @@ def _login_supabase(username: str, password: str) -> dict:
     token = (session or {}).get("access_token") if isinstance(session, dict) else None
     if not token:
         raise ValueError("Unknown username or password.")
-    return {"token": token, "user": public_user_from_profile(profile)}
+    return {
+        "token": token,
+        "user": public_user_from_profile(profile),
+        "session_provider": "supabase",
+        "session_user_id": (profile.get("id") or "").strip(),
+    }
 
 
 def logout(token: Optional[str]) -> dict:
@@ -353,18 +391,19 @@ def logout(token: Optional[str]) -> dict:
 def user_for_token(token: Optional[str]) -> Optional[dict]:
     if not token:
         return None
-    username = parse_token(token)
-    if username:
-        match = _find_user(username)
-        if match:
-            return public_user(match)
-        if supabase_auth.configured():
-            try:
-                profile = supabase_auth.profile_by_username(username)
-            except ValueError:
-                profile = None
-            if profile:
-                return public_user_from_profile(profile)
+    session = parse_session_token(token)
+    if session:
+        if session["provider"] == "mock":
+            match = _find_user(session["username"])
+            return public_user(match) if match else None
+        if not supabase_auth.configured():
+            return None
+        try:
+            profile = supabase_auth.profile_by_id(session["user_id"])
+        except ValueError:
+            profile = None
+        if profile and (profile.get("username") or "").strip() == session["username"]:
+            return public_user_from_profile(profile)
         return None
     if not supabase_auth.configured():
         return None
@@ -394,7 +433,7 @@ def user_for_token(token: Optional[str]) -> Optional[dict]:
 def _token_from_request(request: Request, authorization: Optional[str]) -> Optional[str]:
     if authorization and authorization.lower().startswith("bearer "):
         return authorization.split(" ", 1)[1].strip()
-    cookie = request.cookies.get("careloop_token")
+    cookie = request.cookies.get(SESSION_COOKIE)
     return cookie or None
 
 
