@@ -1,6 +1,6 @@
 """Dave's coverage slice: mock card/plan identity, eligibility, visit-cost estimate, network.
 
-Optional xAI vision on uploaded card/SBC (XAI_API_KEY at launch). Gemini fallback.
+Optional xAI vision on uploaded card/SBC (XAI_API_KEY at launch).
 Optional Stedi sandbox 270/271 (STEDI_API_KEY at launch). Aetna + Jane Doe /
 AETNA12345 is the canned sandbox member.
 """
@@ -614,7 +614,7 @@ def _scan_uploaded(
         value = extracted.get(key)
         if value:
             profile[key] = value
-    profile["scan_source"] = "xai-vision" if careloop_extract.xai_configured() else "gemini-vision"
+    profile["scan_source"] = "xai-vision"
     profile["printed_copay_pcp"] = extracted.get("printed_copay_pcp")
     profile["printed_copay_specialist"] = extracted.get("printed_copay_specialist")
     docs = []

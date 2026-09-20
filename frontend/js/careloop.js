@@ -1086,7 +1086,6 @@ const CareLoop = {
     const session = env.session || {};
     const supabase = env.supabase || session.supabase || {};
     const stedi = env.stedi || {};
-    const gemini = env.gemini || {};
     const groq = env.groq || {};
     const xai = env.xai || {};
     const vercel = env.vercel || {};
@@ -1104,29 +1103,23 @@ const CareLoop = {
         detail: stedi.message || 'STEDI_API_KEY is not loaded on this host yet.',
       },
       {
-        name: 'Gemini letters',
-        tag: gemini.configured ? 'loaded' : 'not set',
-        tagType: gemini.configured ? '' : 'peach',
-        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet. Used for /letters drafts; image JSON prefers XAI_API_KEY.',
-      },
-      {
         name: 'Groq fallback',
         tag: groq.configured ? 'loaded' : 'optional',
         tagType: groq.configured ? '' : 'gray',
         detail: groq.message || 'Add GROQ_API_KEY the same way when you have it.',
       },
       {
-        name: 'xAI image JSON + STT',
+        name: 'xAI letters + image JSON + STT',
         tag: xai.configured ? 'loaded' : 'not set',
         tagType: xai.configured ? '' : 'peach',
-        detail: xai.message || 'Add XAI_API_KEY the same way. Used to turn uploaded images into JSON, and for visit speech-to-text.',
+        detail: xai.message || 'Add XAI_API_KEY the same way. Used for letter drafts, uploaded images into JSON, and visit speech-to-text.',
       },
       {
         name: 'Vercel',
         tag: 'slots',
         tagType: 'gray',
         detail: vercel.message || (
-          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY, and XAI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
+          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, and XAI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
         ),
       },
     ];
