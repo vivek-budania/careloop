@@ -4,16 +4,16 @@ Read this before changing the running app. Setup commands also live in [`README.
 
 ## Owner progress (for other agents)
 
-**Dave (coverage / card / network / cost).** Combined with Vivek’s patient shell on this branch.
+**Dave (coverage / card / network / cost).** Combined with Vivek’s patient shell on **main**.
 
 | Work | Where |
 |------|--------|
-| Vivek patient shell (☰ Today / Past visits / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
-| Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
-| Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **this branch** (`confirm` always sends Jane identity) |
-| Demo key slots on Profile (Stedi / Groq / xAI / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
-| Image → JSON (`XAI_API_KEY`) | **this branch**; cards, doctor pages, lab pages |
-| Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
+| Vivek patient shell (☰ Today / Past visits / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit) | **main** (from PR #8) |
+| Sample card / canned sandbox member / Stedi test 270/271 | **main** |
+| Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **main** (`confirm` fills blanks from that payer’s canned fixture) |
+| Demo key slots on Profile (Stedi / Groq / xAI / Vercel) | **main** (`GET /api/careloop/demo-env`, no secret values) |
+| Image → JSON (`XAI_API_KEY`) | **main**; cards, doctor pages, lab pages |
+| Specialty suggestion from visit reason → `searchNetwork` | **main** |
 | Sreekar Stream C scribe APIs (fixture / draft / approve / optional Grok STT) | **main (PR #6)**; SOAP step in this shell |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
 | Hosted DB docs (`profiles`, `visits`, `insurance`) | [`docs/database/`](docs/database/README.md) · SQL [`supabase/migrations/`](supabase/migrations/) |
@@ -22,7 +22,7 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 
 **Vivek:** design lead. IA, copy, ivory/sage chrome, hamburger, first-time vs returning login, skippable costs after SOAP. Do not fight those.
 
-**Sreekar:** PA/parse/appeal/demand APIs still exist at `/letters`. Claims is Coming soon on Insurance. Do not collapse PA denial vs claim denial. Scribe lives on visit steps 5–6 (transcript → SOAP), not a second wizard.
+**Sreekar:** PA/parse/appeal/demand **APIs** still exist. There is **no** `/letters` UI (`letters.html` was removed). Claims is Coming soon on Insurance. Do not collapse PA denial vs claim denial. Scribe lives on visit steps 5–6 (transcript → SOAP), not a second wizard.
 
 ---
 
@@ -33,8 +33,8 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
 1. **☰** Today · Past visits (My visits | For the clinic) · Upcoming visits · Prescriptions · Test records · Insurance · Profile · Log out
-2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with **Aetna / Jane Doe** coverage seeded.
-3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
+2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with a **sample plan** snapshot seeded.
+3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter-draft APIs remain; there is no `/letters` page.
 
 Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire a download path that skips HITL/watermark. History packet `.md` is a record export, not a letter.
 
@@ -46,13 +46,13 @@ When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a 32+
 
 Without the Supabase env slots, login falls back to `backend/data/mock_users.json` and the same 30-day cookie workflow; live signup returns HTTP 503 rather than pretending an account was created. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage`. The hardcoded signing fallback is for the local mock only; live Supabase sessions require `SESSION_SECRET`.
 
-**Seeded live user:** username **`jane`**, email `jane@careloop.local`, password **`demo`**. Do not invent other passwords.
+**Seeded live user:** username **`jane`**, email `jane@careloop.local`, password **`demo`**. Display name is a sample patient. Do not invent other passwords.
 
-Golden path: **`jane` / `demo`** → **I’m returning** (seeds Aetna Jane Doe) or **Start my first visit** (insurance hub, sample card = same fixture).
+Golden path: **`jane` / `demo`** → **I’m returning** (seeds a sample plan) or **Start my first visit** (insurance hub, sample card = same fixture).
 
 | Username | Name | Role | After login |
 |----------|------|------|-------------|
-| `jane` | Jane Doe | patient | patient shell |
+| `jane` | sample patient | patient | patient shell |
 
 Other mock usernames (`maya`, `priya`, `advocate`, `demo`) only work on the HMAC fallback, not on the seeded Supabase project.
 
@@ -82,9 +82,9 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning** or **Start my first visit**.
 
-**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (`XAI_API_KEY`) lives on this Insurance flow — not in the hamburger. Without a vision key, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
+**Insurance:** payer required; **date of birth required**; sample card is the fixture in `backend/data/mock_payers.json`. Optional **Read uploaded images** (`XAI_API_KEY`) lives on this Insurance flow — not in the hamburger. Without a vision key, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
 
-**Where the keys go:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (login), `STEDI_API_KEY`, `XAI_API_KEY` (letters + image JSON + visit STT; already on Vercel), and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Never put `service_role` in frontend JS. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
+**Where the keys go:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (login), `STEDI_API_KEY`, `XAI_API_KEY` (letters + image JSON + visit STT; already on Vercel), and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Never put `service_role` in frontend JS. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match the sample plan fixture (active PPO, office copay, remaining deductible). `GET /api/careloop/demo-env` is the same status JSON (auth required).
 
 **Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub. Fold extra keys into the same Vercel env list as they arrive. Live login needs the three `SUPABASE_*` names.
 
@@ -93,17 +93,17 @@ Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning**
 Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/network still use Dave’s APIs:
 
 - Payer dropdown + sample card + confirm: `listPayers` / `scanCoverage` / `saveCoverage` / `confirmCoverage`
-- Confirm always sends member name, member ID, and DOB. Blanks on a Stedi payer are filled from that payer’s canned fixture so Jane Doe / `AETNA12345` / `2004-04-04` can match.
-- DOB is required on save. Stedi uses it on the canned Jane Doe member.
+- Confirm always sends member name, member ID, and DOB. Blanks on a Stedi payer are filled from that payer’s canned fixture in `backend/data/mock_payers.json`.
+- DOB is required on save. Stedi uses it on the canned sandbox member.
 - Optional image JSON: `scanCoverage` with `card_image_b64` / `sbc_image_b64` (Insurance form) and `POST /api/careloop/extract-image` for a printed-parts summary (`XAI_API_KEY`)
 - Demo key slots: `demoEnv` → Profile (and Insurance eligibility notice)
 - Symptoms intake: `saveCoverageIntake` (returns `suggested_specialty`)
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
 - Estimated costs (after SOAP, skipped if no plan): `guessVisitCost`
 
-**Sreekar Stream C (visit-day from Upcoming visits):** booking steps 1–3 end at **Save request**, which confirms the appointment. Step 2 searches the mock directory by **ZIP + specialty from the visit reason** (nearby ≤ 40 miles, then farther alternatives). Open/upcoming visits can be deleted. Opening an upcoming visit starts visit-day: **New symptoms** (optional, before check-in; **local only** — not written to `visits`) then check-in → record / upload / **Demo 1, Demo 2, Demo 3** → summary → costs → plan. Demo 1 psoriasis/Skyrizi, Demo 2 lumbar MRI, Demo 3 chronic-migraine Botox (`GET /api/careloop/scribe/demos`). Finishing the plan opens a follow-up summary of medicines to take/buy and tests to complete, with **Update Prescriptions and Test records**. Audio goes to `POST /api/careloop/scribe/transcribe` (2-minute cap). A selected demo drafts SOAP with `use_seeded: true` and `demo_id`; live audio uses `use_seeded: false`. Step 6 calls `POST /api/careloop/scribe/summarize` (Sumy). On Vercel, NLTK corpora go to `/tmp/nltk_data`. `frontend/js/scribe.js` is still not loaded. Returning login is Jane Doe; first-visit signup keeps the typed name on `thread.patient` and maps it onto `App.user.name` (auth is still `jane` / `demo`).
+**Sreekar Stream C (visit-day from Upcoming visits):** booking steps 1–3 end at **Save request**, which confirms the appointment. Step 2 searches the mock directory by **ZIP + specialty from the visit reason** (nearby ≤ 40 miles, then farther alternatives). Open/upcoming visits can be deleted. Opening an upcoming visit starts visit-day: **New symptoms** (optional, before check-in; **local only** — not written to `visits`) then check-in → record / upload / **Demo 1, Demo 2, Demo 3** → summary → costs → plan. Demo 1 psoriasis/Skyrizi, Demo 2 lumbar MRI, Demo 3 chronic-migraine Botox (`GET /api/careloop/scribe/demos`). Finishing the plan opens a follow-up summary of medicines to take/buy and tests to complete, with **Update Prescriptions and Test records**. Audio goes to `POST /api/careloop/scribe/transcribe` (2-minute cap). A selected demo drafts SOAP with `use_seeded: true` and `demo_id`; live audio uses `use_seeded: false`. Step 6 calls `POST /api/careloop/scribe/summarize` (Sumy). On Vercel, NLTK corpora go to `/tmp/nltk_data`. `frontend/js/scribe.js` is still not loaded. Returning login uses the seeded sample-patient display name; first-visit signup keeps the typed name on `thread.patient` and maps it onto `App.user.name` (auth is still `jane` / `demo`).
 
-Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. Live login is **`jane` / `demo`**.
+Fixture golden path: sample plan + sample member from the payer fixture → specialty from visit reason → in-network clinician from the mock directory → labeled patient-owed estimate (office copay + labs against remaining deductible). **Inactive Demo Plan** returns inactive coverage. Live login is **`jane` / `demo`**.
 
 Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s thread store exists. Intended columns: [`docs/database/insurance.md`](docs/database/insurance.md). Visit/meds/history UI state is local until that store lands.
 
@@ -127,12 +127,12 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 - `backend/careloop/stt.py` — optional xAI Grok STT (`XAI_API_KEY`)
 - `backend/config.py` — `demo_env_status()` (Supabase / Stedi / Groq / xAI / Vercel; no secret values)
 - `.env.example` — documents the same key slots (inject at launch; do not commit secrets)
-- `backend/data/mock_users.json` — HMAC fallback accounts (Jane Doe / `jane`)
+- `backend/data/mock_users.json` — HMAC fallback accounts (seeded username `jane`)
 - `backend/data/mock_payers.json`, `mock_network.json`, `mock_fee_schedule.json`, `mock_prior_visit.json`, `mock_visit_transcript.json`
 - `frontend/js/careloop.js`, `frontend/js/app.js`, `frontend/js/api.js`
 - `frontend/js/scribe.js` — older Stream C voice room (not loaded; Record lives in `careloop.js` step 5)
 - `frontend/index.html` — patient shell
-- `frontend/letters.html` — PA/appeal HITL (not in ☰)
+- `frontend/showcase.html` — public product story (`GET /showcase`)
 - `pyproject.toml` — Vercel FastAPI entrypoint
 
-`frontend/js/provider.js` and `frontend/js/patient.js` power `/letters`; they are not the CareLoop hamburger.
+Letter-draft APIs remain on the FastAPI app. There is no `/letters` page and no `provider.js` / `patient.js` in the patient shell.

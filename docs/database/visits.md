@@ -21,7 +21,7 @@ One row per saved visit so the hamburger History list can show date, reason, cli
 | `summary` | `text` | yes | — | Plain-language “what happened.” Not a signed chart note. |
 | `soap` | `jsonb` | yes | — | Optional SOAP object: `subjective`, `objective`, `assessment`, `plan_summary`. Draft until `reviewed`. |
 | `reviewed` | `boolean` | no | `false` | Clinician-review **simulated** in the demo. Not a PA or claim decision. |
-| `coverage_label` | `text` | yes | — | Denormalized plan name at visit time (e.g. `Aetna`). Not a live FK to `insurance`. Not a coverage determination. |
+| `coverage_label` | `text` | yes | — | Denormalized plan name at visit time (e.g. sample plan). Not a live FK to `insurance`. Not a coverage determination. |
 | `created_at` | `timestamptz` | no | `now()` | Insert time. |
 
 Index: `(user_id, visit_date DESC)` for History lists.
@@ -66,7 +66,7 @@ Patients only see and write their own visits. `service_role` bypasses RLS (serve
 | Path | Rows |
 |------|------|
 | **Start my first visit** | None until the patient finishes a journey and History save exists. Empty list is valid. |
-| **I’m returning** | Zero or more prior rows. Demo UI currently **seeds** one local visit (Diabetes follow-up / Dr. Priya Shah / Aetna) — that seed is **not** automatically this table until wired. |
+| **I’m returning** | Zero or more prior rows. Demo UI currently **seeds** one local visit (sample follow-up / sample clinician / sample plan) — that seed is **not** automatically this table until wired. |
 
 Completed visits **append**; they are not overwritten. The visit journey is **not** a hamburger item; History is.
 

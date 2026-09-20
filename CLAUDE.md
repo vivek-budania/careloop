@@ -10,7 +10,7 @@ Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**
 
 **Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. The old Provider/Patient Advocate letter-draft UI (`/letters`) has been removed from the frontend; the backend PA/appeal/demand/denial-parse endpoints and `risk_engine.py` still exist but are currently unused by any UI.
 
-**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Letters, image → JSON, and visit STT use `XAI_API_KEY` (Vercel slot) — cards, doctor pages, lab pages; no letter watermark on JSON, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member is Jane Doe / AETNA12345. Profile shows whether Stedi / Groq / xAI / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
+**Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Letters, image → JSON, and visit STT use `XAI_API_KEY` (Vercel slot) — cards, doctor pages, lab pages; no letter watermark on JSON, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member matches that payer’s canned sandbox fixture. Profile shows whether Stedi / Groq / xAI / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
 ## Commands
 
@@ -24,11 +24,11 @@ pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-There is no test suite, linter, or build step configured in this repo.
+There is no linter or frontend build. A few files exist under `tests/`; they are not a required CI gate.
 
 ## Architecture
 
-**Backend** (`backend/`) is a single FastAPI app (`main.py`) — no routers/blueprints, all endpoints defined directly on `app`. It also mounts `frontend/css` and `frontend/js` as static dirs and serves `frontend/index.html` at `/`.
+**Backend** (`backend/`) is a single FastAPI app (`main.py`) — no routers/blueprints, all endpoints defined directly on `app`. It also mounts `frontend/css` and `frontend/js` as static dirs, serves `frontend/index.html` at `/`, and `frontend/showcase.html` at `/showcase`.
 
 Request flow for all AI-generated documents (PA letters, appeals, demand letters, denial parsing) follows the same shape: Pydantic request model in `main.py` → builds a user-message string from the request fields → `backend/llm.py`'s `generate()`/`generate_json()` → xAI chat completions (`XAI_API_KEY`) with the corresponding system prompt from `backend/prompts.py`.
 

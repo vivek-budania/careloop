@@ -173,13 +173,13 @@ What production systems actually call is **X12 270/271 eligibility** (JSON wrapp
 
 | Vendor | What you’d use | Hackathon reality |
 |--------|----------------|-------------------|
-| **Stedi** Eligibility JSON (`POST …/eligibility`) | Best DX; free **test API key**; mock 271s for Aetna / UHC / Cigna / CMS | Sandbox **only** accepts **exact documented mock members**. Arbitrary card data fails. Production key = real payer traffic + enrollment. |
+| **Stedi** Eligibility JSON (`POST …/eligibility`) | Best DX; free **test API key**; mock 271s for canned sandbox payers | Sandbox **only** accepts **exact documented mock members**. Arbitrary card data fails. Production key = real payer traffic + enrollment. |
 | **Availity Coverages** (`POST /v1/coverages`) | Large US clearinghouse 270/271 | Demo plan is **canned scenarios**, auto-approved. Live data needs contracting. |
 | **Change / Optum, Eligible, etc.** | Same 270/271 idea | Sales / enrollment; not a weekend integration. |
 | **CMS Patient Access / SMART on FHIR** | Patient OAuths into *their* payer | Correct long-term consumer path; per-payer apps; bad demo. |
 | **CareLoop mock** (`MockEligibility.check`) | Map dropdown payer (+ optional member ID) → fixture: active, network, copay/deductible/OOP | **This is the judged path.** Label the UI as mock. |
 
-**Dave implements:** `MockEligibility.check(profile)` always, as fallback. If `STEDI_API_KEY` is a **test** key on the process/container at launch (laptop `.env` is a fallback) **and** the profile matches a Stedi canned subscriber (Aetna Jane Doe / `AETNA12345` / `2004-04-04` / payerId `60054`), call Stedi’s `POST …/2026-06-01/eligibility-check` (`Authorization: Key …`) and flatten 271 benefits onto the coverage card. Ignore raw `x12`. If it does not match or the key is missing, fall back to the fixture and say so. Do **not** send real card PHI to a production eligibility endpoint. Do **not** commit the key, bake it into the image, or paste it in chat.
+**Dave implements:** `MockEligibility.check(profile)` always, as fallback. If `STEDI_API_KEY` is a **test** key on the process/container at launch (laptop `.env` is a fallback) **and** the profile matches that payer’s canned sandbox subscriber (see `backend/data/mock_payers.json`), call Stedi’s `POST …/2026-06-01/eligibility-check` (`Authorization: Key …`) and flatten 271 benefits onto the coverage card. Ignore raw `x12`. If it does not match or the key is missing, fall back to the fixture and say so. Do **not** send real card PHI to a production eligibility endpoint. Do **not** commit the key, bake it into the image, or paste it in chat.
 
 ### Visit / cost guess (step 5)
 
@@ -200,7 +200,7 @@ Not a coverage decision and not Sreekar’s SOAP.
 
 - `backend/careloop/eligibility.py` or `backend/careloop/coverage.py` (scan/extract, mock eligibility, visit/cost guess)
 - `backend/data/mock_insurance_card.json` / `backend/data/mock_network.json` / `backend/data/mock_fee_schedule.json` (fixtures)
-- Payer dropdown source: small list in `backend/data/mock_payers.json` (Aetna, UHC, Cigna, BCBS, Mock Payer, Medicare — names only)
+- Payer dropdown source: small list in `backend/data/mock_payers.json` (commercial payers plus a mock payer — names only)
 - Coverage fields on the store (Vivek owns store shape; Dave proposes Coverage contract, including `symptoms`, `prior_visit_notes`, `visit_cost_estimate`)
 - Journey **coverage / card / network / intake** panels consumed via `frontend/js/api.js` named methods (Vivek wires CareLoop chrome)
 
@@ -244,7 +244,7 @@ curl -s -X POST http://localhost:8080/api/careloop/coverage/scan \
 # Manual identity (dropdown is the minimum)
 curl -s -X POST http://localhost:8080/api/careloop/coverage \
   -H "Content-Type: application/json" \
-  -d '{"payer_name":"Mock Payer","member_id":"M-1001","zip":"94110"}'
+  -d '{"payer_name":"Mock Payer","member_id":"M-1001","zip":"10001"}'
 
 curl -s -X POST http://localhost:8080/api/careloop/coverage/confirm \
   -H "Content-Type: application/json" \
@@ -255,7 +255,7 @@ curl -s -X POST http://localhost:8080/api/careloop/coverage/visit-guess \
   -d '{"symptoms":"follow-up type 2 diabetes, A1c check","payer_name":"Mock Payer"}'
 
 curl -s http://localhost:8080/api/careloop/coverage
-curl -s "http://localhost:8080/api/careloop/network?specialty=pcp&zip=94110"
+curl -s "http://localhost:8080/api/careloop/network?specialty=pcp&zip=10001"
 ```
 
 Until those exist, use `GET /api/careloop/thread` (Vivek) and read `coverage` once seeded.
