@@ -84,7 +84,7 @@ Patients only see and write their own rows. `service_role` bypasses RLS (server 
 - eRx / NDC / pharmacy send / live PBM
 - Full **transcripts**, SOAP (those stay on [`visits`](visits.md) `soap` or the scribe API)
 - Tests / lab files (use [`tests`](tests.md); filenames only there)
-- Claims, EOB, CARC/RARC
+- Claims, EOB (use [`claims`](claims.md); mock EOB only — not PA letter bodies)
 - PA / appeal / demand letter bodies or watermarks
 - Card images, member id, copays (use [`insurance`](insurance.md))
 - API keys, `service_role`, secrets

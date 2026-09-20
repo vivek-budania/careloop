@@ -80,11 +80,11 @@ Generated markdown/PDF from the care record. Rules:
 
 ## Do not put on `visits`
 
-- In-progress / upcoming journeys (`openVisits`) and visit-day **new symptoms** (`journey.new_symptoms`) — these stay in the patient-shell `localStorage` thread for now
+- In-progress / upcoming journeys (use [`intakes`](intakes.md); today `openVisits` in `localStorage`) and visit-day **new symptoms** (`journey.new_symptoms`) — new symptoms are still not a column
 - Full **transcripts** / audio / STT blobs (scribe fixture or `/scribe/transcribe`)
 - Prescriptions / medicines, Rx SIG, refill state (use [`medicines`](medicines.md); optional `visit_id`)
 - Tests, lab PDFs, results interpretation (use [`tests`](tests.md); **filename only**, never bytes)
-- Claims, EOB, CARC/RARC
+- Claims, EOB (use [`claims`](claims.md); mock EOB only — not PA letter bodies)
 - PA / appeal letter bodies or watermarks
 - Card images, member id, copays (use `insurance`; only a `coverage_label` here)
 - API keys

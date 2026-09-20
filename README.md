@@ -6,7 +6,7 @@ It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is l
 
 The running app is **CareLoop** (patient shell behind login: Today / History / Medicines / Tests / Insurance / Profile, plus an 8-step visit). Old DenialShield PA/appeal forms are a secondary page at `/letters` (watermark + HITL), not hamburger items. **Insurance Claims Management** is Coming soon on the Insurance screen. Demo login: **`jane` / `demo`**. Details: [`AGENTS.md`](AGENTS.md).
 
-**Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**. Hosted Supabase tables (`profiles`, `visits`, `insurance`, `medicines`, `tests`): **[`docs/database/`](docs/database/README.md)** (SQL in [`supabase/`](supabase/README.md)). Login still uses Auth + `profiles` only; coverage/visits/meds/tests are not wired to those tables yet.
+**Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**. Hosted Supabase tables (`profiles`, `visits`, `insurance`, `medicines`, `tests`, `intakes`, `claims`): **[`docs/database/`](docs/database/README.md)** (SQL in [`supabase/`](supabase/README.md)). Login still uses Auth + `profiles` only; coverage/visits/meds/tests/intakes/claims are not wired to those tables yet.
 
 ---
 
@@ -75,7 +75,7 @@ Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test
 ├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
 ├── workflow.md             # Patient-facing screen flow (teammate map; pairs with frontend/mockups/)
 ├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
-├── docs/database/          # Hosted Supabase table docs (profiles, visits, insurance, medicines, tests)
+├── docs/database/          # Hosted Supabase table docs (profiles, visits, insurance, medicines, tests, intakes, claims)
 ├── supabase/               # Idempotent SQL matching hosted tables (CLI not required)
 ├── backend/
 │   ├── main.py             # All routes; mounts static; serves index.html
@@ -141,7 +141,7 @@ cp .env.example .env
 #   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
 ```
 
-**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Signup creates Auth + `public.profiles`; login reads them. Hosted `visits`, `insurance`, `medicines`, and `tests` tables are documented ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
+**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Signup creates Auth + `public.profiles`; login reads them. Hosted `visits`, `insurance`, `medicines`, `tests`, `intakes`, and `claims` tables are documented ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
 
 Same names on the **process/container at launch** or in **Vercel**. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
 

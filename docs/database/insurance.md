@@ -89,17 +89,17 @@ No row is different from an inactive row: skip vs “we checked and it is inacti
 
 ## Do not put on `insurance`
 
-- Visit **symptoms**, specialty suggestion, prior-visit PDFs
+- Visit **symptoms**, specialty suggestion, prior-visit PDFs (symptoms / specialty belong on [`intakes`](intakes.md))
 - SOAP, transcripts, clinician, clinic
 - Rx, medicines, tests, lab results (use [`medicines`](medicines.md) / [`tests`](tests.md); filenames only on tests)
 - **API keys**, `service_role`, Stedi/Gemini/Groq secrets
 - Card / SBC **images** or raw `b64`
-- Claims, EOB, PA letters, appeals, demand letters
-- Visit/cost **guess** line items (computed; not a determination)
+- Claims, EOB (use [`claims`](claims.md); mock EOB only). PA letters, appeals, demand letters stay off this table
+- Visit/cost **guess** line items (use [`intakes`](intakes.md) `visit_cost_guess`; not a determination)
 - Passwords
 
 Never invent a copay that is not printed on the card/SBC or returned by mock/271.
 
 ## PA ≠ claim
 
-Prior authorization (before a drug/service is covered) is **not** this table and **not** a claim (after billing). Insurance Claims Management is Coming soon. Do not store PA status here. `coverage_label` on [`visits`](visits.md) is only a display snapshot.
+Prior authorization (before a drug/service is covered) is **not** this table and **not** a [`claims`](claims.md) row (after billing). Insurance Claims Management is Coming soon. Do not store PA status here. `coverage_label` on [`visits`](visits.md) is only a display snapshot.

@@ -8,9 +8,9 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 
 | Layer | What is true today |
 |-------|-------------------|
-| Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance` already exist. `public.medicines` and `public.tests` are in this PR’s SQL (apply in the hosted SQL editor). |
-| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
-| This docs PR | Schema + SQL only. **Do not** wire coverage, medicines, or tests APIs, or change login. |
+| Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance`, `public.intakes`, `public.claims` already exist. `public.medicines` and `public.tests` are in this PR’s SQL (apply in the hosted SQL editor). |
+| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / intakes / meds / tests / claims / packet stay in the browser until a later wiring PR. |
+| This docs PR | Schema + SQL only. **Do not** wire coverage, intakes, medicines, tests, or claims APIs, or change login. |
 
 ## ER (what exists)
 
@@ -21,8 +21,12 @@ erDiagram
   PROFILES ||--o{ INSURANCE : "user_id many rows, one current"
   PROFILES ||--o{ MEDICINES : "user_id 1:many"
   PROFILES ||--o{ TESTS : "user_id 1:many"
+  PROFILES ||--o{ INTAKES : "user_id 1:many"
+  PROFILES ||--o{ CLAIMS : "user_id 1:many"
   VISITS |o--o{ MEDICINES : "visit_id optional"
   VISITS |o--o{ TESTS : "visit_id optional"
+  VISITS |o--o{ INTAKES : "completed_visit_id optional"
+  VISITS |o--o{ CLAIMS : "visit_id optional"
 
   AUTH_USERS {
     uuid id PK
@@ -82,6 +86,28 @@ erDiagram
     date ordered_at
     date result_at
   }
+  INTAKES {
+    uuid id PK
+    uuid user_id FK
+    uuid completed_visit_id FK
+    text status
+    text symptoms
+    text suggested_specialty
+    text clinician_name
+    text slot
+    jsonb visit_cost_guess
+  }
+  CLAIMS {
+    uuid id PK
+    uuid user_id FK
+    uuid visit_id FK
+    text service_name
+    text status
+    numeric billed_amount
+    numeric patient_owes
+    text eob_summary
+    text source
+  }
 ```
 
 - **`auth.users` 1:1 `profiles`.** `profiles.id` = `auth.users.id`. There is **no** `login` table. Password is Auth-only (never a column on `profiles`).
@@ -89,6 +115,8 @@ erDiagram
 - **`visits`:** many per user. **Past visits → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
 - **`medicines`:** many per user (**☰ Prescriptions**). Optional `visit_id` (`ON DELETE SET NULL`).
 - **`tests`:** many per user (**☰ Test records**). Optional `visit_id` (`ON DELETE SET NULL`). `document_filename` is a filename only — never file bytes.
+- **`intakes`:** many per user. In-progress journey **before** a History visit. Optional `completed_visit_id`. `visit_cost_guess` is not a coverage decision.
+- **`claims`:** many per user. Mock EOB **after billing**. Optional `visit_id`. **Not** PA/appeal letter bodies. **PA ≠ claim.**
 
 ## What is not a table
 
@@ -98,19 +126,18 @@ Do **not** add these tables in migrations. The packet is still **generated** at 
 |-------------|----------------------|--------|
 | **`login`** | Auth + `profiles` | No `login` table. Passwords stay in Auth. |
 | **History packet** | Generated `.md` / PDF export | Record export only — not a letter. Do not add `packets`. |
-| **Claims / EOB** | Insurance screen: Coming soon | Separate from PA. Do not store CARC/RARC rows. |
-| **PA / appeal / demand letters** | `/letters` + HITL; watermarked drafts | Not stored as rows. |
-| **Transcripts** | Scribe fixture / STT API | Do not dump onto `insurance` or `visits`. |
+| **PA / appeal / demand letters** | `/letters` + HITL; watermarked drafts | Not stored as rows. Not `claims.eob_summary`. |
+| **Transcripts** | Scribe fixture / STT API | Do not dump onto `insurance`, `visits`, or `intakes`. |
 | **Raw card / SBC images** | Insurance form upload only | Persist extracted fields on `insurance`, never `b64` / bytes. |
 | **API keys** | Process/container env or Vercel | Never columns, never git, never frontend JS. |
 
-Also not persisted as columns yet (stay in the patient-shell `localStorage` thread):
+Also not persisted as columns yet (stay in the patient-shell `localStorage` thread until wired):
 
-| Missing column / object | Where it lives today | Notes |
-|-------------------------|----------------------|--------|
-| New symptoms at check-in | `journey.new_symptoms` + `new_symptoms_log` | Not a `visits` column yet |
-| Open / upcoming visits | `openVisits` | Persist to `visits` only after the journey is completed |
-| Visit symptoms / cost guess | Dave intake APIs (in-memory) | Not insurance columns |
+| Missing column / object | Where it lives today | Intended table |
+|-------------------------|----------------------|----------------|
+| New symptoms at check-in | `journey.new_symptoms` + `new_symptoms_log` | Not a `visits` or `intakes` column yet |
+| Open / upcoming visits | `openVisits` | [`intakes`](intakes.md) (`status = 'open'`) |
+| Visit symptoms / cost guess | Dave intake APIs (in-memory) | [`intakes`](intakes.md) `symptoms` / `visit_cost_guess` |
 
 ## Auth (no `login` table)
 
@@ -125,10 +152,10 @@ Seeded live user: username `jane`, email `jane@careloop.local`, password `demo`.
 
 ## First visit vs returning (intended when coverage is stored)
 
-| Path | `insurance` | `visits` | `medicines` / `tests` | App (today, still local) |
+| Path | `insurance` | `visits` | `intakes` / `claims` | App (today, still local) |
 |------|-------------|----------|----------------------|---------------------------|
-| **Start my first visit** | No current row after skip; save creates/updates `is_current` | Empty until a journey is saved | Empty until Prescriptions / Test records are updated | Opens insurance hub; skip → no estimated-costs step |
-| **I’m returning** | Read `is_current` | List for History → My visits | Zero or more list rows | Today + seeded Aetna Jane Doe / Metformin / HbA1c via local seed (not these tables yet) |
+| **Start my first visit** | No current row after skip; save creates/updates `is_current` | Empty until a journey is saved | Open intakes as the patient books; no claims until a mock EOB exists | Opens insurance hub; skip → no estimated-costs step |
+| **I’m returning** | Read `is_current` | List for History → My visits | Zero or more open intakes; claims stay empty until wired | Today + seeded Aetna Jane Doe / Metformin / HbA1c via local seed (not these tables yet) |
 
 No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a coverage decision.
 
@@ -141,8 +168,10 @@ No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a 
 | `insurance` | Patient JWT on Insurance save / Confirm / Refresh | Owner only; returning login reads `is_current` |
 | `medicines` | Patient JWT on Prescriptions save / visit-plan apply | Owner only (four RLS policies) |
 | `tests` | Patient JWT on Test records save / filename attach | Owner only (four RLS policies) |
+| `intakes` | Patient JWT while the visit journey is in flight | Owner only (four RLS policies) |
+| `claims` | Patient JWT when a mock EOB is recorded | Owner only (four RLS policies) |
 
-RLS is on for all five `public` tables. `service_role` bypasses RLS (server login/signup lookup only for `profiles`).
+RLS is on for all seven `public` tables. `service_role` bypasses RLS (server login/signup lookup only for `profiles`).
 
 ## Safety (do not weaken)
 
@@ -160,3 +189,5 @@ RLS is on for all five `public` tables. `service_role` bypasses RLS (server logi
 | `insurance` | [`insurance.md`](insurance.md) | [`20260919102000_create_insurance.sql`](../../supabase/migrations/20260919102000_create_insurance.sql) |
 | `medicines` | [`medicines.md`](medicines.md) | [`20260919104000_create_medicines.sql`](../../supabase/migrations/20260919104000_create_medicines.sql) |
 | `tests` | [`tests.md`](tests.md) | [`20260919105000_create_tests.sql`](../../supabase/migrations/20260919105000_create_tests.sql) |
+| `intakes` | [`intakes.md`](intakes.md) | [`20260919106000_create_intakes.sql`](../../supabase/migrations/20260919106000_create_intakes.sql) |
+| `claims` | [`claims.md`](claims.md) | [`20260919107000_create_claims.sql`](../../supabase/migrations/20260919107000_create_claims.sql) |

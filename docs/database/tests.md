@@ -70,7 +70,7 @@ Patients only see and write their own rows. `service_role` bypasses RLS (server 
 - Clinical interpretation, diagnosis, or coverage decisions
 - Prescriptions / medicines (use [`medicines`](medicines.md))
 - Full **transcripts**, SOAP (use [`visits`](visits.md) `soap` or the scribe API)
-- Claims, EOB, CARC/RARC
+- Claims, EOB (use [`claims`](claims.md); mock EOB only — not PA letter bodies)
 - PA / appeal / demand letter bodies or watermarks
 - Card images, member id, copays (use [`insurance`](insurance.md))
 - API keys, `service_role`, secrets
