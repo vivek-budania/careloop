@@ -1744,7 +1744,8 @@ const CareLoop = {
     const spec = String(specialty || '').toLowerCase();
     if (!spec || spec === 'any') return merged;
     const matched = merged.filter((row) => String(row.specialty || '').toLowerCase() === spec);
-    return matched.length ? matched : merged;
+    const rest = merged.filter((row) => String(row.specialty || '').toLowerCase() !== spec);
+    return matched.concat(rest);
   },
 
   async loadNetwork() {
@@ -1889,8 +1890,9 @@ const CareLoop = {
     const any = j.network_specialty === 'any';
     const radius = this.networkMeta?.nearby_radius_miles || 40;
     const fallback = Boolean(this.networkMeta?.zip_fallback_used);
-    const nearby = (this.networkMeta?.nearby || this.clinicians.filter((doc) => Number(doc.miles) <= radius)).slice(0, 6);
-    const farther = this.clinicians.filter((doc) => !nearby.some((row) => row.npi === doc.npi)).slice(0, 4);
+    const nearbyAll = this.networkMeta?.nearby || this.clinicians.filter((doc) => Number(doc.miles) <= radius);
+    const nearby = nearbyAll.filter((doc) => Number(doc.miles) <= radius);
+    const farther = this.clinicians.filter((doc) => !nearby.some((row) => row.npi === doc.npi) && Number(doc.miles) > radius);
     const zipNote = fallback
       ? `ZIP ${this.esc(zip)} is not in the demo map, so distance is measured from 94110.`
       : `Distances are from ZIP ${this.esc(zip)}.`;
@@ -1900,7 +1902,7 @@ const CareLoop = {
     const c = this.coverageLabel();
     const insurance = c
       ? `<div class="document zip-confirm">${this.icon('shield')}<div><h3>I can see your insurance</h3><p>You’re on file with <strong>${this.esc(c.payer)}</strong>${c.plan ? ` · ${this.esc(c.plan)}` : ''}${c.member ? ` · member ${this.esc(c.member)}` : ''} · ${this.esc(c.status || 'saved')}. That’s the same plan on your Insurance tab.</p></div></div>`
-      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add a card or your plan details if you want estimated costs later.</div><div class="row" style="flex-wrap:wrap;margin:4px 0 12px">${this.btn('Add insurance', 'add-visit-insurance')}</div>`;
+      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add a card or your plan details if you want estimated costs later.</div><div class="row" style="flex-wrap:wrap;margin:4px 0 12px">${this.btn('Try a sample card', 'sample-card')}${this.btn('Add insurance', 'add-visit-insurance', 'secondary')}</div>`;
     const specReason = this.quietUserCopy(this.coverageSnap.intake?.suggested_specialty_reason)
       || 'Change the reason on the last step to change this filter.';
     return `<h2>Let’s take this one step at a time.</h2><p class="empathy">${this.esc(this.empathyForSymptoms(j.symptoms))}</p>${insurance}<div class="document mt"><div><h3>Who I would start with</h3><p>From what you shared, I’d look for a <strong>${this.esc(spec)}</strong> first. ${this.esc(specReason)}</p></div></div><div class="rule"></div><h3>Then we can search near you.</h3><p>Enter your ZIP so we can sort nearby clinicians by distance.</p><form id="zip-search-form" class="zip-search"><label class="field">ZIP code<input name="zip" value="${this.esc(zip)}" pattern="[0-9]{5}" maxlength="5" required></label><button class="btn secondary" type="submit">Search nearby</button></form><div class="row" style="flex-wrap:wrap;margin:12px 0 8px">${this.btn(any ? 'Use suggested specialty' : 'Suggested specialty ✓', 'network-suggested', any ? 'secondary' : '')}${this.btn(any ? 'Any specialty nearby ✓' : 'Any specialty nearby', 'network-any', any ? '' : 'secondary')}</div>${found}<h3 class="mt">Near ZIP ${this.esc(zip)}</h3>${this.doctorRows(nearby)}${farther.length ? `<h3 class="mt">Farther alternatives</h3><p style="font-size:12px">Farther than ${radius} miles.</p>${this.doctorRows(farther)}` : ''}`;
