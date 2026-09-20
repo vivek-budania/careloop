@@ -1183,7 +1183,10 @@ const CareLoop = {
   deleteOpenVisit(id) {
     const remaining = this.openJourneys().filter((row) => row.id !== id);
     const active = this.thread.journey;
-    const patch = { openVisits: remaining };
+    const patch = {
+      openVisits: remaining,
+      reminders: this.remindersList().filter((row) => !(row.kind === 'visit' && row.source_id === id)),
+    };
     if (active && active.id === id) {
       this.clearVisitRuntime();
       patch.journey = remaining[0] ? { ...remaining[0] } : null;
