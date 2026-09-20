@@ -1928,10 +1928,7 @@ const CareLoop = {
       const on = Number(this.thread.journey?.demo_id) === Number(row.id) && demo;
       return this.btn(on ? `${row.label} ✓` : row.label, 'pick-demo', on ? '' : 'secondary', `data-demo-id="${row.id}"`);
     }).join('');
-    const transcriptActions = text
-      ? `<div class="mt">${this.btn(`${this.icon('download')} Download full transcript (PDF)`, 'export-transcript-pdf', 'secondary')}</div>`
-      : '';
-    return `<div class="row" style="justify-content:space-between"><h2>Capture this visit.</h2>${tag}</div><p>Record or upload the conversation, or pick a demo transcript. The samples stay hidden until you choose one.</p>${this.recordControls('visit')}<div class="demo-picks mt">${demos}</div><div class="transcript">${this.renderTranscriptParas(text)}</div>${transcriptActions}<div class="notice">${this.esc(hint)}</div>`;
+    return `<div class="row" style="justify-content:space-between"><h2>Capture this visit.</h2>${tag}</div><p>Record or upload the conversation, or pick a demo transcript. The samples stay hidden until you choose one.</p>${this.recordControls('visit')}<div class="demo-picks mt">${demos}</div><div class="transcript">${this.renderTranscriptParas(text)}</div><div class="notice">${this.esc(hint)}</div>`;
   },
 
   planBody() {
