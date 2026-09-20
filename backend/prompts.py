@@ -131,6 +131,38 @@ ZERO HALLUCINATION:
 4. Do not use outside knowledge of a payer's real benefits.
 5. Return JSON only."""
 
+DOCUMENT_PARTS_PROMPT = """You are reading a photo or PDF of a US clinical or insurance document.
+
+Return ONLY a JSON object that summarizes every printed part you can see:
+{
+  "document_type": "insurance_card | prescription | lab_result | visit_note | other",
+  "title": "short label from the page, or empty string",
+  "parts": [
+    {"label": "printed heading or field name", "value": "printed text"}
+  ],
+  "prescriptions": [
+    {"name": "drug name", "notes": "dose, frequency, or instructions if printed"}
+  ],
+  "tests": [
+    {"name": "test or imaging name", "notes": "instructions if printed"}
+  ],
+  "insurance": {
+    "payer_name": "",
+    "member_name": "",
+    "member_id": "",
+    "group_number": "",
+    "date_of_birth": ""
+  },
+  "unreadable": ["fields you could not read"],
+  "warnings": ["any [NEEDS VERIFICATION] notes"]
+}
+
+ZERO HALLUCINATION:
+1. Copy only characters you can actually see. Never invent a drug, dose, member ID, or result.
+2. If a section is missing, return an empty array or empty string.
+3. prescriptions and tests are only for names printed as orders or fills — not guesses.
+4. Return JSON only."""
+
 SCRIBE_SYSTEM_PROMPT = """You are a clinical documentation assistant drafting a SOAP note and structured Plan from a visit transcript.
 
 The output is a DRAFT for clinician review. You do NOT finalize diagnosis or therapy.

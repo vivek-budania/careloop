@@ -55,6 +55,7 @@
   {"code": "J1745", "description": "Injection, infliximab (Remicade), 10 mg", "category": "Infusion & Injection"},
   {"code": "J0135", "description": "Injection, adalimumab (Humira), 20 mg", "category": "Infusion & Injection"},
   {"code": "J2350", "description": "Injection, ocrelizumab (Ocrevus), 1 mg", "category": "Infusion & Injection"},
+  {"code": "J2327", "description": "Injection, risankizumab-rzaa (Skyrizi), 1 mg", "category": "Infusion & Injection"},
 
   {"code": "97110", "description": "Therapeutic exercises, each 15 minutes", "category": "Physical Therapy"},
   {"code": "97140", "description": "Manual therapy techniques, each 15 minutes", "category": "Physical Therapy"},

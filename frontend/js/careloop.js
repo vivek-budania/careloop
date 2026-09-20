@@ -12,9 +12,11 @@ const CareLoop = {
   selectedVisit: null,
   insuranceMode: 'hub',
   insuranceReturn: false,
+  insuranceFromVisit: false,
   payers: [],
   clinicians: [],
   costEstimate: null,
+  claimAcceptance: null,
   coverageSnap: { profile: null, eligibility: null },
   demoEnv: null,
   scribeFixture: null,
@@ -61,6 +63,7 @@ const CareLoop = {
     trash: 'M5 7h14M9 7V5h6v2m-7 0 1 14h8l1-14',
     eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
     'eye-off': 'M3 3l18 18M10.58 10.58a3 3 0 0 0 4.24 4.24M9.88 4.24A10.94 10.94 0 0 1 12 5c6 0 10 7 10 7a17.9 17.9 0 0 1-3.14 4.06M6.1 6.1C3.51 7.86 2 10.5 2 10.5S6 17.5 12 17.5c1.13 0 2.19-.2 3.17-.55',
+    stop: 'M8 8h8v8H8z',
   },
 
   stepNames: [
@@ -177,6 +180,12 @@ const CareLoop = {
         reviewed: true,
         summary: 'Discussed current metformin routine and planned a follow-up HbA1c test.',
         coverage: 'Aetna',
+        new_symptoms: '',
+        new_symptoms_log: [],
+        care: {
+          prescriptions: this.seedPrescriptions(),
+          tests: this.seedTestRecords(),
+        },
       }] : [],
       doses: returning
         ? { morning: 'taken', evening: 'upcoming' }
@@ -280,7 +289,8 @@ const CareLoop = {
       ? this.orders
       : ((this.encounter && this.encounter.plan) || []);
     if (!items.length && !this.encounter && !this.orders) {
-      return { ...this.demoFallbackCare(), applied: false };
+      if (this.usesDemoTranscript()) return { ...this.demoFallbackCare(), applied: false };
+      return { prescriptions: [], tests: [], applied: false };
     }
     const prescriptions = [];
     const tests = [];
@@ -368,6 +378,136 @@ const CareLoop = {
     this.toast('Prescriptions and test records updated from this visit.');
   },
 
+  linesFromText(text) {
+    return String(text || '').split(/\n+/).map((row) => row.trim()).filter(Boolean);
+  },
+
+  updatePastVisit(visitId, patch) {
+    const visits = (this.thread.visits || []).map((row) => (
+      row.id === visitId ? { ...row, ...patch } : row
+    ));
+    this.saveThread({ visits });
+    return visits.find((row) => row.id === visitId);
+  },
+
+  mergeVisitCareIntoLists(visit) {
+    const care = (visit && visit.care) || {};
+    const prescriptions = this.mergeCareItems(
+      this.thread.prescriptions,
+      (care.prescriptions || []).map((item) => this.tidyCareItem(item)),
+    );
+    const testRecords = this.mergeCareItems(
+      this.thread.testRecords,
+      (care.tests || []).map((item) => ({ ...item, kind: item.kind || 'order' })),
+      { byKind: true },
+    );
+    this.saveThread({ prescriptions, testRecords });
+  },
+
+  updateVisitCareItem(visitId, kind, itemId, patch) {
+    const visit = (this.thread.visits || []).find((row) => row.id === visitId);
+    if (!visit) {
+      this.toast('That past visit was not found.');
+      return;
+    }
+    const care = {
+      prescriptions: [...((visit.care && visit.care.prescriptions) || [])],
+      tests: [...((visit.care && visit.care.tests) || [])],
+    };
+    const list = kind === 'rx' ? care.prescriptions : care.tests;
+    const i = list.findIndex((row) => row.id === itemId);
+    if (i < 0) {
+      this.toast('That item is no longer on this visit.');
+      return;
+    }
+    list[i] = { ...list[i], ...patch };
+    const next = this.updatePastVisit(visitId, { care });
+    this.mergeVisitCareIntoLists(next);
+    this.render();
+    this.toast(kind === 'rx' ? 'Prescription updated from after the visit.' : 'Test updated from after the visit.');
+  },
+
+  extractedPartsBlock(extracted) {
+    if (!extracted || typeof extracted !== 'object') return '';
+    const parts = Array.isArray(extracted.parts) ? extracted.parts.filter((row) => row && (row.label || row.value)) : [];
+    if (!parts.length) return '';
+    const rows = parts.slice(0, 12).map((row) => `<li><strong>${this.esc(row.label || 'Field')}</strong> ${this.esc(row.value || '')}</li>`).join('');
+    return `<ul class="extract-parts mt">${rows}</ul>`;
+  },
+
+  async applyDoctorScript(visitId, form) {
+    const visit = (this.thread.visits || []).find((row) => row.id === visitId);
+    if (!visit) {
+      this.toast('That past visit was not found.');
+      return;
+    }
+    const d = new FormData(form);
+    const rxLines = this.linesFromText(d.get('rx'));
+    const testLines = this.linesFromText(d.get('tests'));
+    const notes = String(d.get('notes') || '').trim();
+    const input = document.getElementById('visit-script-file');
+    const file = input && input.files && input.files[0];
+    if (!rxLines.length && !testLines.length && !file) {
+      this.toast('Add a doctor’s page or at least one prescription or test.');
+      return;
+    }
+    let script = visit.script || null;
+    let extracted = null;
+    if (file) {
+      try {
+        const payload = await this.readDataUrl(file);
+        script = {
+          filename: payload.filename,
+          mime: payload.mime,
+          dataUrl: payload.dataUrl,
+          notes,
+          at: new Date().toISOString(),
+        };
+      } catch (err) {
+        this.toast(err.message);
+        return;
+      }
+      extracted = await this.tryExtractImage(file, 'Could not read that page into JSON. You can still type the items.');
+      if (extracted) script.extracted = extracted;
+    } else if (notes) {
+      script = { ...(script || {}), notes, at: new Date().toISOString() };
+    }
+    const fromJsonRx = (extracted && extracted.prescriptions) || [];
+    const fromJsonTests = (extracted && extracted.tests) || [];
+    const incomingRx = (rxLines.length ? rxLines : fromJsonRx.map((row) => [row.name, row.notes].filter(Boolean).join(' '))).map((line) => {
+      const parsed = this.parseCareName(typeof line === 'string' ? line : (line && line.name) || '');
+      const extra = typeof line === 'string' ? '' : (line && line.notes) || '';
+      return this.tidyCareItem({
+        id: `rx-${this.careKey(parsed.name || line)}`,
+        name: parsed.name || String(line || ''),
+        notes: [parsed.leftover, extra, notes].filter(Boolean).join(' · '),
+        status: 'Updated after visit',
+        source: 'doctor-script',
+        schedule: /metformin/i.test(parsed.name || String(line || '')),
+      });
+    }).filter((item) => item.name);
+    const incomingTests = (testLines.length ? testLines : fromJsonTests.map((row) => [row.name, row.notes].filter(Boolean).join(' '))).map((line) => {
+      const parsed = this.parseCareName(typeof line === 'string' ? line : (line && line.name) || '');
+      const extra = typeof line === 'string' ? '' : (line && line.notes) || '';
+      return {
+        id: `test-${this.careKey(parsed.name || line)}`,
+        name: parsed.name || String(line || ''),
+        notes: [parsed.leftover, extra, notes].filter(Boolean).join(' · '),
+        status: 'Updated after visit',
+        source: 'doctor-script',
+        kind: 'order',
+      };
+    }).filter((item) => item.name);
+    const care = {
+      prescriptions: this.mergeCareItems((visit.care && visit.care.prescriptions) || [], incomingRx),
+      tests: this.mergeCareItems((visit.care && visit.care.tests) || [], incomingTests, { byKind: true }),
+    };
+    const next = this.updatePastVisit(visitId, { care, script });
+    this.mergeVisitCareIntoLists(next);
+    this.render();
+    this.toast('Past visit updated from the doctor’s page.');
+  },
+
   viewTestRecord(id) {
     const row = (this.thread.testRecords || []).find((item) => item.id === id);
     if (!row) {
@@ -394,8 +534,17 @@ const CareLoop = {
       : `<img class="test-preview-img" alt="${this.esc(row.name)}" src="${row.dataUrl}">`;
     this.modal(
       this.esc(row.name),
-      `<div class="notice">Stored on this device only · not a verified medical record</div><div class="test-preview">${preview}</div><p style="font-size:12px">${this.esc(row.filename || '')}${row.date ? ` · ${this.esc(row.date)}` : ''}</p>`,
+      `<div class="notice">Stored on this device only · not a verified medical record. Copied printed parts only — CareLoop does not interpret labs.</div><div class="test-preview">${preview}</div><p style="font-size:12px">${this.esc(row.filename || '')}${row.date ? ` · ${this.esc(row.date)}` : ''}${row.extracted && row.extracted.document_type ? ` · read as ${this.esc(row.extracted.document_type)}` : ''}</p>${this.extractedPartsBlock(row.extracted)}`,
     );
+  },
+
+  async tryExtractImage(file, failToast) {
+    try {
+      return await API.extractImage(file);
+    } catch (err) {
+      this.toast(err.message || failToast || 'Could not read that page into JSON.');
+      return null;
+    }
   },
 
   async readDataUrl(file) {
@@ -418,6 +567,7 @@ const CareLoop = {
     }
     try {
       const payload = await this.readDataUrl(file);
+      const extracted = await this.tryExtractImage(file, 'Could not read printed parts. The file is still saved.');
       const list = (this.thread.testRecords || []).slice();
       const i = list.findIndex((row) => row.id === id);
       const next = {
@@ -432,6 +582,7 @@ const CareLoop = {
         filename: payload.filename,
         mime: payload.mime,
         dataUrl: payload.dataUrl,
+        extracted: extracted || null,
       };
       if (i >= 0) list[i] = { ...list[i], ...next };
       else list.unshift(next);
@@ -483,6 +634,7 @@ const CareLoop = {
     }
     try {
       const payload = await this.readDataUrl(file);
+      const extracted = await this.tryExtractImage(file, 'Could not read printed parts. The file is still saved.');
       this.saveThread({
         testRecords: [{
           id: this.newVisitId(),
@@ -495,6 +647,7 @@ const CareLoop = {
           filename: payload.filename,
           mime: payload.mime,
           dataUrl: payload.dataUrl,
+          extracted: extracted || null,
         }, ...(this.thread.testRecords || [])],
       });
       this.render();
@@ -524,6 +677,20 @@ const CareLoop = {
       }
     }
     t.openVisits = t.openVisits.filter((row) => row && row.id && !row.completed);
+    const withLog = (row) => {
+      if (!row || typeof row !== 'object') return row;
+      if (!Array.isArray(row.new_symptoms_log)) row.new_symptoms_log = [];
+      return row;
+    };
+    if (t.journey) withLog(t.journey);
+    t.openVisits = t.openVisits.map(withLog);
+    t.visits = (t.visits || []).map((visit) => {
+      const row = withLog(visit) || {};
+      if (!row.care || typeof row.care !== 'object') row.care = { prescriptions: [], tests: [] };
+      if (!Array.isArray(row.care.prescriptions)) row.care.prescriptions = [];
+      if (!Array.isArray(row.care.tests)) row.care.tests = [];
+      return row;
+    });
     if (!Array.isArray(t.prescriptions)) {
       t.prescriptions = (t.visits || []).some((v) => v.id === 'seed') ? this.seedPrescriptions() : [];
     }
@@ -572,6 +739,7 @@ const CareLoop = {
       symptoms_source: '',
       new_symptoms: '',
       new_symptoms_source: '',
+      new_symptoms_log: [],
       checkin_tab: 'symptoms',
       booked: false,
     };
@@ -604,9 +772,69 @@ const CareLoop = {
 
   visitReasonText(j) {
     const booked = String((j && j.symptoms) || '').trim();
-    const extra = String((j && j.new_symptoms) || '').trim();
+    const extra = this.newSymptomsText(j);
     if (booked && extra) return `${booked} New since booking: ${extra}`;
     return booked || extra || '';
+  },
+
+  symptomLog(j) {
+    const row = j || {};
+    const log = Array.isArray(row.new_symptoms_log) ? row.new_symptoms_log : [];
+    return log.filter((entry) => entry && String(entry.text || '').trim());
+  },
+
+  newSymptomsText(j) {
+    const row = j || {};
+    const fromLog = this.symptomLog(row).map((entry) => String(entry.text || '').trim()).filter(Boolean);
+    const draft = String(row.new_symptoms || '').trim();
+    return [...fromLog, draft].filter(Boolean).join(' ');
+  },
+
+  formatStamp(iso) {
+    if (!iso) return 'Noted';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  },
+
+  appendNewSymptom(text, source) {
+    const trimmed = String(text || '').trim();
+    const j = this.thread.journey || {};
+    const log = this.symptomLog(j);
+    if (trimmed) {
+      const last = log[log.length - 1];
+      if (!last || last.text !== trimmed || last.source !== (source || 'typed')) {
+        log.push({
+          text: trimmed,
+          at: new Date().toISOString(),
+          source: source || 'typed',
+        });
+      }
+    }
+    this.saveThread({
+      journey: {
+        ...j,
+        new_symptoms: '',
+        new_symptoms_log: log,
+        new_symptoms_source: source || j.new_symptoms_source,
+      },
+    });
+    return log;
+  },
+
+  empathyForSymptoms(text) {
+    const s = String(text || '').trim();
+    if (!s) {
+      return 'I’m sorry you’re not feeling like yourself. That deserves care, not a rushed form.';
+    }
+    const short = s.length > 180 ? `${s.slice(0, 177)}…` : s;
+    return `I’m sorry you’re going through this — “${short}” That’s a lot to carry, and you shouldn’t have to jump straight into logistics.`;
   },
 
   checkinTab() {
@@ -654,6 +882,7 @@ const CareLoop = {
     this.extractiveSummary = null;
     this.scribeFixture = null;
     this.costEstimate = null;
+    this.claimAcceptance = null;
   },
 
   visitHeroActions() {
@@ -683,7 +912,7 @@ const CareLoop = {
       : `Preparing · step ${row.step || 1} of 3`;
     const status = kind === 'upcoming'
       ? ((row.step || 1) >= 4
-        ? (row.checked_in ? 'Checked in · continue recording' : (String(row.new_symptoms || '').trim() ? 'New symptoms noted · ready to check in' : 'Ready to check in'))
+        ? (row.checked_in ? 'Checked in · continue recording' : (this.newSymptomsText(row) ? 'New symptoms noted · ready to check in' : 'Ready to check in'))
         : 'Confirmed · tap to check in')
       : (row.doctor || 'Clinician not chosen yet');
     const title = this.visitTitle(row);
@@ -699,7 +928,7 @@ const CareLoop = {
     this.pendingDeleteId = id;
     this.modal(
       'Remove this open visit?',
-      `<p>This deletes <strong>${this.esc(this.visitTitle(row))}</strong> from this demo. Past visits in History stay put.</p>`,
+      `<p>This deletes <strong>${this.esc(this.visitTitle(row))}</strong> from this demo. Past visits stay put.</p>`,
       this.btn('Keep visit', 'close', 'secondary') + this.btn('Delete visit', 'confirm-delete-visit', 'coral'),
     );
   },
@@ -836,10 +1065,13 @@ const CareLoop = {
   },
 
   setupNotice() {
+    const xai = (this.demoEnv && this.demoEnv.xai) || {};
     const gemini = (this.demoEnv && this.demoEnv.gemini) || {};
-    const ocr = gemini.configured
-      ? 'Read uploaded images is available on this form. It copies printed fields only and does not invent missing copays.'
-      : 'Read uploaded images needs GEMINI_API_KEY on this host or in Vercel. Use the sample card until then.';
+    const ocr = xai.configured
+      ? 'Read uploaded images uses XAI_API_KEY on this host. It copies printed fields only and does not invent missing copays.'
+      : gemini.configured
+        ? 'Read uploaded images can use Gemini as a fallback. It copies printed fields only and does not invent missing copays.'
+        : 'Read uploaded images needs XAI_API_KEY on this host or in Vercel. Use the sample card until then.';
     return (
       'Demo eligibility only. This does not verify real coverage or decide benefits. '
       + `Estimates are not a bill. ${ocr}`
@@ -869,10 +1101,10 @@ const CareLoop = {
         detail: stedi.message || 'STEDI_API_KEY is not loaded on this host yet.',
       },
       {
-        name: 'Gemini OCR + letters',
+        name: 'Gemini letters',
         tag: gemini.configured ? 'loaded' : 'not set',
         tagType: gemini.configured ? '' : 'peach',
-        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet.',
+        detail: gemini.message || 'GEMINI_API_KEY is not loaded on this host yet. Used for /letters drafts; image JSON prefers XAI_API_KEY.',
       },
       {
         name: 'Groq fallback',
@@ -881,17 +1113,17 @@ const CareLoop = {
         detail: groq.message || 'Add GROQ_API_KEY the same way when you have it.',
       },
       {
-        name: 'xAI visit STT',
-        tag: xai.configured ? 'loaded' : 'optional',
-        tagType: xai.configured ? '' : 'gray',
-        detail: xai.message || 'Add XAI_API_KEY the same way when you have it. Record on the visit transcript step, or keep the sample conversation.',
+        name: 'xAI image JSON + STT',
+        tag: xai.configured ? 'loaded' : 'not set',
+        tagType: xai.configured ? '' : 'peach',
+        detail: xai.message || 'Add XAI_API_KEY the same way. Used to turn uploaded images into JSON, and for visit speech-to-text.',
       },
       {
         name: 'Vercel',
         tag: 'slots',
         tagType: 'gray',
         detail: vercel.message || (
-          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
+          'Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, STEDI_API_KEY, GEMINI_API_KEY, and XAI_API_KEY in Vercel Project Settings, then Redeploy. Never put service_role in frontend JS.'
         ),
       },
     ];
@@ -946,7 +1178,7 @@ const CareLoop = {
       ? `${c.payer} — ${c.status} (mock estimate)`
       : 'Not on file';
     const visits = (s.visits || []).map((v) => (
-      `\n### ${v.date} · ${v.doctor}\nReason: ${v.reason}${v.new_symptoms ? `\nNew symptoms at check-in: ${v.new_symptoms}` : ''}\n${v.summary}\nReview status: ${
+      `\n### ${v.date} · ${v.doctor}\nReason: ${v.reason}${this.newSymptomsText(v) ? `\nNew symptoms at check-in: ${this.newSymptomsText(v)}` : ''}\n${v.summary}\nReview status: ${
         v.reviewed ? 'Clinician review simulated' : 'Awaiting clinician review'
       }\nCoverage at visit: ${v.coverage}\n`
     )).join('');
@@ -997,6 +1229,7 @@ const CareLoop = {
   },
 
   navigate(next) {
+    if (next === 'History') next = 'Past visits';
     if (next !== this.view) this.cancelRecording();
     this.view = next;
     this.selectedVisit = null;
@@ -1047,8 +1280,12 @@ const CareLoop = {
     }
   },
 
-  async login(username, password, mode, profile = null) {
+  async login(username, password, mode) {
     const result = await API.login(username, password);
+    return this.startSession(result, mode);
+  },
+
+  async startSession(result, mode, profile = null) {
     API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
@@ -1071,6 +1308,7 @@ const CareLoop = {
       this.cancelRecording();
       this.insuranceMode = 'hub';
       this.insuranceReturn = false;
+      this.insuranceFromVisit = false;
       this.view = 'Setup';
     } else {
       this.thread = this.loadThread();
@@ -1149,7 +1387,7 @@ const CareLoop = {
 
   renderSignup() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your information stays in this interactive demo.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">UI demo only · No real account is created.</p></form></section></div>`;
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your account is secured by Supabase Auth.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><div class="signup-grid"><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Username<input name="username" autocomplete="username" placeholder="yourname" maxlength="30" required></label></div><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">Creates a CareLoop demo account · Never use real medical information.</p></form></section></div>`;
     const form = document.getElementById('signup-form');
     const passwordInput = form.password;
     const errBox = document.getElementById('signup-error');
@@ -1204,6 +1442,11 @@ const CareLoop = {
         showSignupError('Enter a valid email address, like name@example.com.', form.email);
         return;
       }
+      const username = form.username.value.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)) {
+        showSignupError('Use 3–30 letters, numbers, dots, dashes, or underscores.', form.username);
+        return;
+      }
       if (form.password.value.length < 8) {
         showSignupError('Password must be at least 8 characters.', form.password);
         return;
@@ -1220,7 +1463,14 @@ const CareLoop = {
       submit.disabled = true;
       submit.textContent = 'CREATING YOUR CARE SPACE…';
       try {
-        await this.login('jane', 'demo', 'first', {
+        const result = await API.signup({
+          username,
+          full_name: fullName,
+          email,
+          password: form.password.value,
+          date_of_birth: form.dateOfBirth.value,
+        });
+        this.renderSignupSuccess(result, {
           name: fullName,
           email,
           dateOfBirth: form.dateOfBirth.value,
@@ -1234,10 +1484,26 @@ const CareLoop = {
     });
   },
 
+  renderSignupSuccess(result, profile) {
+    const app = document.getElementById('app');
+    const needsEmail = Boolean(result.requires_email_confirmation);
+    const username = result.user?.username || '';
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>${needsEmail ? 'One quick email check, then your journey can begin.' : 'Your account is created. Continue when you’re ready.'}</p>${this.art()}<small>CareLoop keeps account passwords in Supabase Auth, never in the profile table.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>${needsEmail ? 'Check your email.' : 'Welcome to CareLoop.'}</h2><p>${needsEmail ? `We sent a verification link to <strong>${this.esc(profile.email)}</strong>. After verifying, return and log in with <strong>${this.esc(username)}</strong>.` : `Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.`}</p>${needsEmail ? '<button type="button" class="btn pill full" data-signup-action="login">BACK TO LOGIN</button>' : `<button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button>`}<p class="fine-print">Your password is managed only by Supabase Auth.</p></div></section></div>`;
+    const button = app.querySelector('[data-signup-action]');
+    button.addEventListener('click', async () => {
+      if (button.dataset.signupAction === 'login') {
+        this.renderLogin();
+        return;
+      }
+      button.disabled = true;
+      await this.startSession(result, 'first', profile);
+    });
+  },
+
   shell(content) {
     const destinations = [
       ['Today', 'home'],
-      ['History', 'history'],
+      ['Past visits', 'history'],
       ['Upcoming visits', 'calendar'],
       ['Prescriptions', 'pill'],
       ['Test records', 'test'],
@@ -1247,9 +1513,9 @@ const CareLoop = {
     const name = this.displayName();
     const crumb = this.view === 'Journey'
       ? ((this.thread.journey && this.thread.journey.step >= 4) ? 'Visit day' : 'Your visit')
-      : this.view === 'Setup' ? 'Getting started' : this.view === 'Followups' ? 'Follow-ups' : this.view;
-    const navActive = ['Today', 'History', 'Upcoming visits', 'Prescriptions', 'Test records', 'Insurance', 'Profile'].includes(this.view)
-      ? this.view
+      : this.view === 'Setup' ? 'Getting started' : this.view === 'Followups' ? 'Follow-ups' : this.view === 'History' ? 'Past visits' : this.view;
+    const navActive = ['Today', 'Past visits', 'History', 'Upcoming visits', 'Prescriptions', 'Test records', 'Insurance', 'Profile'].includes(this.view)
+      ? (this.view === 'History' ? 'Past visits' : this.view)
       : '';
     document.getElementById('app').innerHTML = `<button class="overlay" data-action="menu" aria-label="Close navigation"></button><aside class="sidebar">${this.logo()}<span class="eyebrow">Your space</span><nav class="nav" aria-label="Main navigation">${destinations.map(([n, i]) => `<button type="button" data-nav="${n}" class="${navActive === n ? 'active' : ''}" ${navActive === n ? 'aria-current="page"' : ''}>${this.icon(i)}${n}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="help"><span class="eyebrow" style="padding:0">Made for your next visit</span><p>Your story, ready to share.<br>No starting from scratch.</p>${this.link('Prepare your packet', 'packet')}</div><div class="profile-mini"><div class="avatar">${this.esc(this.initials(name))}</div><div><strong style="font-size:12px">${this.esc(name)}</strong><small>My personal care space</small></div><button class="logout" data-action="logout" aria-label="Log out">${this.icon('logout')}</button></div></div></aside><div class="shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open navigation">${this.icon('menu')}</button><span class="mobile-brand">careloop.</span><div class="breadcrumb">My care <span>/</span><strong>${this.esc(crumb)}</strong></div><div class="topright"><span class="demo-badge"><span class="dot"></span> DEMO MODE</span><button class="icon-btn" aria-label="Notifications" data-action="notifications">${this.icon('bell')}</button><button class="avatar" data-nav="Profile" aria-label="Open profile">${this.esc(this.initials(name))}</button></div></header><main>${content}<footer class="footer"><span>Your care, connected. &nbsp; ♡</span><span>Fictional data · No live care or insurance actions</span></footer></main></div>`;
   },
@@ -1265,7 +1531,8 @@ const CareLoop = {
   setup() {
     let content = '';
     if (this.insuranceMode === 'hub') {
-      content = `<h2>A good place to start.</h2><p>Add your insurance to see estimated costs and mock in-network clinics. You can also skip this for now.</p><div class="split"><button class="card" style="text-align:left" data-action="sample-card" type="button">${this.icon('camera')}<h3 class="mt">Try a sample card</h3><p style="font-size:12px;margin-top:8px">Jane Doe · Aetna · DOB 2004-04-04.<br>Fixture first. You can still read an upload next.</p></button><button class="card" style="text-align:left" data-action="manual-card" type="button">${this.icon('file')}<h3 class="mt">Enter plan details</h3><p style="font-size:12px;margin-top:8px">Choose your insurance company.<br>Date of birth is required.</p></button></div><div class="actions">${this.link('Skip for now', 'skip-insurance')}</div>`;
+      const fromVisit = this.insuranceFromVisit;
+      content = `<h2>${fromVisit ? 'Let’s add your insurance.' : 'A good place to start.'}</h2><p>${fromVisit ? 'Upload your insurance card or enter your plan details, then we’ll return to finding a clinician. You can also skip and keep searching nearby.' : 'Add your insurance to see estimated costs and mock in-network clinics. You can also skip this for now.'}</p><div class="split"><button class="card" style="text-align:left" data-action="sample-card" type="button">${this.icon('camera')}<h3 class="mt">${fromVisit ? 'Upload a card' : 'Try a sample card'}</h3><p style="font-size:12px;margin-top:8px">${fromVisit ? 'Read a card image, or start from the Jane Doe Aetna sample and replace it with yours.' : 'Jane Doe · Aetna · DOB 2004-04-04.<br>Fixture first. You can still read an upload next.'}</p></button><button class="card" style="text-align:left" data-action="manual-card" type="button">${this.icon('file')}<h3 class="mt">${fromVisit ? 'Enter insurance details' : 'Enter plan details'}</h3><p style="font-size:12px;margin-top:8px">Choose your insurance company.<br>Date of birth is required.</p></button></div><div class="actions">${this.link(fromVisit ? 'Skip and return to your visit' : 'Skip for now', 'skip-insurance')}</div>`;
     } else {
       const p = this.coverageSnap.profile || {};
       const sample = this.insuranceMode === 'sample';
@@ -1276,7 +1543,7 @@ const CareLoop = {
       const warnings = (p.warnings || []).map((w) => `<p class="mt" style="font-size:12px">${this.esc(w)}</p>`).join('');
       content = `<h2>${sample ? 'Review your sample card.' : 'A few plan details.'}</h2><p>${sample ? 'These fields come from the Jane Doe Aetna fixture. Date of birth is required so eligibility can match the sandbox member. You can edit them before saving.' : 'Insurance company and date of birth are required. Use fictional details for this demo.'}</p><form id="insurance-form"><label class="field">Insurance company<select name="payer" required><option value="">Select an insurer</option>${options}</select></label><label class="field">Member name (optional)<input name="member_name" value="${this.esc(p.member_name || this.thread.patient.name)}"></label><div class="split"><label class="field">Member ID (optional)<input name="member" value="${this.esc(p.member_id || '')}"></label><label class="field">Group number (optional)<input name="group" value="${this.esc(p.group_number || '')}"></label></div><label class="field">Date of birth<input type="date" name="dob" value="${this.esc(p.date_of_birth || '')}" required></label><label class="field">ZIP code<input name="zip" value="${this.esc(p.zip || this.thread.patient.zip || '94110')}" pattern="[0-9]{5}" maxlength="5"></label><div class="split"><label class="field">Card image (optional)<input type="file" id="card-file" accept="image/*,.pdf"></label><label class="field">SBC / EOB (optional)<input type="file" id="sbc-file" accept="image/*,.pdf"></label></div><p class="mt" style="font-size:12px" id="ocr-status"></p>${warnings}<div class="notice">${this.esc(this.setupNotice())}</div><div class="actions">${this.btn('Back', 'insurance-hub', 'secondary')}<div class="row">${this.btn('Read uploaded images', 'read-images', 'secondary')}<button class="btn" type="submit">Save &amp; review coverage ${this.icon('arrow')}</button></div></div></form>`;
     }
-    return `<div class="narrow">${this.head(this.insuranceReturn ? 'Update your insurance.' : 'Let’s bring your care together.', 'Insurance is a starting point. Your story is what connects it all.')}<section class="card journey-panel">${content}</section></div>`;
+    return `<div class="narrow">${this.head(this.insuranceFromVisit ? 'Add insurance for this visit.' : this.insuranceReturn ? 'Update your insurance.' : 'Let’s bring your care together.', 'Upload a card or enter your plan details. This is a starting point, not a coverage decision.')}<section class="card journey-panel">${content}</section></div>`;
   },
 
   startVisit() {
@@ -1447,19 +1714,21 @@ const CareLoop = {
   recordControls(purpose) {
     const visit = purpose === 'visit';
     const day = purpose === 'day-symptoms';
-    const label = this.recording
-      ? `${this.icon('mic')} Stop & transcribe`
-      : this.sttBusy
-        ? 'Transcribing…'
-        : (visit ? `${this.icon('mic')} Record this visit` : day ? `${this.icon('mic')} Record new symptoms` : `${this.icon('mic')} Record your reason`);
-    const recordClass = this.recording ? 'coral' : 'secondary';
-    const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
     const action = visit ? 'record-visit' : day ? 'record-day-symptoms' : 'record-symptoms';
     const upload = visit ? 'pick-visit-audio' : day ? 'pick-day-symptoms-audio' : 'pick-symptoms-audio';
+    if (this.recording) {
+      const status = this.recordStatus
+        ? `<div class="notice" id="scribe-record-status">${this.esc(this.recordStatus)}</div>`
+        : '<div id="scribe-record-status" hidden></div>';
+      return `<div class="visit-record voice-orb-active" id="visit-record-controls"><div class="voice-orb-wrap"><canvas id="voice-orb" class="voice-orb" width="220" height="220" aria-hidden="true"></canvas><button type="button" class="voice-orb-btn" data-action="${action}" aria-label="Stop and transcribe">${this.icon('mic')}</button></div><input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
+    }
+    const label = this.sttBusy
+      ? 'Transcribing…'
+      : (visit ? `${this.icon('mic')} Record this visit` : day ? `${this.icon('mic')} Record new symptoms` : `${this.icon('mic')} Record your reason`);
     const status = this.recordStatus
-      ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
+      ? `<div class="notice green" id="scribe-record-status">${this.esc(this.recordStatus)}</div>`
       : '<div id="scribe-record-status" hidden></div>';
-    return `<div class="visit-record" id="visit-record-controls">${this.btn(label, action, recordClass, recordDisabled)}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
+    return `<div class="visit-record" id="visit-record-controls">${this.btn(label, action, 'secondary', this.sttBusy ? 'disabled' : '')}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
   },
 
   symptomsBody() {
@@ -1495,7 +1764,13 @@ const CareLoop = {
     const found = nearby.length
       ? `<div class="notice green">Found ${nearby.length} clinician${nearby.length === 1 ? '' : 's'} within ${radius} miles for ${this.esc(any ? 'any specialty' : spec)}. ${zipNote} Directory filter only — not a diagnosis.</div>`
       : `<div class="notice">No clinicians within ${radius} miles of ZIP ${this.esc(zip)} for ${this.esc(any ? 'any specialty' : spec)}. ${zipNote} Alternatives below are farther or a different city.</div>`;
-    return `<h2>Doctors near this ZIP.</h2><p>We match your visit reason to a specialty, then sort the demo directory by distance from your ZIP. This is not a payer directory.</p><form id="zip-search-form" class="zip-search"><label class="field">ZIP code<input name="zip" value="${this.esc(zip)}" pattern="[0-9]{5}" maxlength="5" required></label><button class="btn secondary" type="submit">Search nearby</button></form><p style="font-size:12px">Suggested from your visit reason: <strong>${this.esc(spec)}</strong>. ${this.esc(this.coverageSnap.intake?.suggested_specialty_reason || 'Change the reason on the last step to change this filter.')}</p><div class="row" style="flex-wrap:wrap;margin:12px 0 8px">${this.btn(any ? 'Use suggested specialty' : 'Suggested specialty ✓', 'network-suggested', any ? 'secondary' : '')}${this.btn(any ? 'Any specialty nearby ✓' : 'Any specialty nearby', 'network-any', any ? '' : 'secondary')}</div>${found}<h3 class="mt">Near ZIP ${this.esc(zip)}</h3>${this.doctorRows(nearby)}${farther.length ? `<h3 class="mt">Farther alternatives</h3><p style="font-size:12px">Still in the demo directory, just farther than ${radius} miles.</p>${this.doctorRows(farther)}` : ''}`;
+    const c = this.coverageLabel();
+    const insurance = c
+      ? `<div class="document zip-confirm">${this.icon('shield')}<div><h3>I can see your insurance</h3><p>You’re on file with <strong>${this.esc(c.payer)}</strong>${c.plan ? ` · ${this.esc(c.plan)}` : ''}${c.member ? ` · member ${this.esc(c.member)}` : ''} · ${this.esc(c.status || 'saved')}. That’s the same plan on your Insurance tab.</p></div></div>`
+      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add a card or your plan details if you want estimated costs later.</div><div class="row" style="flex-wrap:wrap;margin:4px 0 12px">${this.btn('Add insurance', 'add-visit-insurance')}</div>`;
+    const specReason = this.coverageSnap.intake?.suggested_specialty_reason
+      || 'Suggestion only — not a diagnosis. Change the reason on the last step to change this filter.';
+    return `<h2>Let’s take this one step at a time.</h2><p class="empathy">${this.esc(this.empathyForSymptoms(j.symptoms))}</p>${insurance}<div class="document mt"><div><h3>Who I would start with</h3><p>From what you shared, I’d look for a <strong>${this.esc(spec)}</strong> first. ${this.esc(specReason)}</p></div></div><div class="rule"></div><h3>Then we can search near you.</h3><p>Enter your ZIP so we can sort the demo directory by distance. This is not a payer directory.</p><form id="zip-search-form" class="zip-search"><label class="field">ZIP code<input name="zip" value="${this.esc(zip)}" pattern="[0-9]{5}" maxlength="5" required></label><button class="btn secondary" type="submit">Search nearby</button></form><div class="row" style="flex-wrap:wrap;margin:12px 0 8px">${this.btn(any ? 'Use suggested specialty' : 'Suggested specialty ✓', 'network-suggested', any ? 'secondary' : '')}${this.btn(any ? 'Any specialty nearby ✓' : 'Any specialty nearby', 'network-any', any ? '' : 'secondary')}</div>${found}<h3 class="mt">Near ZIP ${this.esc(zip)}</h3>${this.doctorRows(nearby)}${farther.length ? `<h3 class="mt">Farther alternatives</h3><p style="font-size:12px">Still in the demo directory, just farther than ${radius} miles.</p>${this.doctorRows(farther)}` : ''}`;
   },
 
   appointmentDate() {
@@ -1539,13 +1814,17 @@ const CareLoop = {
     const tabs = `<div class="tabs"><button type="button" class="${tab === 'symptoms' ? 'active' : ''}" data-checkin-tab="symptoms">New symptoms</button><button type="button" class="${tab === 'checkin' ? 'active' : ''}" data-checkin-tab="checkin">Check in</button></div>`;
     if (tab === 'symptoms') {
       const extra = String(j.new_symptoms || '');
+      const log = this.symptomLog(j);
       const source = j.new_symptoms_source === 'stt'
-        ? `<div class="notice green">Transcribed from your audio. You can edit the text before you check in.</div>`
+        ? `<div class="notice green">Transcribed from your audio. Add it to this visit, then keep going.</div>`
         : '';
       const booked = String(j.symptoms || '').trim()
-        ? `<div class="document">${this.icon('file')}<div><h3>When you booked</h3><small>${this.esc(j.symptoms)}</small></div></div>`
+        ? `<div class="document"><div><h3>When you booked</h3><p class="symptom-booked">${this.esc(j.symptoms)}</p></div></div>`
         : '';
-      return `${tabs}<div class="eyebrow">Visit day</div><h2 class="mt">Any new symptoms before check-in?</h2><p>Share what changed since you booked. This is optional — you can skip it and check in.</p>${booked}<div class="chips">${['Worse than before', 'New rash', 'Fever', 'Headache', 'Nausea', 'Shortness of breath', 'Something else'].map((n) => `<button type="button" class="chip ${extra.toLowerCase().includes(n.toLowerCase()) ? 'selected' : ''}" data-new-symptom="${n}" aria-pressed="${extra.toLowerCase().includes(n.toLowerCase())}">${n}</button>`).join('')}</div><label class="field">New symptoms since booking<textarea id="new-symptoms">${this.esc(extra)}</textarea></label>${this.recordControls('day-symptoms')}${source}<div class="notice">${this.esc(this.audioDisclaimer())}</div>`;
+      const logBlock = log.length
+        ? `<div class="symptom-log">${log.map((entry) => `<article class="symptom-log-item"><time>${this.esc(this.formatStamp(entry.at))}${entry.source ? ` · ${this.esc(entry.source)}` : ''}</time><p class="symptom-note">${this.esc(entry.text)}</p></article>`).join('')}</div>`
+        : '<p class="symptom-empty">No new symptoms added yet. Each note is saved with a timestamp so it stays distinct from what you booked.</p>';
+      return `${tabs}<div class="eyebrow">Visit day</div><h2 class="mt">Any new symptoms before check-in?</h2><p>Add what changed since you booked. Each note is appended with a time so we can tell it apart from the original reason. This is optional — you can skip it and check in.</p>${booked}<h3 class="mt">New since booking</h3>${logBlock}<div class="chips">${['Worse than before', 'New rash', 'Fever', 'Headache', 'Nausea', 'Shortness of breath', 'Something else'].map((n) => `<button type="button" class="chip" data-new-symptom="${n}">${n}</button>`).join('')}</div><label class="field">Add another note<textarea id="new-symptoms">${this.esc(extra)}</textarea></label>${this.btn('Add this note', 'append-symptom', 'secondary')}${this.recordControls('day-symptoms')}${source}<div class="notice">${this.esc(this.audioDisclaimer())}</div>`;
     }
     const booked = this.openJourneys().filter((row) => row.slot && (row.doctor || (row.step || 1) >= 3));
     const choices = booked.length > 1
@@ -1555,8 +1834,8 @@ const CareLoop = {
     const warn = onTime
       ? `<div class="notice green">You’re within 15 minutes of ${this.esc(this.appointmentLabel())}.</div>`
       : `<div class="notice">This check-in is not within 15 minutes of the appointment (${this.esc(this.appointmentLabel())}). You can still continue in this demo. A real clinic would ask you to wait or reschedule.</div>`;
-    const noted = String(j.new_symptoms || '').trim()
-      ? `<div class="notice green">New symptoms noted: ${this.esc(j.new_symptoms)}</div>`
+    const noted = this.newSymptomsText(j)
+      ? `<div class="notice green"><strong>New symptoms noted</strong>${this.symptomLog(j).map((entry) => `<p class="symptom-noted">${this.esc(this.formatStamp(entry.at))} — ${this.esc(entry.text)}</p>`).join('')}${String(j.new_symptoms || '').trim() && !this.symptomLog(j).some((entry) => entry.text === String(j.new_symptoms).trim()) ? `<p class="symptom-noted">${this.esc(j.new_symptoms)}</p>` : ''}</div>`
       : '';
     return `${tabs}<div class="eyebrow">Visit day</div><h2 class="mt">Check in for this visit.</h2><p>${this.esc(j.doctor || 'Your clinician')} · ${this.esc(this.appointmentLabel())}<br>${this.esc(j.clinic || 'Clinic')}</p>${choices}${noted}${warn}<div class="document">${this.icon('check')}<div><h3>${j.checked_in ? 'Checked in' : 'Ready when you are'}</h3><small>${j.checked_in ? 'Next: record the visit, upload audio, or pick Demo 1, 2, or 3.' : 'Confirm check-in to start the visit recording flow.'}</small></div></div>${this.btn(j.checked_in ? 'Checked in ✓' : 'Check in', 'check-in', j.checked_in ? '' : '')}`;
   },
@@ -1615,14 +1894,20 @@ const CareLoop = {
   planBody() {
     const j = this.thread.journey || {};
     const items = (this.encounter && this.encounter.plan) || [];
+    const demo = this.usesDemoTranscript();
     const iconFor = (type) => (type === 'rx' ? 'pill' : type === 'lab' || type === 'imaging' ? 'test' : type === 'follow_up' ? 'calendar' : 'shield');
-    const rows = items.length
-      ? items.map((item) => {
+    let rows;
+    if (items.length) {
+      rows = items.map((item) => {
         const extra = item.pa_required ? ' Prior authorization may be required — not an approval, denial, or price.' : '';
         return `<div class="task-row"><span class="tile-icon">${this.icon(iconFor(item.type))}</span><div><h3>${this.esc(item.description || item.type)}</h3><p style="font-size:12px">${this.esc((item.notes || '') + extra)}</p></div></div>`;
-      }).join('')
-      : [['pill', 'Current medicine', 'Metformin stays on the existing fixture schedule. No dose changes.'], ['test', 'HbA1c blood test', j.reviewed ? 'Mock order ready. Result not available.' : 'Suggested test. Clinic needs to review.'], ['shield', 'Possible add-on therapy', 'Clinician may consider a GLP-1 class add-on. Prior authorization may be required — not an approval, denial, or price.'], ['calendar', 'Follow-up visit', 'Discuss a follow-up in 3 months with your clinic.']].map(([i, t, p]) => `<div class="task-row"><span class="tile-icon">${this.icon(i)}</span><div><h3>${t}</h3><p style="font-size:12px">${p}</p></div></div>`).join('');
-    return `<h2>Your next steps, together.</h2><p>${j.reviewed ? 'Clinician review simulated. These mock plan items are ready for the next step.' : 'Draft plan · waiting for clinician review. No orders have been created.'}</p>${rows}`;
+      }).join('');
+    } else if (demo) {
+      rows = [['pill', 'Current medicine', 'Metformin stays on the existing fixture schedule. No dose changes.'], ['test', 'HbA1c blood test', j.reviewed ? 'Mock order ready. Result not available.' : 'Suggested test. Clinic needs to review.'], ['shield', 'Possible add-on therapy', 'Clinician may consider a GLP-1 class add-on. Prior authorization may be required — not an approval, denial, or price.'], ['calendar', 'Follow-up visit', 'Discuss a follow-up in 3 months with your clinic.']].map(([i, t, p]) => `<div class="task-row"><span class="tile-icon">${this.icon(i)}</span><div><h3>${t}</h3><p style="font-size:12px">${p}</p></div></div>`).join('');
+    } else {
+      rows = `<div class="notice">No next steps could be pulled from this transcript yet. That’s alright — we’ll keep working this flow. Demo 1, 2, or 3 still use the sample care plan.</div>`;
+    }
+    return `<h2>Your next steps, together.</h2><p>${demo ? (j.reviewed ? 'Clinician review simulated. These demo plan items are ready for the next step.' : 'Draft plan from the selected demo conversation. No orders have been created.') : (items.length ? (j.reviewed ? 'Clinician review simulated. These items came from your transcript.' : 'Draft plan pulled from your transcript. No orders have been created.') : 'Waiting on a transcript we can read.')}</p>${rows}`;
   },
 
   refreshRecordUi() {
@@ -1670,11 +1955,18 @@ const CareLoop = {
         : live
           ? 'Your recording was transcribed. Sumy summarizes it; SOAP may still use the sample note until Gemini can draft from the live text.'
           : 'Draft summary from this visit. Nothing becomes an order without clinician review.';
+    const demo = this.usesDemoTranscript();
+    const fallback = {
+      subjective: demo ? 'Fatigue and increased thirst; taking metformin twice daily.' : '',
+      objective: demo ? 'Current metformin routine. No new lab result is available in this demo.' : '',
+      assessment: demo ? 'Diabetes follow-up. Any change in assessment needs clinician verification.' : '',
+      plan_summary: demo ? 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.' : '',
+    };
     const rows = [
-      ['S', 'What you shared', soap.subjective || 'Fatigue and increased thirst; taking metformin twice daily.'],
-      ['O', 'What’s on file', soap.objective || 'Current metformin routine. No new lab result is available in this demo.'],
-      ['A', 'What to review', soap.assessment || 'Diabetes follow-up. Any change in assessment needs clinician verification.'],
-      ['P', 'Suggested next steps', soap.plan_summary || 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.'],
+      ['S', 'What you shared', soap.subjective || fallback.subjective || 'Nothing could be pulled from this transcript yet.'],
+      ['O', 'What’s on file', soap.objective || fallback.objective || 'No objective details were extracted from this transcript.'],
+      ['A', 'What to review', soap.assessment || fallback.assessment || 'No assessment could be drafted from this transcript yet.'],
+      ['P', 'Suggested next steps', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
     ];
     return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Simulate clinician review of this sample summary and plan.</label><small>Demo role simulation only. This is not a signed clinical note. The app does not finalize a diagnosis. Prior authorization, if needed, is separate from any later claim.</small>`;
   },
@@ -1776,7 +2068,7 @@ const CareLoop = {
       const leftMs = this.RECORD_MAX_MS - (Date.now() - this.recordStartedAt);
       const left = Math.max(0, Math.ceil(leftMs / 1000));
       const el = document.getElementById('scribe-record-status');
-      const label = `Listening… ${left}s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.`;
+      const label = `Listening… ${left}s left (max 2 minutes). Tap the orb to stop.`;
       this.recordStatus = label;
       if (el) {
         const pulse = el.querySelector('.record-pulse');
@@ -1792,11 +2084,115 @@ const CareLoop = {
     }, 250);
   },
 
+  /** Web Audio analyser driving the voice-orb canvas — mic level only, never routed to speakers. */
+  startVoiceOrb() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || !this.recordStream) return;
+    try {
+      this.orbAudioCtx = new Ctx();
+      const source = this.orbAudioCtx.createMediaStreamSource(this.recordStream);
+      this.orbAnalyser = this.orbAudioCtx.createAnalyser();
+      this.orbAnalyser.fftSize = 256;
+      this.orbAnalyser.smoothingTimeConstant = 0.8;
+      source.connect(this.orbAnalyser);
+      this.orbData = new Uint8Array(this.orbAnalyser.frequencyBinCount);
+      this.orbLevel = 0;
+      this.orbPoints = null;
+      this.orbT = 0;
+      this.drawVoiceOrb();
+    } catch (_) {
+      /* Web Audio unavailable/blocked — recording still works without the animation */
+    }
+  },
+
+  drawVoiceOrb() {
+    const canvas = document.getElementById('voice-orb');
+    if (!canvas || !this.orbAnalyser) {
+      this.orbRAF = null;
+      return;
+    }
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    this.orbAnalyser.getByteTimeDomainData(this.orbData);
+    let sum = 0;
+    for (let i = 0; i < this.orbData.length; i++) {
+      const v = (this.orbData[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / this.orbData.length);
+    const target = Math.min(1, rms * 4.5);
+    this.orbLevel += (target - this.orbLevel) * 0.25;
+
+    if (!this.orbPoints) {
+      this.orbPoints = [];
+      for (let i = 0; i < 480; i++) {
+        this.orbPoints.push({
+          a: Math.random() * Math.PI * 2,
+          r: Math.sqrt(Math.random()),
+          tw: 0.6 + Math.random() * 0.8,
+          seed: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    ctx.clearRect(0, 0, w, h);
+    this.orbT += 0.02;
+    const t = this.orbT;
+    const level = this.orbLevel;
+    const baseR = Math.min(w, h) * 0.24;
+    const wobbleAmp = Math.min(w, h) * 0.1;
+    const wobble = (angle) => (
+      Math.sin(angle * 3 + t * 1.3) * 0.5
+      + Math.sin(angle * 5 - t * 2.1) * 0.3
+      + Math.sin(angle * 2 + t * 0.7) * 0.2
+    );
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    for (const p of this.orbPoints) {
+      const edge = wobble(p.a) * wobbleAmp * (0.4 + level * 1.2);
+      const R = baseR + edge + level * wobbleAmp * 0.8;
+      const rr = p.r * (R + Math.sin(t * p.tw + p.seed) * 3);
+      const x = Math.cos(p.a) * rr;
+      const y = Math.sin(p.a) * rr;
+      const edgeFactor = Math.pow(p.r, 2.2);
+      const alpha = 0.08 + edgeFactor * (0.5 + level * 0.4);
+      const size = 0.6 + edgeFactor * 1.6 + level * 1.2;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(49,89,75,${alpha.toFixed(3)})`;
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    this.orbRAF = requestAnimationFrame(() => this.drawVoiceOrb());
+  },
+
+  stopVoiceOrb() {
+    if (this.orbRAF) {
+      cancelAnimationFrame(this.orbRAF);
+      this.orbRAF = null;
+    }
+    if (this.orbAudioCtx) {
+      try { this.orbAudioCtx.close(); } catch (_) { /* ignore */ }
+      this.orbAudioCtx = null;
+    }
+    this.orbAnalyser = null;
+    this.orbPoints = null;
+    this.orbLevel = 0;
+    this.orbT = 0;
+  },
+
   cancelRecording() {
     this.discardRecording = this.recording || Boolean(this.mediaRecorder);
     this.recording = false;
     this.sttBusy = false;
     this.clearRecordTimer();
+    this.stopVoiceOrb();
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try { this.mediaRecorder.stop(); } catch (_) { /* ignore */ }
     }
@@ -1893,10 +2289,11 @@ const CareLoop = {
 
       this.mediaRecorder.start(250);
       this.recording = true;
-      this.recordStatus = 'Listening… 120s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.';
+      this.recordStatus = 'Listening… 120s left (max 2 minutes). Tap the orb to stop.';
       this.startRecordTimer();
       this.refreshRecordUi();
-      this.toast('Listening — max 2 minutes. Tap Stop & transcribe when done.');
+      this.startVoiceOrb();
+      this.toast('Listening — max 2 minutes. Tap the orb to stop.');
     } catch (err) {
       this.stopRecordTracks();
       this.recording = false;
@@ -1911,6 +2308,7 @@ const CareLoop = {
     this.sttBusy = true;
     this.clearRecordTimer();
     this.recordStatus = 'Sending the recording to Grok…';
+    this.stopVoiceOrb();
     this.refreshRecordUi();
     try {
       if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
@@ -2006,15 +2404,15 @@ const CareLoop = {
         this.recordStatus = 'Transcribed your reason. Edit the text if needed, then continue.';
         this.toast('Visit reason transcribed.');
       } else if (this.recordPurpose === 'day-symptoms') {
+        this.appendNewSymptom(plain, 'stt');
         this.saveThread({
           journey: {
             ...this.thread.journey,
-            new_symptoms: plain,
             new_symptoms_source: 'stt',
             checkin_tab: 'symptoms',
           },
         });
-        this.recordStatus = 'Transcribed your new symptoms. Edit the text if needed, then continue to check-in.';
+        this.recordStatus = 'Transcribed your new symptoms and added them with a timestamp.';
         this.toast('New symptoms transcribed.');
       } else {
         this.saveThread({
@@ -2093,13 +2491,37 @@ const CareLoop = {
     return this.money(line.patient_owes_low);
   },
 
+  claimAcceptanceBlock() {
+    const claim = this.claimAcceptance
+      || (this.costEstimate && this.costEstimate.claim_acceptance)
+      || (this.coverageSnap.visit_cost_estimate && this.coverageSnap.visit_cost_estimate.claim_acceptance);
+    if (!claim) {
+      return `<div class="notice">Claim-acceptance estimate is not ready yet. The original DenialShield risk engine needs a diagnosis and service code from this visit.</div>`;
+    }
+    if (!claim.available || claim.acceptance_percent == null) {
+      return `<div class="notice">${this.esc(claim.disclaimer || 'Not enough information yet to estimate whether a later claim might be accepted.')}</div>`;
+    }
+    const pct = Number(claim.acceptance_percent);
+    const factors = (claim.factors || []).slice(0, 3).map((row) => `<li>${this.esc(row)}</li>`).join('');
+    return `<div class="acceptance"><div class="acceptance-meter"><strong>${pct}%</strong><small>estimated chance a later claim is accepted</small></div><p>${this.esc(claim.disclaimer)}</p><p style="font-size:12px">Codes used: ${this.esc(claim.icd10_code || '—')} · ${this.esc(claim.cpt_code || '—')}. Denial-risk score from the original heuristic: ${this.esc(String(claim.denial_risk ?? '—'))} (${this.esc(claim.risk_level || '')}).</p>${factors ? `<ul class="acceptance-factors">${factors}</ul>` : ''}</div>`;
+  },
+
   costBody() {
+    const demo = this.usesDemoTranscript();
     const estimate = this.costEstimate || this.coverageSnap.visit_cost_estimate;
     const e = this.coverageSnap.eligibility;
-    if (!estimate) {
-      return `<h2>A little visibility into costs.</h2><p>Loading mock amounts from your saved plan…</p><div class="notice">Guess only — not a bill or a coverage decision. PA-may-be-required is not a price.</div>`;
+    const claim = this.claimAcceptanceBlock();
+    if (!demo && !this.transcriptText()) {
+      return `<h2>A little visibility into costs.</h2><p>Estimated costs come from your visit transcript unless you pick Demo 1, 2, or 3.</p><div class="notice">No transcript yet, so there is no cost guess to show. Demo conversations still use the sample fee schedule.</div>${claim}`;
     }
-    const visitRows = (estimate.likely_visits || []).map((line) => {
+    if (!estimate) {
+      return `<h2>A little visibility into costs.</h2><p>${demo ? 'Loading mock amounts from the selected demo conversation…' : 'Trying to pull cost lines from your transcript…'}</p><div class="notice">${demo ? 'Demo boilerplate only. Guess only — not a bill or a coverage decision.' : 'If this stays empty, the transcript did not have enough service detail. That’s alright for now.'}</div>${claim}`;
+    }
+    const lines = estimate.likely_visits || [];
+    if (!lines.length && !(estimate.medicines || []).length) {
+      return `<h2>A little visibility into costs.</h2><p>${demo ? 'The selected demo did not return priced services.' : 'Nothing billable could be pulled from this transcript yet.'}</p><div class="notice">${this.esc((estimate.warnings && estimate.warnings[0]) || 'No demo boilerplate is shown for a live transcript.')}</div>${claim}`;
+    }
+    const visitRows = lines.map((line) => {
       const allowed = line.allowed;
       const you = line.patient_owes_low;
       const planPays = (allowed != null && you != null) ? Math.max(0, Number(allowed) - Number(you)) : null;
@@ -2123,7 +2545,13 @@ const CareLoop = {
     const warnings = (estimate.warnings || [])
       .map((w) => `<div class="notice">${this.esc(w)}</div>`)
       .join('');
-    return `<h2>A little visibility into costs.</h2><p>Estimates from your saved plan: office/lab visit lines, plus mock formulary retail copays for medicines on this visit’s plan. Not a bill or a coverage decision.</p><h3 class="mt">Visit</h3><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${visitRows}</tbody></table><div class="cost-subtotal">Visit subtotal ${this.money(visitLow)}${visitHigh !== visitLow ? `–${this.money(visitHigh)}` : ''}</div><h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${warnings}<p>${this.esc(estimate.disclaimer || '')}</p><p>Coverage status: ${this.esc(e?.status || 'unknown')} · ${this.esc(e?.network_name || '')}. PA ≠ claim.</p>`;
+    const source = demo
+      ? 'Sample amounts from the selected demo conversation, your saved plan, and medicines on this visit’s plan. An estimate, not a bill or a coverage decision.'
+      : 'Amounts inferred from your transcript, your saved plan, and medicines on this visit’s plan. An estimate, not a bill or a coverage decision.';
+    const visitTable = lines.length
+      ? `<h3 class="mt">Visit</h3><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${visitRows}</tbody></table><div class="cost-subtotal">Visit subtotal ${this.money(visitLow)}${visitHigh !== visitLow ? `–${this.money(visitHigh)}` : ''}</div>`
+      : `<h3 class="mt">Visit</h3><div class="notice">${this.esc((estimate.warnings && estimate.warnings[0]) || 'No visit services priced yet.')}</div>`;
+    return `<h2>A little visibility into costs.</h2><p>${source}</p>${visitTable}<h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${warnings}${claim}<p>${this.esc(estimate.disclaimer || '')}</p><p>Coverage status: ${this.esc(e?.status || 'unknown')} · ${this.esc(e?.network_name || '')}. PA ≠ claim.</p>`;
   },
 
   followups() {
@@ -2143,6 +2571,35 @@ const CareLoop = {
     return `<div class="narrow">${this.head('What to take. What to book.', 'A summary from this visit — not a prescription or a lab order.')}<section class="card"><h2>Medicines to take or buy</h2>${rxRows}<div class="rule"></div><h2>Tests to complete</h2>${labRows}<div class="notice">Demo only. CareLoop does not e-prescribe, buy medicine, or book a lab. Prior authorization, if flagged, is separate from any later claim.</div><div class="actions">${this.btn('Prepare clinic packet', 'packet', 'secondary')}<div class="row">${updateBtn}</div></div></section></div>`;
   },
 
+  visitCareItemForm(visitId, kind, item) {
+    const statuses = kind === 'rx'
+      ? ['To take', 'To buy', 'Picked up', 'Taking as written', 'Stopped', 'Updated after visit']
+      : ['To schedule', 'Scheduled', 'Completed', 'Result on file', 'Updated after visit'];
+    const current = item.status || statuses[0];
+    const opts = statuses.map((s) => `<option value="${this.esc(s)}" ${s === current ? 'selected' : ''}>${this.esc(s)}</option>`).join('');
+    return `<form class="visit-care-form" data-visit-id="${this.esc(visitId)}" data-care-kind="${kind}" data-item-id="${this.esc(item.id)}"><div class="split"><label class="field">Status<select name="status">${opts}</select></label><label class="field">${kind === 'rx' ? 'Pharmacy / how you take it' : 'Lab / appointment'}<input name="place" value="${this.esc(item.place || item.lab || '')}" maxlength="80"></label></div><label class="field">After-visit information<textarea name="notes" rows="3">${this.esc(item.notes || '')}</textarea></label><button class="btn secondary" type="submit">Update this ${kind === 'rx' ? 'prescription' : 'test'}</button></form>`;
+  },
+
+  pastVisitDetail(v) {
+    const log = this.symptomLog(v);
+    const extra = log.length
+      ? log.map((entry) => `${this.formatStamp(entry.at)} — ${entry.text}`).join('\n')
+      : (v.new_symptoms || '');
+    const care = v.care || { prescriptions: [], tests: [] };
+    const rx = care.prescriptions || [];
+    const tests = care.tests || [];
+    const rxBlock = rx.length
+      ? rx.map((item) => `<div class="document mt visit-care-item"><span class="tile-icon peach">${this.icon('pill')}</span><div style="flex:1"><h3>${this.esc(item.name)}</h3><small>${this.esc(item.status || '')}${item.place ? ` · ${this.esc(item.place)}` : ''}</small>${this.visitCareItemForm(v.id, 'rx', item)}</div></div>`).join('')
+      : '<p style="font-size:12px">No prescriptions on this visit yet. Add them from a doctor’s page below.</p>';
+    const testBlock = tests.length
+      ? tests.map((item) => `<div class="document mt visit-care-item"><span class="tile-icon">${this.icon('test')}</span><div style="flex:1"><h3>${this.esc(item.name)}</h3><small>${this.esc(item.status || '')}${item.place || item.lab ? ` · ${this.esc(item.place || item.lab)}` : ''}</small>${this.visitCareItemForm(v.id, 'test', item)}</div></div>`).join('')
+      : '<p style="font-size:12px">No tests on this visit yet. Add them from a doctor’s page below.</p>';
+    const script = v.script
+      ? `<div class="notice green">Doctor’s page on file: ${this.esc(v.script.filename || 'uploaded page')}${v.script.at ? ` · ${this.esc(this.formatStamp(v.script.at))}` : ''}${v.script.extracted && v.script.extracted.document_type ? ` · read as ${this.esc(v.script.extracted.document_type)}` : ''}</div>${this.extractedPartsBlock(v.script.extracted)}`
+      : '';
+    return `<button class="back" data-action="history-back" type="button">${this.icon('back')}Past visits</button><h2>${this.esc(v.reason)}</h2><p class="mt">${this.esc(v.date)} · ${this.esc(v.doctor)}</p><div class="rule"></div>${[['What happened', v.summary], ...(extra ? [['New symptoms at check-in', extra]] : []), ['Coverage at this visit', `${v.coverage} · mock snapshot`]].map(([t, p]) => `<h3 class="mt">${t}</h3><p style="font-size:12px;margin-top:7px">${this.esc(p)}</p>`).join('')}<div class="notice">Prior authorization: not submitted. Claim: not submitted. These are separate insurance events. PA ≠ claim.</div><div class="rule"></div><h3>Update from a doctor’s prescription</h3><p class="mt" style="font-size:12px">Upload the page you were given. We’ll read it into a JSON summary of the printed parts, or you can type each medicine or test yourself. This updates this past visit — not a real e-prescribe.</p>${script}<form id="visit-script-form" data-visit-id="${this.esc(v.id)}"><label class="field">Doctor’s page (PDF or picture)<input type="file" id="visit-script-file" accept="image/*,.pdf,application/pdf"></label><label class="field">Prescriptions on that page (one per line)<textarea name="rx" rows="3" placeholder="Metformin 1000 mg twice daily"></textarea></label><label class="field">Tests needed (one per line)<textarea name="tests" rows="3" placeholder="HbA1c"></textarea></label><label class="field">Notes from after the visit<textarea name="notes" rows="2" placeholder="Pharmacy, fasting, follow-up date"></textarea></label><button class="btn" type="submit">Update this visit from the page</button></form><div class="rule"></div><h3>Prescriptions from this visit</h3>${rxBlock}<div class="rule"></div><h3>Tests needed</h3>${testBlock}<div class="mt">${this.btn('View in clinic packet', 'packet')}</div>`;
+  },
+
   history() {
     let content = '';
     if (this.selectedVisit) {
@@ -2151,19 +2608,19 @@ const CareLoop = {
         this.selectedVisit = null;
         return this.history();
       }
-      content = `<button class="back" data-action="history-back" type="button">${this.icon('back')}My visits</button><h2>${this.esc(v.reason)}</h2><p class="mt">${this.esc(v.date)} · ${this.esc(v.doctor)}</p><div class="rule"></div>${[['What happened', v.summary], ...(v.new_symptoms ? [['New symptoms at check-in', v.new_symptoms]] : []), ['What’s waiting', v.reviewed ? 'HbA1c result not available. Follow-up to be discussed.' : 'Clinic review of this draft summary and plan.'], ['Who acts', 'Clinic reviews the plan; you arrange tests once orders are ready.'], ['Evidence', 'Sample visit conversation and existing metformin fixture.'], ['Coverage at this visit', `${v.coverage} · mock snapshot`]].map(([t, p]) => `<h3 class="mt">${t}</h3><p style="font-size:12px;margin-top:7px">${this.esc(p)}</p>`).join('')}<div class="notice">Prior authorization: not submitted. Claim: not submitted. These are separate insurance events. PA ≠ claim.</div>${this.btn('View in clinic packet', 'packet')}`;
+      content = this.pastVisitDetail(v);
     } else {
       content = `<div class="tabs"><button type="button" class="${this.historyTab === 'visits' ? 'active' : ''}" data-tab="visits">My visits</button><button type="button" class="${this.historyTab === 'packet' ? 'active' : ''}" data-tab="packet">For the clinic</button></div>`;
       if (this.historyTab === 'visits') {
         const past = this.thread.visits.length
           ? this.thread.visits.map((v) => `<button class="visit-row" data-visit="${v.id}" type="button"><div class="tile-icon">${this.icon('file')}</div><div><small>${this.esc(v.date)}</small><h3>${this.esc(v.reason)}</h3><small>${this.esc(v.doctor)} · ${v.reviewed ? 'Review simulated' : 'Draft — awaiting review'}</small></div>${this.icon('arrow')}</button>`).join('')
-          : `<div class="empty">${this.icon('history')}<h2>Your story starts here.</h2><p>Complete a demo visit and it will appear in your history. You can also start another visit without finishing this one.</p>${this.btn(`${this.icon('plus')} New visit`, 'new-visit')}</div>`;
-        content += `${this.historyOpenVisits()}${this.thread.visits.length ? `<div class="section-heading"><h2>Past visits</h2></div>${past}` : (this.openJourneys().length ? `<div class="section-heading"><h2>Past visits</h2></div><p style="font-size:12px">None saved yet.</p>` : past)}`;
+          : `<div class="empty">${this.icon('history')}<h2>Your story starts here.</h2><p>Finish an upcoming visit and it will appear here as a past visit. You can also start another visit without finishing this one.</p>${this.btn(`${this.icon('plus')} New visit`, 'new-visit')}</div>`;
+        content += `${this.historyOpenVisits()}${this.thread.visits.length ? `<div class="section-heading"><h2>Finished visits</h2></div>${past}` : (this.openJourneys().length ? `<div class="section-heading"><h2>Finished visits</h2></div><p style="font-size:12px">None saved yet.</p>` : past)}`;
       } else {
         content += `<h2>Don’t start from scratch.</h2><p class="mt">A patient history packet from the same saved care record. This is a record export — not an appeal or PA letter. Generated letters still need human review before download.</p><div class="notice green">Record export only. This is not a prescription, appeal letter, or verified medical record.</div><pre class="packet">${this.esc(this.historyPacket())}</pre><div class="actions"><small>Includes visits, prescriptions, test records, and coverage.</small><div class="row">${this.btn(`${this.icon('download')} Download .md`, 'export', 'secondary')}${this.btn(`${this.icon('download')} Download PDF`, 'export-pdf')}</div></div>`;
       }
     }
-    return `<div class="narrow">${this.head('Your story stays with you.', 'Every visit adds a little more context for the next one.')}<section class="card journey-panel">${content}</section></div>`;
+    return `<div class="narrow">${this.head('Past visits.', 'Finished appointments, with room to update prescriptions and tests after you leave the clinic.')}<section class="card journey-panel">${content}</section></div>`;
   },
 
   medicines() {
@@ -2199,7 +2656,7 @@ const CareLoop = {
     const plannedRows = planned.length
       ? planned.map((row) => `<div class="task-row" style="flex-wrap:wrap"><span class="tile-icon">${this.icon(row.kind === 'appointment' ? 'calendar' : 'test')}</span><div style="flex:1"><h3>${this.esc(row.name)}</h3><p style="font-size:12px">${this.esc(row.lab || '')}${row.lab && (row.date || row.time) ? ' · ' : ''}${this.esc([row.date, row.time].filter(Boolean).join(' · '))}</p><small>${this.esc(row.status || 'To schedule')}${row.notes ? ` · ${this.esc(row.notes)}` : ''}${row.source === 'visit' ? ' · from a visit' : ''}</small></div>${this.btn('Attach result', 'attach-test', 'secondary', `data-test-id="${this.esc(row.id)}"`)}</div>`).join('')
       : '<p style="font-size:12px">No lab appointments or visit tests yet. Record one below, or finish an upcoming visit.</p>';
-    return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test. CareLoop does not interpret labs.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete. This does not book a real appointment.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
+    return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test. We’ll copy printed parts into JSON. CareLoop does not interpret labs.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete. This does not book a real appointment.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
   },
 
   insurance() {
@@ -2228,6 +2685,7 @@ const CareLoop = {
       Journey: () => this.journey(),
       Followups: () => this.followups(),
       History: () => this.history(),
+      'Past visits': () => this.history(),
       'Upcoming visits': () => this.upcoming(),
       Prescriptions: () => this.prescriptions(),
       'Test records': () => this.testRecords(),
@@ -2281,6 +2739,24 @@ const CareLoop = {
         this.saveThread({ journey: { ...this.thread.journey, new_symptoms: e.target.value } });
       });
     }
+    const scriptForm = document.getElementById('visit-script-form');
+    if (scriptForm) {
+      scriptForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.applyDoctorScript(scriptForm.dataset.visitId, e.currentTarget);
+      });
+    }
+    document.querySelectorAll('.visit-care-form').forEach((form) => {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const d = new FormData(form);
+        this.updateVisitCareItem(form.dataset.visitId, form.dataset.careKind, form.dataset.itemId, {
+          status: String(d.get('status') || '').trim(),
+          place: String(d.get('place') || '').trim(),
+          notes: String(d.get('notes') || '').trim(),
+        });
+      });
+    });
     const review = document.getElementById('reviewed');
     if (review) {
       review.addEventListener('change', (e) => {
@@ -2360,6 +2836,15 @@ const CareLoop = {
         this.thread.patient.zip = this.coverageSnap.profile.zip;
         this.saveThread();
       }
+      if (this.insuranceFromVisit) {
+        this.insuranceFromVisit = false;
+        this.insuranceReturn = false;
+        this.toast('Plan saved. I can see it now — continue with your ZIP search.');
+        this.navigate('Journey');
+        if (this.thread.journey && this.thread.journey.step >= 2) await this.loadNetwork();
+        this.render();
+        return;
+      }
       this.navigate('Insurance');
       this.toast(this.coverageSource() === 'sandbox'
         ? 'Plan saved. Showing sandbox eligibility for review.'
@@ -2385,7 +2870,8 @@ const CareLoop = {
       id: j.id || Date.now().toString(),
       date: 'September 24, 2026',
       reason: j.symptoms || 'Visit',
-      new_symptoms: String(j.new_symptoms || '').trim(),
+      new_symptoms: this.newSymptomsText(j),
+      new_symptoms_log: this.symptomLog(j),
       doctor: j.doctor,
       reviewed: j.reviewed,
       summary: this.visitCareSummary(pending),
@@ -2404,23 +2890,48 @@ const CareLoop = {
 
   async loadCostGuess() {
     const j = this.thread.journey;
+    const demo = this.usesDemoTranscript();
+    const selected = this.selectedDemo();
+    const transcript = this.transcriptText();
+    const symptoms = (demo && selected && selected.symptoms)
+      ? selected.symptoms
+      : (transcript || this.visitReasonText(j) || j.symptoms || '');
+    this.costEstimate = null;
+    this.claimAcceptance = null;
+    if (this.eligibilityOnFile()) {
+      try {
+        await API.saveCoverageIntake({
+          symptoms,
+          use_fixture_prior_visit: Boolean(j.prior) || demo,
+        });
+        this.rememberCoverage(await API.guessVisitCost({
+          symptoms,
+          from_transcript: !demo,
+          medicines: this.medicinesForCostGuess(),
+          specialty: j.suggested_specialty || this.coverageSnap.intake?.suggested_specialty || '',
+        }));
+        this.costEstimate = this.coverageSnap.visit_cost_estimate;
+      } catch (err) {
+        this.costEstimate = null;
+        if (demo) this.toast(err.message);
+      }
+    }
     try {
-      const demo = this.usesDemoTranscript();
-      const selected = this.selectedDemo();
-      const symptoms = (demo && selected && selected.symptoms) ? selected.symptoms : (this.visitReasonText(j) || j.symptoms);
-      await API.saveCoverageIntake({
-        symptoms,
-        use_fixture_prior_visit: Boolean(j.prior) || demo,
+      const planCode = ((this.encounter && this.encounter.plan) || [])
+        .map((item) => item && item.code)
+        .find(Boolean) || '';
+      const lineCode = (this.costEstimate && this.costEstimate.likely_visits && this.costEstimate.likely_visits[0] && this.costEstimate.likely_visits[0].code) || '';
+      this.claimAcceptance = await API.claimAcceptance({
+        symptoms: symptoms || transcript,
+        cpt_code: planCode || lineCode,
+        has_clinical_notes: Boolean(transcript),
+        has_prior_auth: false,
       });
-      this.rememberCoverage(await API.guessVisitCost({
-        symptoms,
-        medicines: this.medicinesForCostGuess(),
-        specialty: j.suggested_specialty || this.coverageSnap.intake?.suggested_specialty || '',
-      }));
-      this.costEstimate = this.coverageSnap.visit_cost_estimate;
     } catch (err) {
-      this.costEstimate = null;
-      this.toast(err.message);
+      this.claimAcceptance = {
+        available: false,
+        disclaimer: err.message || 'Could not estimate claim acceptance from this visit yet.',
+      };
     }
   },
 
@@ -2468,10 +2979,10 @@ const CareLoop = {
     }
     if (j.step === 4 && this.checkinTab() !== 'checkin') {
       const typed = document.getElementById('new-symptoms');
+      if (typed && typed.value.trim()) this.appendNewSymptom(typed.value, 'typed');
       this.saveThread({
         journey: {
           ...this.thread.journey,
-          new_symptoms: typed ? typed.value : this.thread.journey.new_symptoms,
           checkin_tab: 'checkin',
         },
       });
@@ -2577,12 +3088,7 @@ const CareLoop = {
         return;
       }
       if (d.newSymptom) {
-        this.saveThread({
-          journey: {
-            ...this.thread.journey,
-            new_symptoms: this.toggleChipValue(this.thread.journey.new_symptoms, d.newSymptom),
-          },
-        });
+        this.appendNewSymptom(d.newSymptom, 'chip');
         this.render();
         return;
       }
@@ -2668,20 +3174,39 @@ const CareLoop = {
       case 'packet':
         this.closeModal();
         this.historyTab = 'packet';
-        this.navigate('History');
+        this.navigate('Past visits');
         break;
       case 'latest-visit':
-        this.view = 'History';
+        this.view = 'Past visits';
         this.historyTab = 'visits';
         this.selectedVisit = this.thread.visits[0]?.id;
         this.render();
         break;
+      case 'append-symptom': {
+        const typed = document.getElementById('new-symptoms');
+        if (!typed || !String(typed.value || '').trim()) {
+          this.toast('Write a note first, or tap a chip.');
+          break;
+        }
+        this.appendNewSymptom(typed.value, 'typed');
+        this.render();
+        this.toast('New symptom added with a timestamp.');
+        break;
+      }
       case 'history-back':
         this.selectedVisit = null;
         this.historyTab = 'visits';
         this.render();
         break;
       case 'update-insurance':
+        this.insuranceFromVisit = false;
+        this.insuranceReturn = true;
+        this.insuranceMode = 'hub';
+        await this.loadPayers();
+        this.navigate('Setup');
+        break;
+      case 'add-visit-insurance':
+        this.insuranceFromVisit = true;
         this.insuranceReturn = true;
         this.insuranceMode = 'hub';
         await this.loadPayers();
@@ -2749,7 +3274,13 @@ const CareLoop = {
         }
         break;
       case 'skip-insurance':
-        this.navigate('Today');
+        if (this.insuranceFromVisit) {
+          this.insuranceFromVisit = false;
+          this.navigate('Journey');
+          if (this.thread.journey && this.thread.journey.step >= 2) this.loadNetwork();
+        } else {
+          this.navigate('Today');
+        }
         break;
       case 'prior-note':
         this.saveThread({ journey: { ...this.thread.journey, prior: true } });

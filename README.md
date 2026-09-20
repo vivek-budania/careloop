@@ -134,13 +134,14 @@ cp .env.example .env
 #   SUPABASE_URL=https://your-project.supabase.co
 #   SUPABASE_ANON_KEY=your_anon_key_here
 #   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here   # server-only; never frontend JS
-#   GEMINI_API_KEY=your_key_here          # Insurance OCR + /letters
+#   XAI_API_KEY=                          # image → JSON + visit STT (already on Vercel)
+#   GEMINI_API_KEY=your_key_here          # /letters; fallback image JSON
 #   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
 #   GROQ_API_KEY=                         # optional letter fallback; add when you have it
 #   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
 ```
 
-**Required on Vercel for live login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Login-only: Auth + `public.profiles`. Hosted `visits` and `insurance` tables exist ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
+**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Signup creates Auth + `public.profiles`; login reads them. Hosted `visits` and `insurance` tables exist ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
 
 Same names on the **process/container at launch** or in **Vercel**. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
 

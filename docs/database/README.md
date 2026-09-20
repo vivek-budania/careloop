@@ -9,8 +9,8 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 | Layer | What is true today |
 |-------|-------------------|
 | Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance` |
-| Running app | Login reads **Auth + `profiles`**. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
-| This docs PR | Schema + SQL only. **Do not** wire coverage APIs or change login. |
+| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
+| This signup PR | Adds self-serve Auth + profile creation only. Coverage and clinical data flows are unchanged. |
 
 ## ER (what exists)
 
@@ -30,6 +30,7 @@ erDiagram
     text email UK
     text first_name
     text last_name
+    date date_of_birth
     timestamptz created_at
   }
   VISITS {
@@ -59,7 +60,7 @@ erDiagram
 
 - **`auth.users` 1:1 `profiles`.** `profiles.id` = `auth.users.id`. There is **no** `login` table. Password is Auth-only (never a column on `profiles`).
 - **`insurance`:** many rows allowed; **at most one** `is_current` per user (partial unique index). Returning login hydrates coverage from that row.
-- **`visits`:** many per user. **History → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
+- **`visits`:** many per user. **Past visits → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
 
 ## What is not in the database yet
 
@@ -69,7 +70,7 @@ Do not invent these tables in migrations:
 |---------|----------------------|--------|
 | Prescriptions / doses / refill | `localStorage` in the patient shell (☰ **Prescriptions**) | Stream E later; no table yet |
 | Test records / lab results | Shell + mock test doc | Not a coverage object |
-| New symptoms at check-in | `localStorage` `journey.new_symptoms` | Not a `visits` column yet |
+| New symptoms at check-in | `localStorage` `journey.new_symptoms` + `new_symptoms_log` | Not a `visits` column yet |
 | Open / upcoming visits | `localStorage` `openVisits` | Persist to `visits` only after the journey is completed |
 | Claims / EOB | Insurance screen: Coming soon | Separate from PA |
 | PA / appeal / demand letters | `/letters` + HITL; watermarked drafts | Not stored as rows |
@@ -83,6 +84,8 @@ Do not invent these tables in migrations:
 2. Server looks up `public.profiles` by **username** (service_role, bypasses RLS).
 3. Auth password grant with that row’s **email**.
 4. Response token is the Supabase access JWT (or HMAC `v1.` when Supabase env is unset).
+
+Self-serve signup calls Supabase Auth’s normal signup endpoint, inserts the matching `profiles` row server-side (including validated `date_of_birth`), and follows the hosted project’s email-confirmation setting.
 
 Seeded live user: username `jane`, email `jane@careloop.local`, password `demo`. See [`AGENTS.md`](../../AGENTS.md).
 
@@ -99,7 +102,7 @@ No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a 
 
 | Table | Writers | Readers |
 |-------|---------|---------|
-| `profiles` | Dashboard seed (and optional later self-serve). Login does **not** insert. | Login (service_role); patient JWT may select/update **own** row |
+| `profiles` | Dashboard seed or `/api/careloop/signup` (server service role after Auth signup). Login does **not** insert. | Login (service_role); patient JWT may select/update **own** row |
 | `visits` | Patient JWT after a visit is saved to History | Owner only (`auth.uid() = user_id`) |
 | `insurance` | Patient JWT on Insurance save / Confirm / Refresh | Owner only; returning login reads `is_current` |
 

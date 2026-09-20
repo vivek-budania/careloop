@@ -144,6 +144,17 @@ class CoverageVisitGuessRequest(BaseModel):
     prior_visit_note: str = ""
     medicines: list[dict] = []
     specialty: str = ""
+    from_transcript: bool = False
+
+
+class ClaimAcceptanceRequest(BaseModel):
+    symptoms: str = ""
+    prior_visit_note: str = ""
+    cpt_code: str = ""
+    icd10_code: str = ""
+    has_prior_auth: bool = False
+    has_clinical_notes: bool = True
+    is_emergency: bool = False
 
 
 class ScribeDraftRequest(BaseModel):
@@ -169,6 +180,14 @@ class HistoryPdfRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class SignupRequest(BaseModel):
+    username: str
+    full_name: str
+    email: str
+    password: str
+    date_of_birth: str
 
 
 def require_coverage_user(
@@ -409,6 +428,28 @@ def careloop_login(req: LoginRequest, request: Request):
     return _set_session_cookies(JSONResponse(result), request, result["token"])
 
 
+@app.post("/api/careloop/signup")
+def careloop_signup(req: SignupRequest, request: Request):
+    try:
+        result = careloop_auth.signup(
+            username=req.username,
+            full_name=req.full_name,
+            email=req.email,
+            password=req.password,
+            date_of_birth=req.date_of_birth,
+        )
+    except careloop_auth.SignupUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except careloop_auth.SignupConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result.get("token"):
+        careloop_coverage.bind_user(result["user"]["username"])
+        return _set_session_cookies(JSONResponse(result), request, result["token"])
+    return JSONResponse(result)
+
+
 @app.post("/api/careloop/logout")
 def careloop_logout(request: Request, authorization: Optional[str] = Header(default=None)):
     token = None
@@ -554,11 +595,29 @@ def careloop_visit_guess(
                 prior_visit_note=req.prior_visit_note,
                 medicines=req.medicines,
                 specialty=req.specialty,
+                from_transcript=req.from_transcript,
             ),
             request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/careloop/coverage/claim-acceptance")
+def careloop_claim_acceptance(
+    req: ClaimAcceptanceRequest,
+    _user: dict = Depends(require_coverage_user),
+):
+    """DenialShield risk engine inverted as claim-acceptance certainty."""
+    return careloop_coverage.claim_acceptance_estimate(
+        symptoms=req.symptoms,
+        prior_visit_note=req.prior_visit_note,
+        cpt_code=req.cpt_code,
+        icd10_code=req.icd10_code,
+        has_prior_auth=req.has_prior_auth,
+        has_clinical_notes=req.has_clinical_notes,
+        is_emergency=req.is_emergency,
+    )
 
 
 @app.get("/api/careloop/network")
@@ -615,6 +674,32 @@ async def scribe_transcribe(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
+
+
+@app.post("/api/careloop/extract-image")
+async def extract_image(
+    file: UploadFile = File(...),
+    _user: dict = Depends(careloop_auth.require_user),
+):
+    """Read an uploaded photo/PDF into a JSON summary of the printed parts.
+
+    Uses XAI_API_KEY (Grok vision) first, then Gemini if needed.
+    Copy-only — does not invent drugs, IDs, or copays.
+    """
+    from backend.careloop import extract as careloop_extract
+
+    data = await file.read()
+    try:
+        upload = careloop_extract.from_bytes(
+            data,
+            file.content_type or "",
+            file.filename or "upload",
+        )
+        return careloop_extract.extract_parts(upload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image extract failed: {e}")
 
 
 @app.post("/api/careloop/scribe/draft")
@@ -736,3 +821,8 @@ if os.path.isdir(FRONTEND_DIR):
     def serve_letters():
         """Secondary DenialShield PA / appeal surface. Not the CareLoop patient UX."""
         return FileResponse(os.path.join(FRONTEND_DIR, "letters.html"))
+
+    @app.get("/showcase")
+    def serve_showcase():
+        """Judge-facing HopHacks product story."""
+        return FileResponse(os.path.join(FRONTEND_DIR, "showcase.html"))

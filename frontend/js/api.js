@@ -148,6 +148,10 @@ const API = {
     return this.post('/api/careloop/coverage/visit-guess', data);
   },
 
+  claimAcceptance(data) {
+    return this.post('/api/careloop/coverage/claim-acceptance', data);
+  },
+
   searchNetwork(specialty, zip) {
     const params = new URLSearchParams();
     if (specialty) params.set('specialty', specialty);
@@ -161,6 +165,10 @@ const API = {
 
   login(username, password) {
     return this.post('/api/careloop/login', { username, password });
+  },
+
+  signup(data) {
+    return this.post('/api/careloop/signup', data);
   },
 
   logout() {
@@ -222,6 +230,34 @@ const API = {
     a.download = 'careloop-history.pdf';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+
+  async extractImage(file) {
+    const url = `${this.BASE_URL}/api/careloop/extract-image`;
+    const headers = {};
+    const token = this.getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const form = new FormData();
+    form.append('file', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: form,
+      credentials: 'same-origin',
+    });
+    if (response.status === 401) {
+      this.setToken('');
+      if (window.App && typeof App.showLogin === 'function') App.showLogin();
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      const detail = error.detail;
+      const message = Array.isArray(detail) ? detail.map((d) => d.msg || d).join('; ') : (detail || `HTTP ${response.status}`);
+      throw new Error(message);
+    }
+    return response.json();
   },
 
   async transcribeScribeAudio(file) {

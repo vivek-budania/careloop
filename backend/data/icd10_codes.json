@@ -62,6 +62,7 @@
   {"code": "G89.29", "description": "Other chronic pain", "category": "Nervous System"},
   {"code": "G89.4", "description": "Chronic pain syndrome", "category": "Nervous System"},
   {"code": "G43.909", "description": "Migraine, unspecified, not intractable, without status migrainosus", "category": "Nervous System"},
+  {"code": "L40.0", "description": "Psoriasis vulgaris", "category": "Skin"},
   {"code": "G35", "description": "Multiple sclerosis", "category": "Nervous System"},
   {"code": "G20", "description": "Parkinson's disease", "category": "Nervous System"},
   {"code": "G40.909", "description": "Epilepsy, unspecified, not intractable, without status epilepticus", "category": "Nervous System"},

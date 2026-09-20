@@ -10,12 +10,19 @@ a.link svg{width:15px}
 .cost-table .tag{white-space:normal;text-align:left}
 .signup-form{overflow-y:auto;align-items:flex-start}.signup-form form{margin:auto;padding:26px 0}.signup-form .signup-back{margin-bottom:30px}.signup-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}.signup-consent{display:flex;align-items:flex-start;gap:10px;margin:4px 0 18px;color:var(--muted);font-size:11px;line-height:1.55}.signup-consent input{margin:2px 0 0;accent-color:var(--green);flex-shrink:0}.signup-form .btn svg{width:15px}.signup-form .error{margin-top:4px}.signup-form>form>p{font-size:12px;margin-bottom:24px}
 .signup-form input[aria-invalid="true"]{border-color:#b54932;box-shadow:0 0 0 3px #f7e4de}.signup-form .signup-consent input[aria-invalid="true"]{outline:2px solid #b54932;outline-offset:2px;box-shadow:none}
+.signup-success{width:380px;max-width:100%;margin:auto}.signup-success-icon{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--sage);color:var(--green);margin-bottom:28px}.signup-success-icon svg{width:24px;height:24px}.signup-success h2{margin-top:14px}.signup-success>p:not(.fine-print){margin:12px 0 28px}.signup-success strong{color:var(--ink)}
 @media(max-width:680px){.signup-form form{padding:5px 0}.signup-grid{grid-template-columns:1fr;gap:0}.signup-form .signup-back{margin-bottom:24px}.login.signup .login-story{min-height:190px}.login.signup .login-story h1{margin-top:22px}}
 .visit-record{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 8px;align-items:center}
 .visit-record .btn.coral{background:var(--coral)}
 .visit-record .btn.coral:hover{background:#a64a33}
 .record-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--coral);margin-right:8px;box-shadow:0 0 0 0 rgba(186,89,63,.45);animation:record-pulse 1.2s infinite}
 @keyframes record-pulse{70%{box-shadow:0 0 0 8px rgba(186,89,63,0)}100%{box-shadow:0 0 0 0 rgba(186,89,63,0)}}
+.visit-record.voice-orb-active{justify-content:center;padding:20px 0 6px}
+.voice-orb-wrap{position:relative;width:220px;height:220px;margin:0 auto;display:grid;place-items:center}
+.voice-orb{position:absolute;inset:0;width:100%;height:100%}
+.voice-orb-btn{position:relative;z-index:1;width:60px;height:60px;border-radius:50%;background:var(--paper);border:2px solid var(--green);color:var(--green);display:grid;place-items:center;box-shadow:0 6px 18px rgba(49,89,75,.25)}
+.voice-orb-btn:hover{background:var(--green);color:#fff}
+.voice-orb-btn svg{width:20px;height:20px}
 /* Keep clickable via input.click() — pointer-events:none breaks Upload on some browsers */
 #visit-audio{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 .visit-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;position:relative;z-index:1}
@@ -32,3 +39,22 @@ dialog:has(.test-preview){max-width:720px}
 .test-preview{margin:12px 0;max-height:60vh;overflow:auto}
 .test-preview-img{display:block;width:100%;border-radius:8px;background:#fff}
 .test-preview-frame{display:block;width:100%;min-height:420px;border:0;border-radius:8px;background:#fff}
+.empathy{font-size:16px;line-height:1.6;color:var(--ink);margin-bottom:18px}
+.zip-confirm p{font-size:13px;color:var(--ink);margin-top:6px}
+.symptom-booked{font-size:15px;color:var(--ink);margin-top:6px}
+.symptom-empty{font-size:13px;margin:10px 0 6px}
+.symptom-log{margin:8px 0 18px}
+.symptom-log-item{padding:14px 0;border-bottom:1px solid var(--line)}
+.symptom-log-item:last-child{border-bottom:0}
+.symptom-log-item time{display:block;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.symptom-log-item p,.symptom-log-item p.symptom-note{font:22px/1.45 var(--serif);color:var(--ink)}
+.symptom-noted{font:22px/1.45 var(--serif);color:var(--ink);margin:8px 0 0}
+#new-symptoms{font-size:20px;line-height:1.45;min-height:140px}
+.acceptance{margin:22px 0;padding:18px;border:1px solid #dce1d2;border-radius:10px;background:#f4f6ee}
+.acceptance-meter{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+.acceptance-meter strong{font:42px var(--serif);color:var(--green)}
+.acceptance-meter small{font-size:12px;color:var(--muted)}
+.acceptance-factors{margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
+.visit-care-item{align-items:flex-start}
+.extract-parts{margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.55}
+.extract-parts strong{color:var(--ink)}

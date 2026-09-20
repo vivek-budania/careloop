@@ -8,11 +8,11 @@ Read this before changing the running app. Setup commands also live in [`README.
 
 | Work | Where |
 |------|--------|
-| Vivek patient shell (☰ Today / History / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
+| Vivek patient shell (☰ Today / Past visits / Upcoming visits / Prescriptions / Test records / Insurance / Profile, 8-step visit, `/letters`) | **this branch** (from PR #8) |
 | Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` / Stedi sandbox | **this branch** |
 | Live Stedi 270/271 when `STEDI_API_KEY` is a `test_` key | **this branch** (`confirm` always sends Jane identity) |
 | Demo key slots on Profile (Stedi / Gemini / Groq / Vercel) | **this branch** (`GET /api/careloop/demo-env`, no secret values) |
-| Gemini vision card/SBC on Insurance only | **this branch** |
+| Image → JSON (`XAI_API_KEY`) | **this branch**; cards, doctor pages, lab pages; Gemini fallback |
 | Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
 | Sreekar Stream C scribe APIs (fixture / draft / approve / optional Grok STT) | **main (PR #6)**; SOAP step in this shell |
 | Coverage snapshot | **in-memory** until Vivek’s thread store |
@@ -32,7 +32,7 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 
 After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
-1. **☰** Today · History (My visits | For the clinic) · Upcoming visits · Prescriptions · Test records · Insurance · Profile · Log out
+1. **☰** Today · Past visits (My visits | For the clinic) · Upcoming visits · Prescriptions · Test records · Insurance · Profile · Log out
 2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with **Aetna / Jane Doe** coverage seeded.
 3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
 
@@ -40,11 +40,11 @@ Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire
 
 ## Dummy credentials (login)
 
-Not production auth. No HIPAA. **Login-only** against the existing Supabase project: username looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet — do not wire that in a docs-only change. Prescriptions, test records, claims, and PA letters are still not tables. Visit-day **new symptoms** stay on the local journey (`new_symptoms`); they are not a `visits` column yet.
+Not production auth. No HIPAA. **Login + self-serve signup** use the existing Supabase project. Signup creates a Supabase Auth user through the normal Auth signup endpoint, then the server inserts the matching `public.profiles` row with the service role, including the validated patient-entered DOB required by downstream identity APIs. Username login looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Passwords stay in Auth. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet. Prescriptions, test records, claims, and PA letters are still not tables. Visit-day **new symptoms** stay on the local journey (`new_symptoms` + timestamped `new_symptoms_log`); they are not a `visits` column yet.
 
 When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are set on the **server** (never in frontend JS), `/api/careloop/login` returns `{ token, user }` where `token` is the **Supabase access JWT**. Dave’s coverage routes still take `Authorization: Bearer <token>` (or the `careloop_token` cookie). `require_user` accepts that JWT **or** the older HMAC `v1.` mock token so coverage cookies from a no-key deploy still work.
 
-Without those env slots, login falls back to `backend/data/mock_users.json` and an HMAC token. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage`. Optional `SESSION_SECRET` rotates the HMAC / coverage-cookie signature.
+Without those env slots, login falls back to `backend/data/mock_users.json` and an HMAC token; live signup returns HTTP 503 rather than pretending an account was created. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage`. Optional `SESSION_SECRET` rotates the HMAC / coverage-cookie signature.
 
 **Seeded live user:** username **`jane`**, email `jane@careloop.local`, password **`demo`**. Do not invent other passwords.
 
@@ -72,7 +72,8 @@ cp .env.example .env
 # Demo key slots (inject at launch; extra keys later the same way):
 #   SUPABASE_URL=… SUPABASE_ANON_KEY=… SUPABASE_SERVICE_ROLE_KEY=…  # login only; never frontend
 #   STEDI_API_KEY=test_… python3 -m uvicorn backend.main:app --port 8080
-#   GEMINI_API_KEY=…     # Insurance OCR + /letters
+#   XAI_API_KEY=…        # image → JSON + visit STT (already on Vercel)
+#   GEMINI_API_KEY=…     # /letters; fallback image JSON
 #   GROQ_API_KEY=…       # optional letter fallback
 # Laptop fallback: gitignored .env. Never paste keys in chat/GitHub.
 # Vercel: Project Settings → Environment Variables → same names, then Redeploy.
@@ -82,9 +83,9 @@ python3 -m uvicorn backend.main:app --reload --port 8080
 
 Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning** or **Start my first visit**.
 
-**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (Gemini vision) lives on this Insurance flow only — not in the hamburger. Without `GEMINI_API_KEY`, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
+**Insurance:** payer required; **date of birth required**; sample card is Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Optional **Read uploaded images** (`XAI_API_KEY`, Gemini fallback) lives on this Insurance flow — not in the hamburger. Without a vision key, use the sample card. JSON extract is not watermarked. Never invent a copay that is not printed. **Refresh coverage snapshot** re-runs confirm (live 270/271 when a Stedi test key is loaded).
 
-**Where the keys go:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (login), `STEDI_API_KEY`, `GEMINI_API_KEY`, and optional `GROQ_API_KEY` / `XAI_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Never put `service_role` in frontend JS. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
+**Where the keys go:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (login), `STEDI_API_KEY`, `XAI_API_KEY` (image JSON + visit STT; already on Vercel), `GEMINI_API_KEY` (/letters; fallback image JSON), and optional `GROQ_API_KEY` on the **process/container at launch**, or Vercel Project Settings → Environment Variables (then Redeploy). Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit them, or paste them in chat. Never put `service_role` in frontend JS. Profile in the patient shell shows whether each slot is loaded — never the secret value. A `test_` Stedi key runs canned 270/271; a production key is refused. Without a Stedi key, confirm still works using mock numbers that match Jane Doe's Aetna 271 (ACTIVE PPO Gold, office copay $30, INN deductible $500 remaining $500). `GET /api/careloop/demo-env` is the same status JSON (auth required).
 
 **Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub. Fold extra keys into the same Vercel env list as they arrive. Live login needs the three `SUPABASE_*` names.
 
@@ -95,7 +96,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 - Payer dropdown + sample card + confirm: `listPayers` / `scanCoverage` / `saveCoverage` / `confirmCoverage`
 - Confirm always sends member name, member ID, and DOB. Blanks on a Stedi payer are filled from that payer’s canned fixture so Jane Doe / `AETNA12345` / `2004-04-04` can match.
 - DOB is required on save. Stedi uses it on the canned Jane Doe member.
-- Optional Gemini read: `scanCoverage` with `card_image_b64` / `sbc_image_b64` (Insurance form only)
+- Optional image JSON: `scanCoverage` with `card_image_b64` / `sbc_image_b64` (Insurance form) and `POST /api/careloop/extract-image` for a printed-parts summary (`XAI_API_KEY`)
 - Demo key slots: `demoEnv` → Profile (and Insurance eligibility notice)
 - Symptoms intake: `saveCoverageIntake` (returns `suggested_specialty`)
 - Clinician list: `searchNetwork(suggested_specialty, zip)` — no specialty dropdown
@@ -116,12 +117,12 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 
 ## Files that matter for this slice
 
-- `backend/careloop/auth.py` — login (Supabase JWT or mock HMAC)
+- `backend/careloop/auth.py` — signup/login orchestration (Supabase JWT; mock fallback is login-only)
 - [`docs/database/`](docs/database/README.md) — hosted schema (`profiles` 1:1 Auth; `insurance` one current row; `visits` many)
 - [`supabase/`](supabase/README.md) — idempotent SQL matching those tables (hosted project; CLI not required)
 - `backend/careloop/supabase_auth.py` — server-only Auth + `profiles` HTTP
 - `backend/careloop/coverage.py` — mock scan/eligibility/visit guess/network/specialty suggestion
-- `backend/careloop/extract.py` — Gemini vision card/SBC → InsuranceProfile (no watermark)
+- `backend/careloop/extract.py` — xAI vision (`XAI_API_KEY`) then Gemini; `POST /api/careloop/extract-image` returns a printed-parts JSON summary (no watermark)
 - `backend/careloop/stedi.py` — optional sandbox 270/271 (`STEDI_API_KEY` at launch)
 - `backend/careloop/scribe.py` — seeded SOAP/Plan + clinician approve → orders
 - `backend/careloop/stt.py` — optional xAI Grok STT (`XAI_API_KEY`)

@@ -18,9 +18,11 @@ STEDI_API_KEY = os.getenv("STEDI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
 
-# Optional xAI Grok speech-to-text for visit scribe (not Groq).
+# Optional xAI Grok: visit speech-to-text and image → JSON (cards, prescriptions).
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
 XAI_STT_URL = os.getenv("XAI_STT_URL", "https://api.x.ai/v1/stt")
+XAI_CHAT_URL = os.getenv("XAI_CHAT_URL", "https://api.x.ai/v1/chat/completions")
+XAI_VISION_MODEL = os.getenv("XAI_VISION_MODEL", "grok-2-vision-1212")
 
 
 def _key_loaded(value: str) -> bool:
@@ -47,13 +49,13 @@ def demo_env_status() -> dict:
         "stedi": careloop_stedi.status(),
         "gemini": {
             "configured": gemini_on,
-            "used_for": "Insurance card/SBC read + /letters drafts",
+            "used_for": "Letter drafts at /letters; fallback if xAI image JSON is unavailable",
             "message": (
-                "GEMINI_API_KEY is loaded. Insurance can read an uploaded card/SBC. "
-                "Letter drafts at /letters still need human review."
+                "GEMINI_API_KEY is loaded. Letter drafts at /letters still need human review. "
+                "Image JSON uses XAI_API_KEY first; Gemini is the fallback."
             ) if gemini_on else (
-                "GEMINI_API_KEY is not set. Use the Jane Doe sample card. "
-                "Letter drafts at /letters need this key. "
+                "GEMINI_API_KEY is not set. Letter drafts at /letters need this key. "
+                "Image JSON still prefers XAI_API_KEY. The Jane Doe sample card works without either. "
                 "Add it on the host or in Vercel, then Redeploy."
             ),
         },
@@ -68,13 +70,14 @@ def demo_env_status() -> dict:
         },
         "xai": {
             "configured": xai_on,
-            "used_for": "Optional visit speech-to-text",
+            "used_for": "Image → JSON (cards, prescriptions, lab pages) + visit speech-to-text",
             "message": (
-                "XAI_API_KEY is loaded. Visit scribe can transcribe uploaded or recorded audio."
+                "XAI_API_KEY is loaded. Uploaded images can be read into JSON, "
+                "and visit scribe can transcribe audio."
                 if xai_on
                 else (
-                    "XAI_API_KEY is optional. Use the seeded visit transcript until you add it "
-                    "on this host or in Vercel, then Redeploy."
+                    "XAI_API_KEY is not set. Fixture sample card and seeded transcripts still work. "
+                    "Add it on this host or in Vercel, then Redeploy."
                 )
             ),
         },
