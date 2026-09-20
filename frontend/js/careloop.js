@@ -3,6 +3,33 @@
  * Journey / meds / history stay in-browser until the longitudinal store lands.
  * Cost and network numbers come from /api/careloop/*, not hardcoded money.
  */
+const patientSummaryCopy = (value) => {
+  const raw = String(value || '').trim();
+  const verification = [];
+  const textWithoutVerification = raw.replace(/\[NEEDS VERIFICATION\]\s*([^.!?]+(?:[.!?]|$))/gi, (_match, detail) => {
+    const cleaned = String(detail || '').trim().replace(/[.!?]+$/, '');
+    if (cleaned) verification.push(cleaned);
+    return '';
+  });
+  const glossary = [
+    [/\b(\d{1,3})F\s+with\b/g, '$1-year-old woman with'],
+    [/\bOTC\b/gi, 'over-the-counter'],
+    [/\bPT\b/g, 'physical therapy'],
+    [/\bPA\b/g, 'prior authorization (approval from your insurance plan)'],
+    [/\bNSAID\b/g, 'anti-inflammatory medicine (NSAID)'],
+    [/\bBID\b/g, 'twice a day'],
+    [/\bBP\b/g, 'blood pressure (BP)'],
+    [/\bHbA1c\b/g, 'A1c blood sugar test (HbA1c)'],
+    [/\bMRI\b/g, 'MRI scan'],
+    [/\blumbar radiculopathy\b/gi, 'possible irritation of a nerve in the lower back (lumbar radiculopathy)'],
+  ];
+  const text = glossary.reduce(
+    (copy, [pattern, replacement]) => copy.replace(pattern, replacement),
+    textWithoutVerification,
+  ).replace(/\s+([.,;:!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  return { text, verification };
+};
+
 const CareLoop = {
   THREAD_KEY: 'careloop-patient-thread-v2',
   COVERAGE_KEY: 'careloop-coverage-v1',
@@ -2350,7 +2377,6 @@ const CareLoop = {
   },
 
   soapBody() {
-    const j = this.thread.journey || {};
     const soap = (this.encounter && this.encounter.soap) || {};
     const source = (this.encounter && this.encounter.source) || 'seeded';
     const live = this.liveTranscript();
@@ -2374,15 +2400,22 @@ const CareLoop = {
       plan_summary: demo ? 'Review HbA1c testing, current medicines, possible add-on therapy, and a follow-up visit.' : '',
     };
     const rows = [
-      ['S', 'What you shared', soap.subjective || fallback.subjective || 'Nothing could be pulled from this transcript yet.'],
-      ['O', 'What’s on file', soap.objective || fallback.objective || 'No objective details were extracted from this transcript.'],
-      ['A', 'What to review', soap.assessment || fallback.assessment || 'No assessment could be drafted from this transcript yet.'],
-      ['P', 'Suggested next steps', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
+      ['What you told us', soap.subjective || fallback.subjective || 'Nothing could be pulled from this transcript yet.'],
+      ['What your care team knows', soap.objective || fallback.objective || 'No visit details could be pulled from this transcript yet.'],
+      ['What this could mean', soap.assessment || fallback.assessment || 'No clinician assessment could be drafted from this transcript yet.'],
+      ['What happens next', soap.plan_summary || fallback.plan_summary || 'No next steps could be pulled from this transcript yet.'],
     ];
+    const sections = rows.map(([title, copy]) => {
+      const formatted = patientSummaryCopy(copy);
+      const verification = formatted.verification.map((detail) => `<div class="verification-callout"><strong>Your care team still needs to confirm</strong><span>${this.esc(detail)}.</span></div>`).join('');
+      return `<section class="patient-summary-section"><h3>${title}</h3><p>${this.esc(formatted.text)}</p>${verification}</section>`;
+    }).join('');
+    const clinicianReviewed = Boolean(this.encounter && this.encounter.clinician_reviewed);
+    const reviewStatus = clinicianReviewed ? 'Clinician review recorded' : 'Awaiting clinician review';
     const transcriptActions = this.transcriptText()
       ? `<div class="mt">${this.btn(`${this.icon('download')} Download full transcript (PDF)`, 'export-transcript-pdf', 'secondary')}</div>`
       : '';
-    return `<h2>Your visit, in plain language.</h2><p>${intro}</p>${sumBlock}${rows.map(([l, t, p]) => `<div class="soap"><span class="letter">${l}</span><div><h3>${t}</h3><p>${this.esc(p)}</p></div></div>`).join('')}${transcriptActions}<label class="check"><input type="checkbox" id="reviewed" ${j.reviewed ? 'checked' : ''}>Mark this summary as reviewed.</label>`;
+    return `<h2>Your visit, in plain language.</h2><p>${intro}</p><div class="patient-summary-status" role="status"><strong>${reviewStatus}</strong><span>This is a draft for information only. Your care team must review it before it is used for care or orders.</span></div>${sumBlock}<div class="patient-summary">${sections}</div>${transcriptActions}`;
   },
 
   async loadScribeFixture() {
@@ -2863,18 +2896,6 @@ const CareLoop = {
     }
   },
 
-  async approveScribeEncounter(reviewed) {
-    this.saveThread({ journey: { ...this.thread.journey, reviewed } });
-    if (!reviewed || !this.encounter) return;
-    try {
-      const result = await API.approveScribe(this.encounter);
-      this.encounter = result.encounter || this.encounter;
-      this.orders = result.orders || [];
-    } catch (err) {
-      this.toast(err.message);
-    }
-  },
-
   medicinesForCostGuess() {
     const plan = (this.encounter && this.encounter.plan) || [];
     const fromPlan = plan
@@ -3181,12 +3202,6 @@ const CareLoop = {
         });
       });
     });
-    const review = document.getElementById('reviewed');
-    if (review) {
-      review.addEventListener('change', (e) => {
-        this.approveScribeEncounter(e.target.checked);
-      });
-    }
     this.bindVisitAudio();
     const labForm = document.getElementById('lab-form');
     if (labForm) {
