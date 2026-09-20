@@ -15,8 +15,8 @@ Read this before changing the running app. Setup commands also live in [`README.
 | Image → JSON (`XAI_API_KEY`) | **this branch**; cards, doctor pages, lab pages |
 | Specialty suggestion from visit reason → `searchNetwork` | **this branch** |
 | Sreekar Stream C scribe APIs (fixture / draft / approve / optional Grok STT) | **main (PR #6)**; SOAP step in this shell |
-| Coverage snapshot | **in-memory** until Vivek’s thread store |
-| Hosted DB docs (`profiles`, `visits`, `insurance`) | [`docs/database/`](docs/database/README.md) · SQL [`supabase/migrations/`](supabase/migrations/) |
+| Coverage snapshot | **hosted `insurance` is_current** (cookie + localStorage cache). Returning login hydrates; skip = no row = skip estimated costs |
+| Hosted DB | `profiles`, `logins` (events), `insurance`, `intakes`, `visits`, `medicines`, `tests`, `claims` — wired on this branch. Schema SQL for the newer tables may still live on [#33](https://github.com/vivek-budania/careloop/pull/33) |
 
 Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample card stays the no-key path. Do not invent copays. Tag unreadable OCR fields `[NEEDS VERIFICATION]`. No letter watermark on JSON extract.
 
@@ -33,18 +33,18 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
 1. **☰** Today · Past visits (My visits | For the clinic) · Upcoming visits · Prescriptions · Test records · Insurance · Profile · Log out
-2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today with **Aetna / Jane Doe** coverage seeded.
+2. **Visit journey** is not in the hamburger (symptoms → clinicians → book → visit → transcript → SOAP → skippable estimated costs → plan). First-time login opens the insurance hub; returning login opens Today and hydrates **`insurance` is_current** when a row exists (no localStorage Aetna seed on live Supabase).
 3. **Insurance Claims Management** is Coming soon on the Insurance screen. Letter drafts (HITL) are at `/letters`.
 
 Letter APIs (`/api/generate-pa`, parse, appeal, demand) still exist. Do not wire a download path that skips HITL/watermark. History packet `.md` is a record export, not a letter.
 
 ## Dummy credentials (login)
 
-Not production auth. No HIPAA. **Login + self-serve signup** use the existing Supabase project. Signup creates a Supabase Auth user through the normal Auth signup endpoint, then the server inserts the matching `public.profiles` row with the service role, including the validated patient-entered DOB required by downstream identity APIs. Username login looks up `public.profiles`, then Auth signs in with that row’s email + password. There is no `login` table. Passwords stay in Auth. Hosted `visits` and `insurance` exist ([`docs/database/`](docs/database/README.md)) but login and coverage APIs do **not** read them yet. Prescriptions, test records, claims, and PA letters are still not tables. Visit-day **new symptoms** stay on the local journey (`new_symptoms` + timestamped `new_symptoms_log`); they are not a `visits` column yet.
+Not production auth. No HIPAA. **Login + self-serve signup** use the existing Supabase project. Signup creates a Supabase Auth user through the normal Auth signup endpoint, then the server inserts the matching `public.profiles` row with the service role, including the validated patient-entered DOB required by downstream identity APIs. Username login looks up `public.profiles`, then Auth signs in with that row’s email + password. Successful (and failed-for-known-profile) sign-ins append `public.logins` events. There is **no password column** on `logins` or `profiles`. Hosted `visits`, `insurance`, `intakes`, `medicines`, `tests`, and `claims` are read/written by the patient JWT after login. Prescriptions, test records, and mock EOBs persist what the shell already stores — the app does not invent rows. Visit-day **new symptoms** stay on the local journey (`new_symptoms` + timestamped `new_symptoms_log`); they are not a `visits` column yet. **PA ≠ claim:** `/letters` drafts are not `claims` rows.
 
 When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are set on the **server** (never in frontend JS), `/api/careloop/login` returns `{ token, user }` where `token` is the **Supabase access JWT**. Dave’s coverage routes still take `Authorization: Bearer <token>` (or the `careloop_token` cookie). `require_user` accepts that JWT **or** the older HMAC `v1.` mock token so coverage cookies from a no-key deploy still work.
 
-Without those env slots, login falls back to `backend/data/mock_users.json` and an HMAC token; live signup returns HTTP 503 rather than pretending an account was created. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage`. Optional `SESSION_SECRET` rotates the HMAC / coverage-cookie signature.
+Without those env slots, login falls back to `backend/data/mock_users.json` and an HMAC token; live signup returns HTTP 503 rather than pretending an account was created. Coverage snapshot still travels in a signed `careloop_coverage` cookie plus browser `localStorage` when Supabase is unset. With Supabase, returning login hydrates `insurance` instead of seeding Aetna from localStorage. Optional `SESSION_SECRET` rotates the HMAC / coverage-cookie signature.
 
 **Seeded live user:** username **`jane`**, email `jane@careloop.local`, password **`demo`**. Do not invent other passwords.
 
@@ -105,7 +105,7 @@ Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/n
 
 Fixture golden path: **Aetna**, Jane Doe, member `AETNA12345`, DOB `2004-04-04`, ZIP `94110`, diabetes follow-up → specialty **endocrinology** (Elena Ruiz, in-network on Aetna) → about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible). **Inactive Demo Plan** returns inactive coverage. Live login is **`jane` / `demo`**.
 
-Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s thread store exists. Intended columns: [`docs/database/insurance.md`](docs/database/insurance.md). Visit/meds/history UI state is local until that store lands.
+Coverage snapshot is per username. With Supabase, `GET /api/careloop/coverage` hydrates `public.insurance` (`is_current`). Without it, signed cookie + `localStorage` still work. History / prescriptions / tests / upcoming persist through `GET|PUT /api/careloop/records`. Columns: [`docs/database/`](docs/database/).
 
 ## Safety (do not weaken)
 
@@ -117,6 +117,7 @@ Coverage snapshot is per username (signed cookie + localStorage) until Vivek’s
 ## Files that matter for this slice
 
 - `backend/careloop/auth.py` — signup/login orchestration (Supabase JWT; mock fallback is login-only)
+- `backend/careloop/store.py` — JWT PostgREST for insurance / visits / intakes / medicines / tests / claims / logins
 - [`docs/database/`](docs/database/README.md) — hosted schema (`profiles` 1:1 Auth; `insurance` one current row; `visits` many)
 - [`supabase/`](supabase/README.md) — idempotent SQL matching those tables (hosted project; CLI not required)
 - `backend/careloop/supabase_auth.py` — server-only Auth + `profiles` HTTP

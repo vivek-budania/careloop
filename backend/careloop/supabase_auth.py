@@ -1,7 +1,8 @@
 """Server-side Supabase Auth + public.profiles helpers.
 
 Keys stay on the process. Never import this from frontend JS.
-Login-only: no insurance / meds / history tables.
+Login username lookup still uses service_role. Table rows use the user JWT
+(see store.py).
 """
 
 from __future__ import annotations
@@ -53,10 +54,11 @@ def status() -> dict:
         "url_set": url_on,
         "anon_set": _usable(anon_key()),
         "service_role_set": _usable(service_role_key()),
-        "used_for": "Login + signup (Auth + public.profiles). No insurance or meds tables.",
+        "used_for": "Auth + profiles, and JWT row access to insurance/visits/intakes/medicines/tests/claims/logins.",
         "message": (
             "Supabase login and signup are loaded. Signup creates an Auth user and matching "
-            "public.profiles row; login resolves username to the Auth email."
+            "public.profiles row; login resolves username to the Auth email. Coverage and the "
+            "patient shell persist to hosted tables with the user JWT."
             if on
             else (
                 "SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are required "
@@ -131,7 +133,7 @@ def profile_by_username(username: str) -> Optional[dict]:
     rows = _rest(
         "profiles",
         {
-            "select": "id,username,email,first_name,last_name,created_at",
+            "select": "id,username,email,first_name,last_name,date_of_birth,created_at",
             "username": f"ilike.{escaped}",
             "limit": "1",
         },
@@ -148,7 +150,7 @@ def profile_by_id(user_id: str) -> Optional[dict]:
     rows = _rest(
         "profiles",
         {
-            "select": "id,username,email,first_name,last_name,created_at",
+            "select": "id,username,email,first_name,last_name,date_of_birth,created_at",
             "id": f"eq.{user_id}",
             "limit": "1",
         },
@@ -167,7 +169,7 @@ def profile_by_email(email: str) -> Optional[dict]:
     rows = _rest(
         "profiles",
         {
-            "select": "id,username,email,first_name,last_name,created_at",
+            "select": "id,username,email,first_name,last_name,date_of_birth,created_at",
             "email": f"ilike.{escaped}",
             "limit": "1",
         },

@@ -9,8 +9,8 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 | Layer | What is true today |
 |-------|-------------------|
 | Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance` |
-| Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
-| This signup PR | Adds self-serve Auth + profile creation only. Coverage and clinical data flows are unchanged. |
+| Running app | Signup writes **Auth + `profiles`**; login reads them and appends `logins` events. Coverage confirm still runs Dave’s mock/Stedi 271, then upserts `insurance` (`is_current`). Returning login hydrates that row. Skip = no row = skip estimated costs. History / prescriptions / tests / upcoming / mock EOBs persist through `/api/careloop/records`. |
+| This wiring PR | JWT row access for the hosted tables. Schema docs/SQL for medicines/tests/intakes/claims/logins may still be on the open schema PR. |
 
 ## ER (what exists)
 

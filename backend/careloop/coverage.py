@@ -401,6 +401,30 @@ def reset() -> dict:
     return snapshot()
 
 
+def clear_coverage_identity() -> dict:
+    """Drop saved plan/eligibility but keep in-flight intake. Skip = no current insurance row."""
+    state = _ensure_state()
+    state["profile"] = None
+    state["eligibility"] = None
+    state["visit_cost_estimate"] = None
+    state["source"] = "mock"
+    return snapshot()
+
+
+def apply_hosted_insurance(row: Optional[dict]) -> dict:
+    """Replace in-memory profile/eligibility from public.insurance is_current."""
+    from backend.careloop import store as careloop_store
+
+    state = _ensure_state()
+    if not row:
+        return clear_coverage_identity()
+    profile, eligibility = careloop_store.insurance_row_to_coverage(row)
+    state["profile"] = profile
+    state["eligibility"] = eligibility
+    state["source"] = (row.get("source") if row.get("source") in ("mock", "stedi") else state.get("source")) or "mock"
+    return snapshot()
+
+
 def snapshot() -> dict:
     if _active_user not in _states:
         _states[_active_user] = _empty_state()

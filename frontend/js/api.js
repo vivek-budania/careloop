@@ -175,8 +175,39 @@ const API = {
     return this.post('/api/careloop/logout', {});
   },
 
-  me() {
+    me() {
     return this.get('/api/careloop/me');
+  },
+
+  getRecords() {
+    return this.get('/api/careloop/records');
+  },
+
+  saveRecords(data) {
+    return this.request('/api/careloop/records', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listVisits() {
+    return this.get('/api/careloop/visits');
+  },
+
+  listIntakes() {
+    return this.get('/api/careloop/intakes');
+  },
+
+  listMedicines() {
+    return this.get('/api/careloop/medicines');
+  },
+
+  listTests() {
+    return this.get('/api/careloop/tests');
+  },
+
+  listClaims() {
+    return this.get('/api/careloop/claims');
   },
 
   // --- CareLoop scribe (Stream C) ---

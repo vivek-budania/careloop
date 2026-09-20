@@ -8,7 +8,7 @@ Created in the hosted project’s Table Editor. The migration is idempotent and 
 
 Username → email lookup so `/api/careloop/login` can call Auth’s password grant. Display name is `first_name` + `last_name`.
 
-**There is no `login` table.** Passwords are not stored here.
+**There is no credentials table.** Passwords stay in Auth. `public.logins` is an append-only sign-in **event** log (no password column).
 
 ## Columns
 
@@ -31,7 +31,7 @@ Enabled.
 | `profiles_select_own` | `SELECT` | `authenticated` | `auth.uid() = id` |
 | `profiles_update_own` | `UPDATE` | `authenticated` | `auth.uid() = id` |
 
-No insert/delete policies for `authenticated`. Demo users are **seeded** in the dashboard. Login username lookup uses **`SUPABASE_SERVICE_ROLE_KEY` on the server** (bypasses RLS). Never put `service_role` in frontend JS.
+No insert/delete policies for `authenticated`. Demo users are **seeded** in the dashboard. Login username lookup uses **`SUPABASE_SERVICE_ROLE_KEY` on the server** (bypasses RLS). Coverage and record rows use the **patient JWT**. Never put `service_role` in frontend JS.
 
 ## Who writes
 

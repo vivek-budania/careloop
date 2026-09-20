@@ -6,7 +6,7 @@ It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is l
 
 The running app is **CareLoop** (patient shell behind login: Today / History / Medicines / Tests / Insurance / Profile, plus an 8-step visit). Old DenialShield PA/appeal forms are a secondary page at `/letters` (watermark + HITL), not hamburger items. **Insurance Claims Management** is Coming soon on the Insurance screen. Demo login: **`jane` / `demo`**. Details: [`AGENTS.md`](AGENTS.md).
 
-**Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**. Hosted Supabase tables (`profiles`, `visits`, `insurance`): **[`docs/database/`](docs/database/README.md)** (SQL in [`supabase/`](supabase/README.md)). Login still uses Auth + `profiles` only; coverage/visits are not wired to those tables yet.
+**Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**. Hosted Supabase tables (`profiles`, `logins`, `visits`, `insurance`, `intakes`, `medicines`, `tests`, `claims`): **[`docs/database/`](docs/database/README.md)** (SQL in [`supabase/`](supabase/README.md)). Login uses Auth + `profiles` (and appends `logins` events). Coverage confirm still runs Dave’s mock/Stedi 271, then writes `insurance`.
 
 ---
 
@@ -140,7 +140,7 @@ cp .env.example .env
 #   SESSION_SECRET=                       # optional; signs mock fallback tokens + coverage cookie
 ```
 
-**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Signup creates Auth + `public.profiles`; login reads them. Hosted `visits` and `insurance` tables exist ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
+**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Signup creates Auth + `public.profiles`; login reads them and appends `public.logins` events. Coverage, visits, intakes, medicines, tests, and mock claims use the patient JWT against hosted tables ([`docs/database/`](docs/database/README.md)). Never commit real keys or put `service_role` in frontend JS.
 
 Same names on the **process/container at launch** or in **Vercel**. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
 

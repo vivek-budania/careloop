@@ -68,10 +68,12 @@ def public_user_from_profile(row: dict) -> dict:
     last = (row.get("last_name") or "").strip()
     name = f"{first} {last}".strip() or (row.get("username") or "Patient")
     return {
+        "id": row.get("id") or "",
         "username": row.get("username") or "",
         "name": name,
         "role": "patient",
         "tabs": ROLE_TABS["patient"],
+        "date_of_birth": row.get("date_of_birth") or "",
     }
 
 
@@ -157,11 +159,17 @@ def list_accounts() -> list[dict]:
     return [{"username": u["username"], "name": u["name"], "role": u["role"]} for u in _users()]
 
 
-def login(username: str, password: str) -> dict:
+def login(
+    username: str,
+    password: str,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     username = (username or "").strip()
     password = password or ""
     if supabase_auth.configured():
-        return _login_supabase(username, password)
+        return _login_supabase(username, password, ip=ip, user_agent=user_agent)
     return _login_mock(username.lower(), password)
 
 
@@ -327,20 +335,53 @@ def _login_mock(username: str, password: str) -> dict:
     return {"token": issue_token(match["username"]), "user": pub}
 
 
-def _login_supabase(username: str, password: str) -> dict:
+def _login_supabase(
+    username: str,
+    password: str,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    from backend.careloop import store as careloop_store
+
     try:
         profile = supabase_auth.profile_by_username(username)
     except ValueError as exc:
         raise ValueError(str(exc)) from None
     if not profile or not (profile.get("email") or "").strip():
         raise ValueError("Unknown username or password.")
+    user_id = str(profile.get("id") or "").strip()
     try:
         session = supabase_auth.password_sign_in(profile["email"].strip(), password)
     except ValueError:
+        if user_id:
+            careloop_store.insert_login_event(
+                user_id=user_id,
+                username=username,
+                success=False,
+                ip=ip,
+                user_agent=user_agent,
+            )
         raise ValueError("Unknown username or password.") from None
     token = (session or {}).get("access_token") if isinstance(session, dict) else None
     if not token:
+        if user_id:
+            careloop_store.insert_login_event(
+                user_id=user_id,
+                username=username,
+                success=False,
+                ip=ip,
+                user_agent=user_agent,
+            )
         raise ValueError("Unknown username or password.")
+    careloop_store.insert_login_event(
+        user_id=user_id,
+        username=username,
+        success=True,
+        ip=ip,
+        user_agent=user_agent,
+        token=token,
+    )
     return {"token": token, "user": public_user_from_profile(profile)}
 
 
@@ -391,11 +432,15 @@ def user_for_token(token: Optional[str]) -> Optional[dict]:
     return public_user_from_profile(profile)
 
 
-def _token_from_request(request: Request, authorization: Optional[str]) -> Optional[str]:
+def token_from_request(request: Request, authorization: Optional[str] = None) -> Optional[str]:
     if authorization and authorization.lower().startswith("bearer "):
         return authorization.split(" ", 1)[1].strip()
     cookie = request.cookies.get("careloop_token")
     return cookie or None
+
+
+def _token_from_request(request: Request, authorization: Optional[str]) -> Optional[str]:
+    return token_from_request(request, authorization)
 
 
 def require_user(
@@ -406,6 +451,8 @@ def require_user(
     user = user_for_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Login required.")
+    request.state.access_token = token
+    request.state.user_id = user.get("id") or ""
     return user
 
 

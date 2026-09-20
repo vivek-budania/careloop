@@ -1,6 +1,7 @@
 /**
- * CareLoop patient shell — demo IA (workflow.md) bound to Dave's coverage APIs.
- * Journey / meds / history stay in-browser until the longitudinal store lands.
+ * CareLoop patient shell — demo IA bound to Dave's coverage APIs.
+ * Hosted tables (JWT) hold insurance, visits, intakes, medicines, tests, claims.
+ * Journey extras (transcripts, new symptoms) stay in-browser. PA ≠ claim.
  * Cost and network numbers come from /api/careloop/*, not hardcoded money.
  */
 const CareLoop = {
@@ -18,6 +19,10 @@ const CareLoop = {
   costEstimate: null,
   claimAcceptance: null,
   coverageSnap: { profile: null, eligibility: null },
+  recordsStore: 'local',
+  hostedClaims: [],
+  _hydrating: false,
+  _recordsTimer: null,
   demoEnv: null,
   scribeFixture: null,
   demoTranscripts: [],
@@ -196,6 +201,7 @@ const CareLoop = {
       refill: false,
       prescriptions: returning ? this.seedPrescriptions() : [],
       testRecords: returning ? this.seedTestRecords() : [],
+      claims: [],
       pendingCare: null,
     };
   },
@@ -701,6 +707,7 @@ const CareLoop = {
       t.testRecords = (t.visits || []).some((v) => v.id === 'seed') ? this.seedTestRecords() : [];
     }
     if (t.pendingCare === undefined) t.pendingCare = null;
+    if (!Array.isArray(t.claims)) t.claims = [];
     if (Array.isArray(t.prescriptions)) {
       t.prescriptions = this.mergeCareItems([], t.prescriptions.map((item) => this.tidyCareItem(item)));
     }
@@ -874,7 +881,159 @@ const CareLoop = {
     if (patch) Object.assign(this.thread, patch);
     this.syncActiveJourney();
     localStorage.setItem(this.THREAD_KEY, JSON.stringify(this.thread));
+    this.scheduleRecordsSave();
     return this.thread;
+  },
+
+  recordsPayload() {
+    const t = this.thread || {};
+    const guess = this.costEstimate || (this.coverageSnap && this.coverageSnap.visit_cost_estimate) || null;
+    const activeId = t.journey && t.journey.id;
+    const intakes = (t.openVisits || [])
+      .filter((row) => row && row.id && !row.completed)
+      .map((row) => ({
+        id: row.id,
+        symptoms: row.symptoms || '',
+        suggested_specialty: row.suggested_specialty || row.network_specialty || '',
+        clinician_name: row.doctor || '',
+        clinic: row.clinic || '',
+        slot: row.slot || '',
+        status: 'open',
+        visit_cost_guess: (activeId === row.id && guess) ? guess : (row.visit_cost_guess || null),
+      }));
+    if (t.journey && t.journey.completed) {
+      intakes.push({
+        id: t.journey.id,
+        symptoms: t.journey.symptoms || '',
+        suggested_specialty: t.journey.suggested_specialty || '',
+        clinician_name: t.journey.doctor || '',
+        clinic: t.journey.clinic || '',
+        slot: t.journey.slot || '',
+        status: 'completed',
+        completed: true,
+        completed_visit_id: t.journey.id,
+        visit_cost_guess: guess || t.journey.visit_cost_guess || null,
+      });
+    }
+    return {
+      visits: (t.visits || []).map((visit) => ({
+        id: visit.id,
+        date: visit.date,
+        reason: visit.reason,
+        clinician_name: visit.doctor,
+        clinic: visit.clinic,
+        summary: visit.summary,
+        soap: visit.soap || null,
+        reviewed: visit.reviewed,
+        coverage: visit.coverage,
+      })),
+      intakes,
+      medicines: (t.prescriptions || []).map((item) => ({
+        id: item.id,
+        name: item.name,
+        notes: item.notes,
+        dose: item.dose || item.notes,
+        status: item.status,
+        schedule: item.schedule,
+        refill_requested: item.refill_requested,
+        visit_id: item.visit_id,
+      })),
+      tests: (t.testRecords || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        summary: row.notes || row.summary,
+        document_filename: row.filename || row.document_filename,
+        date: row.date,
+        kind: row.kind,
+        visit_id: row.visit_id,
+      })),
+      claims: t.claims || [],
+      doses: t.doses || { morning: 'upcoming', evening: 'upcoming' },
+      refill: Boolean(t.refill),
+    };
+  },
+
+  scheduleRecordsSave() {
+    if (this._hydrating || this.recordsStore !== 'supabase') return;
+    clearTimeout(this._recordsTimer);
+    this._recordsTimer = setTimeout(() => this.flushRecordsSave(), 600);
+  },
+
+  async flushRecordsSave() {
+    if (this._hydrating || this.recordsStore !== 'supabase' || !this.thread) return;
+    try {
+      const saved = await API.saveRecords(this.recordsPayload());
+      if (saved && saved.store === 'supabase') {
+        if (Array.isArray(saved.claims)) this.hostedClaims = saved.claims;
+      }
+    } catch (err) {
+      /* keep the local thread; hosted write is best-effort */
+    }
+  },
+
+  applyRecords(records) {
+    let local = {};
+    try {
+      local = JSON.parse(localStorage.getItem(this.THREAD_KEY) || '{}') || {};
+    } catch (err) {
+      local = {};
+    }
+    const name = (App.user && App.user.name)
+      || (local.patient && local.patient.name)
+      || 'Jane Doe';
+    const fromDb = (records.intakes || []).map((row) => {
+      const extra = ((local.openVisits || []).find((item) => item && item.id === row.id)) || {};
+      return {
+        ...extra,
+        ...row,
+        id: row.id,
+        doctor: row.doctor || extra.doctor || '',
+        symptoms: row.symptoms || extra.symptoms || '',
+      };
+    });
+    const dbIds = new Set(fromDb.map((row) => row.id));
+    const extraLocal = (local.openVisits || []).filter((row) => row && row.id && !row.completed && !dbIds.has(row.id));
+    const medicines = records.medicines || [];
+    this.thread = this.normalizeThread({
+      patient: {
+        name,
+        email: (local.patient && local.patient.email) || 'jane.doe@example.com',
+        zip: (local.patient && local.patient.zip) || '94110',
+        identity_source: (local.patient && local.patient.identity_source) || 'login',
+      },
+      journey: local.journey && !local.journey.completed ? local.journey : (fromDb[0] ? { ...fromDb[0] } : null),
+      openVisits: [...fromDb, ...extraLocal],
+      visits: records.visits || [],
+      doses: records.doses || { morning: 'upcoming', evening: 'upcoming' },
+      refill: Boolean(records.refill),
+      prescriptions: medicines,
+      testRecords: records.tests || [],
+      claims: records.claims || [],
+      pendingCare: local.pendingCare || null,
+    });
+    this.hostedClaims = records.claims || [];
+    localStorage.setItem(this.THREAD_KEY, JSON.stringify(this.thread));
+  },
+
+  async hydrateHostedRecords(mode) {
+    try {
+      const records = await API.getRecords();
+      this.recordsStore = records.store || 'local';
+      this.hostedClaims = records.claims || [];
+      if (this.recordsStore !== 'supabase') return records;
+      if (mode === 'first') {
+        this.thread = this.thread || this.seedThread('first');
+        this.thread.claims = this.thread.claims || [];
+        localStorage.setItem(this.THREAD_KEY, JSON.stringify(this.thread));
+        return records;
+      }
+      this.applyRecords(records);
+      return records;
+    } catch (err) {
+      this.recordsStore = 'local';
+      return null;
+    }
   },
 
   clearVisitRuntime() {
@@ -945,6 +1104,7 @@ const CareLoop = {
       patch.journey = remaining[0] ? { ...remaining[0] } : null;
     }
     this.saveThread(patch);
+    this.flushRecordsSave();
     this.pendingDeleteId = null;
     this.closeModal();
     if (this.view === 'Journey' && !this.thread.journey) {
@@ -1308,10 +1468,14 @@ const CareLoop = {
     }
     try {
       App.user = await API.me();
+      this._hydrating = true;
+      await this.hydrateHostedRecords('returning');
+      this._hydrating = false;
       await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       this.syncPatientName();
       this.render();
     } catch (err) {
+      this._hydrating = false;
       API.setToken('');
       this.renderLogin();
     }
@@ -1320,7 +1484,9 @@ const CareLoop = {
   async refreshCoverage() {
     try {
       const snap = await API.getCoverage();
-      if (snap && snap.profile) {
+      if (snap && snap.coverage_store === 'supabase') {
+        this.rememberCoverage(snap);
+      } else if (snap && snap.profile) {
         this.rememberCoverage(snap);
       } else {
         this.coverageSnap = this.loadPersistedCoverage() || snap || { profile: null, eligibility: null };
@@ -1352,6 +1518,7 @@ const CareLoop = {
   async startSession(result, mode, profile = null) {
     API.setToken(result.token);
     App.user = result.user;
+    this._hydrating = true;
     if (mode === 'first') {
       this.thread = this.seedThread('first');
       if (profile) {
@@ -1362,9 +1529,10 @@ const CareLoop = {
         if (App.user && profile.name) App.user.name = profile.name;
       }
       this.saveThread();
+      await this.hydrateHostedRecords('first');
       this.syncPatientName();
       await Promise.all([API.resetCoverage(), this.loadDemoEnv()]);
-      this.rememberCoverage({ profile: null, eligibility: null });
+      this.rememberCoverage({ profile: null, eligibility: null, coverage_store: this.recordsStore });
       this.costEstimate = null;
       this.scribeFixture = null;
       this.encounter = null;
@@ -1375,8 +1543,11 @@ const CareLoop = {
       this.insuranceFromVisit = false;
       this.view = 'Setup';
     } else {
-      this.thread = this.loadThread();
-      if (!this.thread.visits) this.thread = this.seedThread('returning');
+      await this.hydrateHostedRecords('returning');
+      if (this.recordsStore !== 'supabase') {
+        this.thread = this.loadThread();
+        if (!this.thread.visits) this.thread = this.seedThread('returning');
+      }
       if (App.user && App.user.name) {
         this.thread.patient.name = App.user.name;
         this.thread.patient.identity_source = 'login';
@@ -1385,18 +1556,22 @@ const CareLoop = {
       this.syncPatientName();
       await Promise.all([this.refreshCoverage(), this.loadDemoEnv()]);
       if (!this.coverageOnFile()) {
-        const snap = await API.scanCoverage({
-          payer_name: this.GOLDEN_PAYER,
-          image_note: 'fixture:returning-seed',
-        });
-        this.rememberCoverage(await this.confirmFromProfile(snap.profile));
-      } else if (!this.eligibilityOnFile()) {
+        if (this.recordsStore !== 'supabase') {
+          const snap = await API.scanCoverage({
+            payer_name: this.GOLDEN_PAYER,
+            image_note: 'fixture:returning-seed',
+          });
+          this.rememberCoverage(await this.confirmFromProfile(snap.profile));
+        }
+      } else if (!this.eligibilityOnFile() && this.recordsStore !== 'supabase') {
         this.rememberCoverage(await this.confirmFromProfile(this.coverageSnap.profile));
       } else {
         this.persistCoverage();
       }
       this.view = 'Today';
     }
+    this._hydrating = false;
+    if (this.recordsStore === 'supabase') this.flushRecordsSave();
     this.render();
   },
 
@@ -1414,6 +1589,8 @@ const CareLoop = {
       /* ignore */
     }
     this.coverageSnap = { profile: null, eligibility: null };
+    this.recordsStore = 'local';
+    this.hostedClaims = [];
     this.view = 'Today';
     this.renderLogin();
   },
@@ -2749,13 +2926,19 @@ const CareLoop = {
     return `${this.head('Test records.', 'Past results you can open, and lab appointments you still need to complete.')}<div class="grid"><section class="card"><div class="section-heading"><h2>Past results</h2>${this.tag(`${results.length} on file`, 'gray')}</div><p style="font-size:12px">Open a PDF or picture from a prior test.</p>${resultRows}<div class="rule"></div><h3>Add a result</h3><form id="test-result-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Result file (PDF or picture)<input type="file" id="test-result-file" accept="image/*,.pdf,application/pdf" required></label><button class="btn" type="submit">Save result</button></form></section><div class="stack"><section class="card"><div class="section-heading"><h2>Labs to complete</h2>${this.tag(`${planned.length}`, 'gray')}</div>${plannedRows}<input type="file" id="test-attach-file" accept="image/*,.pdf,application/pdf"></section><section class="card insurance-mini"><div class="eyebrow">Potential test</div><h2 class="mt">Record a lab appointment</h2><p class="mt">Save a time with a lab as a test you still need to complete.</p><form id="lab-form"><label class="field">Test name<input name="name" required maxlength="80" placeholder="HbA1c"></label><label class="field">Lab<input name="lab" maxlength="80" placeholder="Quest · Mission"></label><div class="split"><label class="field">Date<input type="date" name="date" required></label><label class="field">Time<input type="time" name="time"></label></div><label class="field">Notes<input name="notes" maxlength="160" placeholder="Fasting, if the clinic asked"></label><button class="btn" type="submit">Save lab appointment</button></form></section></div></div>`;
   },
 
+  claimsBlock() {
+    const claims = (this.thread && this.thread.claims) || this.hostedClaims || [];
+    const rows = claims.map((row) => `<div class="document mt"><div style="flex:1"><h3>${this.esc(row.service_name || 'Visit')}</h3><small>${this.esc(row.status || 'not submitted')} · billed ${this.money(row.billed_amount)} · you may owe ${this.money(row.patient_owes)}</small>${row.eob_summary ? `<p style="font-size:12px;margin-top:6px">${this.esc(row.eob_summary)}</p>` : ''}</div></div>`).join('');
+    return `<div class="rule"></div><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon · mock EOB after billing. This is not a prior authorization or a letter draft.</small></div></div>${rows}`;
+  },
+
   insurance() {
     const c = this.coverageLabel();
     if (!c) {
       return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates.</p>${this.btn('Add insurance', 'update-insurance')}</section></div>`;
     }
     const e = this.coverageSnap.eligibility || {};
-    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.displayName())}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(c.status, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'your plan')}</small></div></div>${this.eligibilityNote() ? `<div class="notice">${this.esc(this.eligibilityNote())}</div>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon</small></div></div><a class="link" href="/letters">Open letter drafts ${this.icon('arrow')}</a></section></div>`;
+    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.displayName())}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(c.status, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'your plan')}</small></div></div>${this.eligibilityNote() ? `<div class="notice">${this.esc(this.eligibilityNote())}</div>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div>${this.claimsBlock()}<a class="link" href="/letters">Open letter drafts ${this.icon('arrow')}</a></section></div>`;
   },
 
   profile() {
@@ -2956,6 +3139,7 @@ const CareLoop = {
     if (!j || j.completed) return;
     const c = this.coverageLabel();
     const pending = { ...this.careFromEncounter(), applied: false, visitId: j.id };
+    const soap = (this.encounter && this.encounter.soap) || null;
     const done = {
       id: j.id || Date.now().toString(),
       date: 'September 24, 2026',
@@ -2967,6 +3151,7 @@ const CareLoop = {
       summary: this.visitCareSummary(pending),
       coverage: c ? c.payer : 'No plan on file',
       care: pending,
+      soap,
     };
     const remaining = this.openJourneys().filter((row) => row.id !== done.id);
     this.saveThread({
@@ -2976,6 +3161,7 @@ const CareLoop = {
       pendingCare: pending,
     });
     this.clearVisitRuntime();
+    this.flushRecordsSave();
   },
 
   async loadCostGuess() {
@@ -3362,6 +3548,13 @@ const CareLoop = {
         }
         break;
       case 'skip-insurance':
+        try {
+          await API.resetCoverage();
+        } catch (err) {
+          /* still skip locally */
+        }
+        this.rememberCoverage({ profile: null, eligibility: null, coverage_store: this.recordsStore });
+        this.costEstimate = null;
         if (this.insuranceFromVisit) {
           this.insuranceFromVisit = false;
           this.navigate('Journey');
@@ -3499,6 +3692,7 @@ const CareLoop = {
             image_note: 'fixture:reset',
           });
           this.rememberCoverage(await this.confirmFromProfile(snap.profile));
+          this.flushRecordsSave();
           this.closeModal();
           this.navigate('Today');
           this.toast('Sample record restored');

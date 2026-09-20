@@ -2,7 +2,7 @@
 
 Many rows per `profiles.id`. Patient **Past visits → My visits**. SQL: [`supabase/migrations/20260919101000_create_visits.sql`](../../supabase/migrations/20260919101000_create_visits.sql). Overview: [`README.md`](README.md).
 
-Vivek has already created this table in hosted Supabase. The migration is idempotent and **may already exist in prod**. The running app still keeps visit history in **`localStorage`** until a later wiring PR — do not wire it from a docs change.
+Vivek has already created this table in hosted Supabase. The migration is idempotent and **may already exist in prod**. History visits persist through `GET|PUT /api/careloop/records`. Open / upcoming journeys live on `intakes` (symptoms/slot/cost guess only — not transcripts).
 
 ## Purpose
 

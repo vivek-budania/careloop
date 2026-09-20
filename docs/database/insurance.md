@@ -2,7 +2,7 @@
 
 Current coverage snapshot for a patient. SQL: [`supabase/migrations/20260919102000_create_insurance.sql`](../../supabase/migrations/20260919102000_create_insurance.sql). Overview: [`README.md`](README.md).
 
-Vivek has already created this table in hosted Supabase. The migration is idempotent and **may already exist in prod**. Dave’s coverage APIs still write **in-memory + signed cookie + `localStorage`**. **Do not wire those APIs in a docs PR.**
+Vivek has already created this table in hosted Supabase. The migration is idempotent and **may already exist in prod**. Dave’s coverage APIs still run mock/Stedi 271 in-process, then **upsert `is_current`**. Returning login hydrates from that row.
 
 ## Purpose
 
@@ -56,7 +56,7 @@ Enabled. **`auth.uid() = user_id`.**
 |--------|---------|------|------|
 | `insurance_own_rows` | `ALL` | `authenticated` | `USING` + `WITH CHECK` (`auth.uid() = user_id`) |
 
-Login does not read this table today (JWT/HMAC only). Intended returning path: server or client loads `is_current` **after** Auth.
+Login hydrates `is_current` **after** Auth (patient JWT). `service_role` is not used for this table.
 
 ## Who writes
 
