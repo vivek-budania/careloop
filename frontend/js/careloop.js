@@ -1981,7 +1981,7 @@ const CareLoop = {
     const example = !zip || zip === this.EXAMPLE_ZIP;
     const hardcoded = this.exampleZipClinicians();
     const incoming = Array.isArray(live) ? live : [];
-    if (source === 'grok' && incoming.length) return incoming;
+    if (source === 'live' && incoming.length) return incoming;
     if (!example) return incoming.length ? incoming : hardcoded;
     const byNpi = new Map(incoming.map((row) => [String(row.npi), row]));
     const merged = hardcoded.map((doc) => {
@@ -2137,12 +2137,15 @@ const CareLoop = {
     const any = j.network_specialty === 'any';
     const radius = this.networkMeta?.nearby_radius_miles || 40;
     const fallback = Boolean(this.networkMeta?.zip_fallback_used);
+    const liveDir = this.networkMeta?.source === 'live';
     const nearbyAll = this.networkMeta?.nearby || this.clinicians.filter((doc) => Number(doc.miles) <= radius);
     const nearby = nearbyAll.filter((doc) => Number(doc.miles) <= radius);
     const farther = this.clinicians.filter((doc) => !nearby.some((row) => row.npi === doc.npi) && Number(doc.miles) > radius);
     const zipNote = fallback
-      ? `ZIP ${this.esc(zip)} is not in the demo map, so distance is measured from 94110.`
-      : `Distances are from ZIP ${this.esc(zip)}.`;
+      ? `No public listings for ZIP ${this.esc(zip)} yet, so these are sample clinicians from 94110.`
+      : liveDir
+        ? `Public listings near ZIP ${this.esc(zip)}. Confirm network with the office.`
+        : `Distances are from ZIP ${this.esc(zip)}.`;
     const found = nearby.length
       ? `<div class="notice green">Found ${nearby.length} clinician${nearby.length === 1 ? '' : 's'} within ${radius} miles for ${this.esc(any ? 'any specialty' : spec)}. ${zipNote}</div>`
       : `<div class="notice">No clinicians within ${radius} miles of ZIP ${this.esc(zip)} for ${this.esc(any ? 'any specialty' : spec)}. ${zipNote} Alternatives below are farther or a different city.</div>`;
