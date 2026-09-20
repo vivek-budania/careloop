@@ -91,7 +91,7 @@ No row is different from an inactive row: skip vs “we checked and it is inacti
 
 - Visit **symptoms**, specialty suggestion, prior-visit PDFs
 - SOAP, transcripts, clinician, clinic
-- Rx, medicines, tests, lab results
+- Rx, medicines, tests, lab results (use [`medicines`](medicines.md) / [`tests`](tests.md); filenames only on tests)
 - **API keys**, `service_role`, Stedi/Gemini/Groq secrets
 - Card / SBC **images** or raw `b64`
 - Claims, EOB, PA letters, appeals, demand letters

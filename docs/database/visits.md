@@ -82,8 +82,8 @@ Generated markdown/PDF from the care record. Rules:
 
 - In-progress / upcoming journeys (`openVisits`) and visit-day **new symptoms** (`journey.new_symptoms`) — these stay in the patient-shell `localStorage` thread for now
 - Full **transcripts** / audio / STT blobs (scribe fixture or `/scribe/transcribe`)
-- Prescriptions / medicines, Rx SIG, refill state
-- Tests, lab PDFs, results interpretation
+- Prescriptions / medicines, Rx SIG, refill state (use [`medicines`](medicines.md); optional `visit_id`)
+- Tests, lab PDFs, results interpretation (use [`tests`](tests.md); **filename only**, never bytes)
 - Claims, EOB, CARC/RARC
 - PA / appeal letter bodies or watermarks
 - Card images, member id, copays (use `insurance`; only a `coverage_label` here)
