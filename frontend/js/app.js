@@ -46,7 +46,7 @@ const App = {
       const user = await API.me();
       this.user = user;
       const label = document.getElementById('nav-user-label');
-      if (label) label.textContent = `${user.name} · letter drafts (HITL)`;
+      if (label) label.textContent = `${user.name} · letter drafts`;
     } catch (err) {
       API.setToken('');
     }

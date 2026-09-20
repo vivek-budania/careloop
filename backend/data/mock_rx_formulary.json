@@ -8,7 +8,7 @@
     "patient_copay": 10,
     "cash_price": 15,
     "pa_required": false,
-    "notes": "Mock retail copay for a common maintenance generic."
+    "notes": "Retail copay for a common maintenance generic."
   },
   {
     "id": "clobetasol",
@@ -19,7 +19,7 @@
     "patient_copay": 40,
     "cash_price": 65,
     "pa_required": false,
-    "notes": "Mock preferred topical copay."
+    "notes": "Preferred topical copay."
   },
   {
     "id": "meloxicam",
@@ -30,7 +30,7 @@
     "patient_copay": 10,
     "cash_price": 18,
     "pa_required": false,
-    "notes": "Mock NSAID retail copay."
+    "notes": "Retail copay for this pain medicine."
   },
   {
     "id": "sumatriptan",
@@ -41,7 +41,7 @@
     "patient_copay": 40,
     "cash_price": 55,
     "pa_required": false,
-    "notes": "Mock migraine abortive copay."
+    "notes": "Retail copay for this migraine medicine."
   },
   {
     "id": "semaglutide",
@@ -52,7 +52,7 @@
     "patient_copay": null,
     "cash_price": null,
     "pa_required": true,
-    "notes": "Specialty add-on — PA may be required; not priced as if allowed."
+    "notes": "May need insurance approval first — not priced yet."
   },
   {
     "id": "skyrizi",
@@ -63,7 +63,7 @@
     "patient_copay": null,
     "cash_price": null,
     "pa_required": true,
-    "notes": "Biologic — PA may be required; not priced as if allowed."
+    "notes": "May need insurance approval first — not priced yet."
   },
   {
     "id": "botox",
@@ -74,6 +74,6 @@
     "patient_copay": null,
     "cash_price": null,
     "pa_required": true,
-    "notes": "Procedure-drug — PA may be required; not priced as if allowed."
+    "notes": "May need insurance approval first — not priced yet."
   }
 ]
