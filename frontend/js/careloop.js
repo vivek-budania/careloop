@@ -12,6 +12,7 @@ const CareLoop = {
   selectedVisit: null,
   insuranceMode: 'hub',
   insuranceReturn: false,
+  insuranceFromVisit: false,
   payers: [],
   clinicians: [],
   costEstimate: null,
@@ -1271,6 +1272,7 @@ const CareLoop = {
       this.cancelRecording();
       this.insuranceMode = 'hub';
       this.insuranceReturn = false;
+      this.insuranceFromVisit = false;
       this.view = 'Setup';
     } else {
       this.thread = this.loadThread();
@@ -1465,7 +1467,8 @@ const CareLoop = {
   setup() {
     let content = '';
     if (this.insuranceMode === 'hub') {
-      content = `<h2>A good place to start.</h2><p>Add your insurance to see estimated costs and mock in-network clinics. You can also skip this for now.</p><div class="split"><button class="card" style="text-align:left" data-action="sample-card" type="button">${this.icon('camera')}<h3 class="mt">Try a sample card</h3><p style="font-size:12px;margin-top:8px">Jane Doe · Aetna · DOB 2004-04-04.<br>Fixture first. You can still read an upload next.</p></button><button class="card" style="text-align:left" data-action="manual-card" type="button">${this.icon('file')}<h3 class="mt">Enter plan details</h3><p style="font-size:12px;margin-top:8px">Choose your insurance company.<br>Date of birth is required.</p></button></div><div class="actions">${this.link('Skip for now', 'skip-insurance')}</div>`;
+      const fromVisit = this.insuranceFromVisit;
+      content = `<h2>${fromVisit ? 'Let’s add your insurance.' : 'A good place to start.'}</h2><p>${fromVisit ? 'Upload your insurance card or enter your plan details, then we’ll return to finding a clinician. You can also skip and keep searching nearby.' : 'Add your insurance to see estimated costs and mock in-network clinics. You can also skip this for now.'}</p><div class="split"><button class="card" style="text-align:left" data-action="sample-card" type="button">${this.icon('camera')}<h3 class="mt">${fromVisit ? 'Upload a card' : 'Try a sample card'}</h3><p style="font-size:12px;margin-top:8px">${fromVisit ? 'Read a card image, or start from the Jane Doe Aetna sample and replace it with yours.' : 'Jane Doe · Aetna · DOB 2004-04-04.<br>Fixture first. You can still read an upload next.'}</p></button><button class="card" style="text-align:left" data-action="manual-card" type="button">${this.icon('file')}<h3 class="mt">${fromVisit ? 'Enter insurance details' : 'Enter plan details'}</h3><p style="font-size:12px;margin-top:8px">Choose your insurance company.<br>Date of birth is required.</p></button></div><div class="actions">${this.link(fromVisit ? 'Skip and return to your visit' : 'Skip for now', 'skip-insurance')}</div>`;
     } else {
       const p = this.coverageSnap.profile || {};
       const sample = this.insuranceMode === 'sample';
@@ -1476,7 +1479,7 @@ const CareLoop = {
       const warnings = (p.warnings || []).map((w) => `<p class="mt" style="font-size:12px">${this.esc(w)}</p>`).join('');
       content = `<h2>${sample ? 'Review your sample card.' : 'A few plan details.'}</h2><p>${sample ? 'These fields come from the Jane Doe Aetna fixture. Date of birth is required so eligibility can match the sandbox member. You can edit them before saving.' : 'Insurance company and date of birth are required. Use fictional details for this demo.'}</p><form id="insurance-form"><label class="field">Insurance company<select name="payer" required><option value="">Select an insurer</option>${options}</select></label><label class="field">Member name (optional)<input name="member_name" value="${this.esc(p.member_name || this.thread.patient.name)}"></label><div class="split"><label class="field">Member ID (optional)<input name="member" value="${this.esc(p.member_id || '')}"></label><label class="field">Group number (optional)<input name="group" value="${this.esc(p.group_number || '')}"></label></div><label class="field">Date of birth<input type="date" name="dob" value="${this.esc(p.date_of_birth || '')}" required></label><label class="field">ZIP code<input name="zip" value="${this.esc(p.zip || this.thread.patient.zip || '94110')}" pattern="[0-9]{5}" maxlength="5"></label><div class="split"><label class="field">Card image (optional)<input type="file" id="card-file" accept="image/*,.pdf"></label><label class="field">SBC / EOB (optional)<input type="file" id="sbc-file" accept="image/*,.pdf"></label></div><p class="mt" style="font-size:12px" id="ocr-status"></p>${warnings}<div class="notice">${this.esc(this.setupNotice())}</div><div class="actions">${this.btn('Back', 'insurance-hub', 'secondary')}<div class="row">${this.btn('Read uploaded images', 'read-images', 'secondary')}<button class="btn" type="submit">Save &amp; review coverage ${this.icon('arrow')}</button></div></div></form>`;
     }
-    return `<div class="narrow">${this.head(this.insuranceReturn ? 'Update your insurance.' : 'Let’s bring your care together.', 'Insurance is a starting point. Your story is what connects it all.')}<section class="card journey-panel">${content}</section></div>`;
+    return `<div class="narrow">${this.head(this.insuranceFromVisit ? 'Add insurance for this visit.' : this.insuranceReturn ? 'Update your insurance.' : 'Let’s bring your care together.', 'Upload a card or enter your plan details. This is a starting point, not a coverage decision.')}<section class="card journey-panel">${content}</section></div>`;
   },
 
   startVisit() {
@@ -1698,7 +1701,7 @@ const CareLoop = {
     const c = this.coverageLabel();
     const insurance = c
       ? `<div class="document zip-confirm">${this.icon('shield')}<div><h3>I can see your insurance</h3><p>You’re on file with <strong>${this.esc(c.payer)}</strong>${c.plan ? ` · ${this.esc(c.plan)}` : ''}${c.member ? ` · member ${this.esc(c.member)}` : ''} · ${this.esc(c.status || 'saved')}. That’s the same plan on your Insurance tab.</p></div></div>`
-      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add insurance if you want estimated costs later.</div>${this.btn('Open Insurance', 'insurance', 'secondary')}`;
+      : `<div class="notice">I don’t see a plan on your Insurance tab yet. You can still search nearby. Add a card or your plan details if you want estimated costs later.</div><div class="row" style="flex-wrap:wrap;margin:4px 0 12px">${this.btn('Add insurance', 'add-visit-insurance')}</div>`;
     const specReason = this.coverageSnap.intake?.suggested_specialty_reason
       || 'Suggestion only — not a diagnosis. Change the reason on the last step to change this filter.';
     return `<h2>Let’s take this one step at a time.</h2><p class="empathy">${this.esc(this.empathyForSymptoms(j.symptoms))}</p>${insurance}<div class="document mt"><div><h3>Who I would start with</h3><p>From what you shared, I’d look for a <strong>${this.esc(spec)}</strong> first. ${this.esc(specReason)}</p></div></div><div class="rule"></div><h3>Then we can search near you.</h3><p>Enter your ZIP so we can sort the demo directory by distance. This is not a payer directory.</p><form id="zip-search-form" class="zip-search"><label class="field">ZIP code<input name="zip" value="${this.esc(zip)}" pattern="[0-9]{5}" maxlength="5" required></label><button class="btn secondary" type="submit">Search nearby</button></form><div class="row" style="flex-wrap:wrap;margin:12px 0 8px">${this.btn(any ? 'Use suggested specialty' : 'Suggested specialty ✓', 'network-suggested', any ? 'secondary' : '')}${this.btn(any ? 'Any specialty nearby ✓' : 'Any specialty nearby', 'network-any', any ? '' : 'secondary')}</div>${found}<h3 class="mt">Near ZIP ${this.esc(zip)}</h3>${this.doctorRows(nearby)}${farther.length ? `<h3 class="mt">Farther alternatives</h3><p style="font-size:12px">Still in the demo directory, just farther than ${radius} miles.</p>${this.doctorRows(farther)}` : ''}`;
@@ -2612,6 +2615,15 @@ const CareLoop = {
         this.thread.patient.zip = this.coverageSnap.profile.zip;
         this.saveThread();
       }
+      if (this.insuranceFromVisit) {
+        this.insuranceFromVisit = false;
+        this.insuranceReturn = false;
+        this.toast('Plan saved. I can see it now — continue with your ZIP search.');
+        this.navigate('Journey');
+        if (this.thread.journey && this.thread.journey.step >= 2) await this.loadNetwork();
+        this.render();
+        return;
+      }
       this.navigate('Insurance');
       this.toast(this.coverageSource() === 'sandbox'
         ? 'Plan saved. Showing sandbox eligibility for review.'
@@ -2964,6 +2976,14 @@ const CareLoop = {
         this.render();
         break;
       case 'update-insurance':
+        this.insuranceFromVisit = false;
+        this.insuranceReturn = true;
+        this.insuranceMode = 'hub';
+        await this.loadPayers();
+        this.navigate('Setup');
+        break;
+      case 'add-visit-insurance':
+        this.insuranceFromVisit = true;
         this.insuranceReturn = true;
         this.insuranceMode = 'hub';
         await this.loadPayers();
@@ -3031,7 +3051,13 @@ const CareLoop = {
         }
         break;
       case 'skip-insurance':
-        this.navigate('Today');
+        if (this.insuranceFromVisit) {
+          this.insuranceFromVisit = false;
+          this.navigate('Journey');
+          if (this.thread.journey && this.thread.journey.step >= 2) this.loadNetwork();
+        } else {
+          this.navigate('Today');
+        }
         break;
       case 'prior-note':
         this.saveThread({ journey: { ...this.thread.journey, prior: true } });
