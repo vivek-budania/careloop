@@ -1515,7 +1515,7 @@ const CareLoop = {
     const navActive = ['Today', 'Past visits', 'History', 'Upcoming visits', 'Prescriptions', 'Test records', 'Insurance', 'Profile'].includes(this.view)
       ? (this.view === 'History' ? 'Past visits' : this.view)
       : '';
-    document.getElementById('app').innerHTML = `<button class="overlay" data-action="menu" aria-label="Close navigation"></button><aside class="sidebar">${this.logo()}<span class="eyebrow">Your space</span><nav class="nav" aria-label="Main navigation">${destinations.map(([n, i]) => `<button type="button" data-nav="${n}" class="${navActive === n ? 'active' : ''}" ${navActive === n ? 'aria-current="page"' : ''}>${this.icon(i)}${n}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="help"><span class="eyebrow" style="padding:0">Made for your next visit</span><p>Your story, ready to share.<br>No starting from scratch.</p>${this.link('Prepare your packet', 'packet')}</div><div class="profile-mini"><div class="avatar">${this.esc(this.initials(name))}</div><div><strong style="font-size:12px">${this.esc(name)}</strong><small>My personal care space</small></div><button class="logout" data-action="logout" aria-label="Log out">${this.icon('logout')}</button></div></div></aside><div class="shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open navigation">${this.icon('menu')}</button><span class="mobile-brand">careloop.</span><div class="breadcrumb">My care <span>/</span><strong>${this.esc(crumb)}</strong></div><div class="topright"><span class="demo-badge"><span class="dot"></span> DEMO MODE</span><button class="icon-btn" aria-label="Notifications" data-action="notifications">${this.icon('bell')}</button><button class="avatar" data-nav="Profile" aria-label="Open profile">${this.esc(this.initials(name))}</button></div></header><main>${content}<footer class="footer"><span>Your care, connected. &nbsp; ♡</span></footer></main></div>`;
+    document.getElementById('app').innerHTML = `<button class="overlay" data-action="menu" aria-label="Close navigation"></button><aside class="sidebar">${this.logo()}<span class="eyebrow">Your space</span><nav class="nav" aria-label="Main navigation">${destinations.map(([n, i]) => `<button type="button" data-nav="${n}" class="${navActive === n ? 'active' : ''}" ${navActive === n ? 'aria-current="page"' : ''}>${this.icon(i)}${n}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="profile-mini"><button type="button" class="profile-mini-main" data-nav="Profile" aria-label="Open profile"><div class="avatar">${this.esc(this.initials(name))}</div><div><strong style="font-size:12px">${this.esc(name)}</strong><small>My personal care space</small></div></button><button type="button" class="logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></aside><div class="shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open navigation">${this.icon('menu')}</button><span class="mobile-brand">careloop.</span><div class="breadcrumb">My care <span>/</span><strong>${this.esc(crumb)}</strong></div><div class="topright"><span class="demo-badge"><span class="dot"></span> DEMO MODE</span><button class="icon-btn" aria-label="Notifications" data-action="notifications">${this.icon('bell')}</button><div class="account-chip"><button class="avatar" data-nav="Profile" aria-label="Open profile">${this.esc(this.initials(name))}</button><button type="button" class="logout topbar-logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></header><main>${content}<footer class="footer"><span>Your care, connected. &nbsp; ♡</span><span>Fictional data · No live care or insurance actions</span></footer></main></div>`;
   },
 
   today() {
@@ -2458,6 +2458,37 @@ const CareLoop = {
     }
   },
 
+  medicinesForCostGuess() {
+    const plan = (this.encounter && this.encounter.plan) || [];
+    const fromPlan = plan
+      .filter((item) => String(item.type || '').toLowerCase() === 'rx')
+      .map((item) => ({
+        id: item.id || item.plan_item_id,
+        name: this.careName(item.description) || item.description,
+        description: item.description || '',
+        pa_required: Boolean(item.pa_required),
+        code: item.code || null,
+      }));
+    if (fromPlan.length) return fromPlan;
+    return (this.careFromEncounter().prescriptions || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: [item.name, item.notes].filter(Boolean).join(' · '),
+      pa_required: /PA may be required/i.test(item.notes || ''),
+      code: null,
+    }));
+  },
+
+  costMoneyCell(line) {
+    if (!line || line.priced === false || line.patient_owes_low == null) {
+      if (line && line.pa_required) {
+        return `${this.tag('PA may be required', 'peach')} — not priced`;
+      }
+      return this.tag('Not priced', 'gray');
+    }
+    return this.money(line.patient_owes_low);
+  },
+
   claimAcceptanceBlock() {
     const claim = this.claimAcceptance
       || (this.costEstimate && this.costEstimate.claim_acceptance)
@@ -2476,31 +2507,45 @@ const CareLoop = {
   costBody() {
     const demo = this.usesDemoTranscript();
     const estimate = this.costEstimate || this.coverageSnap.visit_cost_estimate;
-    const e = this.coverageSnap.eligibility;
     const claim = this.claimAcceptanceBlock();
     if (!demo && !this.transcriptText()) {
-      return `<h2>A little visibility into costs.</h2><p>Estimated costs come from your visit transcript unless you pick Demo 1, 2, or 3.</p><div class="notice">No transcript yet, so there is no cost guess to show.</div>${claim}`;
+      return `<h2>A little visibility into costs.</h2><p>Estimated costs come from your visit transcript unless you pick Demo 1, 2, or 3.</p><div class="notice">No transcript yet, so there is no cost estimate to show.</div>${claim}`;
     }
     if (!estimate) {
       return `<h2>A little visibility into costs.</h2><p>${demo ? 'Loading amounts from the selected demo conversation…' : 'Trying to pull cost lines from your transcript…'}</p>${claim}`;
     }
     const lines = estimate.likely_visits || [];
-    if (!lines.length) {
+    if (!lines.length && !(estimate.medicines || []).length) {
       return `<h2>A little visibility into costs.</h2><p>${demo ? 'The selected demo did not return priced services.' : 'Nothing billable could be pulled from this transcript yet.'}</p><div class="notice">No priced services yet.</div>${claim}`;
     }
-    const rows = lines.map((line) => {
+    const visitRows = lines.map((line) => {
       const allowed = line.allowed;
       const you = line.patient_owes_low;
       const planPays = (allowed != null && you != null) ? Math.max(0, Number(allowed) - Number(you)) : null;
-      return `<tr><td>${this.esc(line.description)} <small>(${this.esc(line.code)})</small><br><small>${this.esc(line.basis || '')}</small></td><td>${this.money(allowed)}</td><td>${this.money(planPays)}</td><td>${this.money(you)}</td></tr>`;
+      return `<tr><td>${this.esc(line.description)} <small>(${this.esc(line.code)})</small><div class="cost-basis">${this.esc(line.basis || '')}</div></td><td>${this.money(allowed)}</td><td>${planPays == null ? '—' : this.money(planPays)}</td><td>${this.money(you)}</td></tr>`;
     }).join('');
-    const addOn = demo
-      ? `<tr><td>Add-on medicine</td><td colspan="3">${this.tag('PA may be required', 'peach')}</td></tr>`
-      : '';
+    const meds = estimate.medicines || [];
+    const medRows = meds.length
+      ? meds.map((line) => {
+        const tier = line.tier_label ? `<small>${this.esc(line.tier_label)}</small>` : '';
+        return `<tr><td>${this.esc(line.name || line.description || 'Medicine')} ${tier}<div class="cost-basis">${this.esc(line.basis || '')}</div></td><td>${line.allowed != null ? this.money(line.allowed) : '—'}</td><td>${line.priced ? this.money(0) : '—'}</td><td>${this.costMoneyCell(line)}</td></tr>`;
+      }).join('')
+      : '<tr><td colspan="4"><span style="color:var(--muted)">No medicines on this visit plan yet.</span></td></tr>';
+    const visitLow = estimate.visit_owes_low != null ? estimate.visit_owes_low : estimate.patient_owes_low;
+    const visitHigh = estimate.visit_owes_high != null ? estimate.visit_owes_high : estimate.patient_owes_high;
+    const medLow = estimate.medicine_owes_low || 0;
+    const medHigh = estimate.medicine_owes_high || 0;
+    const unpriced = estimate.medicine_unpriced_count || 0;
+    const totalNote = unpriced
+      ? `estimated you-pay · visit + priced medicines · ${unpriced} medicine${unpriced === 1 ? '' : 's'} not priced`
+      : 'estimated you-pay · visit + medicines';
     const source = demo
-      ? `Sample amounts from the selected demo conversation and your saved plan.`
-      : `Amounts from your transcript and your saved plan.`;
-    return `<h2>A little visibility into costs.</h2><p>${source}</p><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${rows}${addOn}</tbody></table><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>estimated you-pay · medicine excluded</small></div>${claim}`;
+      ? 'Sample amounts from the selected demo conversation, your saved plan, and medicines on this visit’s plan.'
+      : 'Amounts from your transcript, your saved plan, and medicines on this visit’s plan.';
+    const visitTable = lines.length
+      ? `<h3 class="mt">Visit</h3><table class="cost-table"><thead><tr><th>ESTIMATED SERVICE</th><th>ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${visitRows}</tbody></table><div class="cost-subtotal">Visit subtotal ${this.money(visitLow)}${visitHigh !== visitLow ? `–${this.money(visitHigh)}` : ''}</div>`
+      : `<h3 class="mt">Visit</h3><div class="notice">No visit services priced yet.</div>`;
+    return `<h2>A little visibility into costs.</h2><p>${source}</p>${visitTable}<h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${claim}`;
   },
 
   followups() {
@@ -2620,7 +2665,8 @@ const CareLoop = {
   profile() {
     const p = this.thread.patient;
     const shown = this.displayName();
-    return `<div class="narrow">${this.head('A space that’s yours.', 'General details for your patient profile.')}<section class="card journey-panel"><div class="row"><div class="avatar">${this.esc(this.initials(shown))}</div><div><h2>${this.esc(shown)}</h2><small>${App.user ? `Signed in as ${this.esc(App.user.username)}` : 'Your personal care space'}</small></div></div><div class="rule"></div><form id="profile-form"><label class="field">Display name<input name="name" value="${this.esc(p.name)}" required maxlength="60"></label><label class="field">Email<input type="email" name="email" value="${this.esc(p.email)}" required></label><label class="field">ZIP code<input name="zip" pattern="[0-9]{5}" value="${this.esc(p.zip)}" required></label><button class="btn" type="submit">Save profile</button></form>${this.envPanel()}<div class="rule"></div><h3>Ready for another walkthrough?</h3><p style="font-size:12px;margin:10px 0 20px">Reset only this demo’s saved visits, doses, and insurance to the sample record.</p>${this.btn('Reset demo data', 'reset', 'secondary')}</section></div>`;
+    const account = App.user?.username || 'account';
+    return `<div class="narrow">${this.head('A space that’s yours.', 'General details for your fictional patient profile.')}<section class="card journey-panel"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div class="row"><div class="avatar">${this.esc(this.initials(shown))}</div><div><h2>${this.esc(shown)}</h2><small>Fictional demo patient${App.user ? ` · signed in as ${this.esc(App.user.username)}` : ''}</small></div></div>${this.btn(`${this.icon('logout')} Log out`, 'logout', 'secondary')}</div><div class="rule"></div><form id="profile-form"><label class="field">Display name<input name="name" value="${this.esc(p.name)}" required maxlength="60"></label><label class="field">Demo email<input type="email" name="email" value="${this.esc(p.email)}" required></label><label class="field">ZIP code<input name="zip" pattern="[0-9]{5}" value="${this.esc(p.zip)}" required></label><button class="btn" type="submit">Save profile</button></form>${this.envPanel()}<div class="rule"></div><h3>Ready for another walkthrough?</h3><p style="font-size:12px;margin:10px 0 20px">Reset only this demo’s saved visits, doses, and insurance to the sample record.</p><div class="actions" style="justify-content:flex-start;flex-wrap:wrap"><div class="row">${this.btn('Reset demo data', 'reset', 'secondary')}${this.btn(`${this.icon('logout')} Log out of ${this.esc(account)}`, 'logout')}</div></div></section></div>`;
   },
 
   render() {
@@ -2855,6 +2901,8 @@ const CareLoop = {
         this.rememberCoverage(await API.guessVisitCost({
           symptoms,
           from_transcript: !demo,
+          medicines: this.medicinesForCostGuess(),
+          specialty: j.suggested_specialty || this.coverageSnap.intake?.suggested_specialty || '',
         }));
         this.costEstimate = this.coverageSnap.visit_cost_estimate;
       } catch (err) {

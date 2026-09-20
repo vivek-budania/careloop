@@ -1,0 +1,79 @@
+[
+  {
+    "id": "metformin",
+    "match": ["metformin"],
+    "display_name": "Metformin",
+    "tier": 1,
+    "tier_label": "Tier 1 generic",
+    "patient_copay": 10,
+    "cash_price": 15,
+    "pa_required": false,
+    "notes": "Mock retail copay for a common maintenance generic."
+  },
+  {
+    "id": "clobetasol",
+    "match": ["clobetasol"],
+    "display_name": "Clobetasol",
+    "tier": 2,
+    "tier_label": "Tier 2 preferred brand",
+    "patient_copay": 40,
+    "cash_price": 65,
+    "pa_required": false,
+    "notes": "Mock preferred topical copay."
+  },
+  {
+    "id": "meloxicam",
+    "match": ["meloxicam"],
+    "display_name": "Meloxicam",
+    "tier": 1,
+    "tier_label": "Tier 1 generic",
+    "patient_copay": 10,
+    "cash_price": 18,
+    "pa_required": false,
+    "notes": "Mock NSAID retail copay."
+  },
+  {
+    "id": "sumatriptan",
+    "match": ["sumatriptan"],
+    "display_name": "Sumatriptan",
+    "tier": 2,
+    "tier_label": "Tier 2 preferred brand",
+    "patient_copay": 40,
+    "cash_price": 55,
+    "pa_required": false,
+    "notes": "Mock migraine abortive copay."
+  },
+  {
+    "id": "semaglutide",
+    "match": ["semaglutide", "glp-1", "glp1", "ozempic", "wegovy"],
+    "display_name": "Semaglutide (GLP-1)",
+    "tier": "specialty",
+    "tier_label": "Specialty",
+    "patient_copay": null,
+    "cash_price": null,
+    "pa_required": true,
+    "notes": "Specialty add-on — PA may be required; not priced as if allowed."
+  },
+  {
+    "id": "skyrizi",
+    "match": ["skyrizi", "risankizumab"],
+    "display_name": "Skyrizi (risankizumab)",
+    "tier": "specialty",
+    "tier_label": "Specialty",
+    "patient_copay": null,
+    "cash_price": null,
+    "pa_required": true,
+    "notes": "Biologic — PA may be required; not priced as if allowed."
+  },
+  {
+    "id": "botox",
+    "match": ["botox", "onabotulinumtoxina", "onabotulinumtoxin"],
+    "display_name": "OnabotulinumtoxinA (Botox)",
+    "tier": "specialty",
+    "tier_label": "Specialty",
+    "patient_copay": null,
+    "cash_price": null,
+    "pa_required": true,
+    "notes": "Procedure-drug — PA may be required; not priced as if allowed."
+  }
+]

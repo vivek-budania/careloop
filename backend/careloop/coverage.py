@@ -1,4 +1,4 @@
-"""Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
+"""Dave's coverage slice: mock card/plan identity, eligibility, visit-cost estimate, network.
 
 Optional xAI vision on uploaded card/SBC (XAI_API_KEY at launch). Gemini fallback.
 Optional Stedi sandbox 270/271 (STEDI_API_KEY at launch). Aetna + Jane Doe /
@@ -60,6 +60,10 @@ def _network() -> list[dict]:
 
 def _fee_schedule() -> dict:
     return _load_json("mock_fee_schedule.json")
+
+
+def _rx_formulary() -> list[dict]:
+    return _load_json("mock_rx_formulary.json")
 
 
 def _prior_visit_fixture() -> dict:
@@ -169,7 +173,7 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "E11.9",
             "description": "Type 2 diabetes mellitus without complications",
-            "reason": "Visit text looks like a diabetes follow-up. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like a diabetes follow-up. Code estimate only — not a diagnosis.",
         }
     if _has_word(
         blob,
@@ -178,7 +182,7 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "L40.0",
             "description": "Psoriasis vulgaris",
-            "reason": "Visit text looks like plaque psoriasis. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like plaque psoriasis. Code estimate only — not a diagnosis.",
         }
     if _has_word(
         blob,
@@ -187,40 +191,46 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "G43.909",
             "description": "Migraine, unspecified, not intractable, without status migrainosus",
-            "reason": "Visit text looks like migraine. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like migraine. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("sciatica", "radiculopathy")):
         return {
             "code": "M54.41",
             "description": "Lumbago with sciatica, right side",
-            "reason": "Visit text looks like sciatica. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like sciatica. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("back", "spine", "lumbar", "meloxicam", "mri", "orthop")):
         return {
             "code": "M54.5",
             "description": "Low back pain",
-            "reason": "Visit text looks like low-back pain. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like low-back pain. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("headache",)):
         return {
             "code": "R51.9",
             "description": "Headache, unspecified",
-            "reason": "Visit text mentions headache. Code guess only — not a diagnosis.",
+            "reason": "Visit text mentions headache. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("fatigue", "thirst")):
         return {
             "code": "R53.83",
             "description": "Other fatigue",
-            "reason": "Visit text mentions fatigue. Code guess only — not a diagnosis.",
+            "reason": "Visit text mentions fatigue. Code estimate only — not a diagnosis.",
         }
     return None
 
+
+
+def _is_specialist_specialty(specialty_code: str = "") -> bool:
+    code = (specialty_code or "").strip().lower()
+    return bool(code) and code not in ("pcp", "any", "primary", "primary care")
 
 def infer_service_codes(
     symptoms: str = "",
     prior_visit_note: str = "",
     *,
     require_match: bool = False,
+    specialty_code: str = "",
 ) -> list[tuple[str, str]]:
     """Pick mock CPT lines from visit text. Not a claim or an order."""
     blob = f"{symptoms} {prior_visit_note}".lower()
@@ -231,7 +241,7 @@ def infer_service_codes(
     specialist = _has_word(
         blob,
         ("psoriasis", "migraine", "botox", "skyrizi", "neurolog", "dermatolog", "orthop"),
-    )
+    ) or _is_specialist_specialty(specialty_code)
     codes: list[tuple[str, str]] = []
     if diabetes:
         codes.append(("99214", "office"))
@@ -769,7 +779,26 @@ def save_intake(
     return snapshot()
 
 
-def _line_cost(code: str, eligibility: dict, setting: str) -> dict:
+
+def _office_copay(eligibility: dict, specialty_code: str = "") -> tuple[float, str]:
+    """Pick PCP vs specialist office copay from the saved eligibility snapshot."""
+    if _is_specialist_specialty(specialty_code):
+        copay = eligibility.get("estimated_copay_specialist")
+        if copay is None:
+            copay = eligibility.get("estimated_copay_pcp") or 0
+            return float(copay), f"in-network specialist copay unavailable — using PCP copay ${copay} (mock)"
+        return float(copay), f"in-network specialist copay ${copay} (mock)"
+    copay = eligibility.get("estimated_copay_pcp") or 0
+    return float(copay), f"in-network PCP copay ${copay} (mock)"
+
+
+def _line_cost(
+    code: str,
+    eligibility: dict,
+    setting: str,
+    *,
+    specialty_code: str = "",
+) -> dict:
     fee = _fee_schedule().get(code)
     if not fee:
         raise ValueError(f"No mock allowed amount for {code}.")
@@ -778,21 +807,25 @@ def _line_cost(code: str, eligibility: dict, setting: str) -> dict:
     if status != "active":
         return {
             **fee,
+            "kind": "visit",
             "patient_owes_low": allowed,
             "patient_owes_high": allowed,
+            "priced": True,
             "basis": "coverage inactive — estimate is the full mock allowed amount",
         }
 
     if setting == "office":
-        copay = eligibility.get("estimated_copay_pcp") or 0
+        copay, basis = _office_copay(eligibility, specialty_code)
         return {
             **fee,
+            "kind": "visit",
             "patient_owes_low": copay,
             "patient_owes_high": copay,
-            "basis": f"in-network PCP copay ${copay} (mock)",
+            "priced": True,
+            "basis": basis,
         }
 
-    # Labs: apply remaining deductible then coinsurance on the rest.
+    # Labs / imaging: apply remaining deductible then coinsurance on the rest.
     deductible_left = eligibility.get("deductible_remaining") or 0
     coins = (eligibility.get("coinsurance_pct") or 0) / 100.0
     if deductible_left >= allowed:
@@ -807,15 +840,151 @@ def _line_cost(code: str, eligibility: dict, setting: str) -> dict:
         )
     return {
         **fee,
+        "kind": "visit",
         "patient_owes_low": owed,
         "patient_owes_high": owed,
+        "priced": True,
         "basis": basis,
     }
+
+
+def _match_formulary_entry(text: str) -> Optional[dict]:
+    blob = (text or "").lower()
+    if not blob.strip():
+        return None
+    for entry in _rx_formulary():
+        for needle in entry.get("match") or []:
+            if _has_word(blob, (str(needle).lower(),)):
+                return entry
+            # Multi-word / hyphenated tokens (e.g. glp-1) — plain substring is fine.
+            if "-" in needle and needle.lower() in blob:
+                return entry
+    return None
+
+
+def _normalize_medicine_inputs(medicines: Optional[list[dict]] = None) -> list[dict]:
+    out: list[dict] = []
+    for i, raw in enumerate(medicines or []):
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or raw.get("description") or "").strip()
+        description = str(raw.get("description") or raw.get("name") or "").strip()
+        if not name and not description:
+            continue
+        out.append({
+            "id": str(raw.get("id") or f"rx-{i + 1}"),
+            "name": name or description,
+            "description": description or name,
+            "pa_required": bool(raw.get("pa_required", False)),
+            "code": raw.get("code"),
+        })
+    return out
+
+
+def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
+    """Mock patient-pay for one plan medicine using the saved eligibility + formulary."""
+    blob = f"{medicine.get('name') or ''} {medicine.get('description') or ''}"
+    entry = _match_formulary_entry(blob)
+    display = (entry or {}).get("display_name") or medicine.get("name") or "Medicine"
+    plan_pa = bool(medicine.get("pa_required"))
+    formulary_pa = bool((entry or {}).get("pa_required"))
+    needs_pa = plan_pa or formulary_pa
+    status = (eligibility or {}).get("status")
+    active = status == "active"
+
+    base = {
+        "kind": "medicine",
+        "id": medicine.get("id"),
+        "name": display,
+        "description": display,
+        "code": medicine.get("code") or (entry or {}).get("id"),
+        "tier": (entry or {}).get("tier"),
+        "tier_label": (entry or {}).get("tier_label") or "Unlisted",
+        "pa_required": needs_pa,
+        "allowed": None,
+        "setting": "pharmacy",
+        "match": (entry or {}).get("id"),
+    }
+
+    if needs_pa:
+        return {
+            **base,
+            "patient_owes_low": None,
+            "patient_owes_high": None,
+            "priced": False,
+            "basis": (
+                (entry or {}).get("notes")
+                or "PA may be required — not priced as if the medicine were already allowed"
+            ),
+        }
+
+    if not entry:
+        return {
+            **base,
+            "patient_owes_low": None,
+            "patient_owes_high": None,
+            "priced": False,
+            "basis": (
+                "No mock formulary match for this medicine — "
+                "[NEEDS VERIFICATION] before treating any dollar amount as real"
+            ),
+        }
+
+    if not active:
+        cash = entry.get("cash_price")
+        if cash is None:
+            return {
+                **base,
+                "patient_owes_low": None,
+                "patient_owes_high": None,
+                "priced": False,
+                "basis": "coverage inactive — no mock cash price on file for this medicine",
+            }
+        return {
+            **base,
+            "patient_owes_low": float(cash),
+            "patient_owes_high": float(cash),
+            "priced": True,
+            "allowed": float(cash),
+            "basis": f"coverage inactive — mock cash price ${cash}",
+        }
+
+    copay = entry.get("patient_copay")
+    if copay is None:
+        return {
+            **base,
+            "patient_owes_low": None,
+            "patient_owes_high": None,
+            "priced": False,
+            "basis": entry.get("notes") or "Mock formulary has no retail copay for this medicine",
+        }
+
+    return {
+        **base,
+        "patient_owes_low": float(copay),
+        "patient_owes_high": float(copay),
+        "priced": True,
+        "allowed": float(copay),
+        "basis": (
+            f"{entry.get('tier_label') or 'Mock formulary'} retail copay ${copay} "
+            f"(from your saved plan)"
+        ),
+    }
+
+
+def estimate_medicines(
+    medicines: Optional[list[dict]] = None,
+    eligibility: Optional[dict] = None,
+) -> list[dict]:
+    elig = eligibility or {}
+    return [_rx_line_cost(med, elig) for med in _normalize_medicine_inputs(medicines)]
 
 
 def visit_guess(
     symptoms: str = "",
     prior_visit_note: str = "",
+    medicines: Optional[list[dict]] = None,
+    specialty: str = "",
     from_transcript: bool = False,
 ) -> dict:
     state = _ensure_state()
@@ -829,40 +998,72 @@ def visit_guess(
     if not eligibility:
         raise ValueError("Confirm coverage first.")
 
-    codes = infer_service_codes(symptoms, prior_text, require_match=from_transcript)
-    urgent = _has_word(blob, ("chest", "shortness", "emergency", "urgent"))
-    lines = [_line_cost(code, eligibility, setting) for code, setting in codes]
-    if urgent and lines:
-        lines[0]["description"] += " [NEEDS VERIFICATION — urgency inferred from free text]"
+    suggestion = guess_specialty(symptoms, prior_text)
+    specialty_code = (specialty or intake.get("suggested_specialty") or suggestion["code"] or "").strip().lower()
+    if not specialty_code:
+        specialty_code = suggestion["code"]
 
-    total_low = round(sum(line["patient_owes_low"] for line in lines), 2) if lines else 0
-    total_high = round(sum(line["patient_owes_high"] for line in lines), 2) if lines else 0
+    codes = infer_service_codes(
+        symptoms,
+        prior_text,
+        require_match=from_transcript,
+        specialty_code=specialty_code,
+    )
+    urgent = _has_word(blob, ("chest", "shortness", "emergency", "urgent"))
+    visit_lines = [
+        _line_cost(code, eligibility, setting, specialty_code=specialty_code)
+        for code, setting in codes
+    ]
+    if urgent and visit_lines:
+        visit_lines[0]["description"] += " [NEEDS VERIFICATION — urgency inferred from free text]"
+
+    medicine_lines = estimate_medicines(medicines, eligibility)
+
+    visit_low = round(sum(line["patient_owes_low"] or 0 for line in visit_lines), 2) if visit_lines else 0
+    visit_high = round(sum(line["patient_owes_high"] or 0 for line in visit_lines), 2) if visit_lines else 0
+    priced_meds = [line for line in medicine_lines if line.get("priced")]
+    med_low = round(sum(line["patient_owes_low"] or 0 for line in priced_meds), 2)
+    med_high = round(sum(line["patient_owes_high"] or 0 for line in priced_meds), 2)
+    unpriced = [line for line in medicine_lines if not line.get("priced")]
 
     estimate = {
         "is_guess": True,
+        "is_estimate": True,
         "from_transcript": bool(from_transcript),
         "disclaimer": (
-            "Guess only — not a bill, quote, or coverage decision. "
-            "Allowed amounts and remaining deductible are mocked."
+            "Estimate based on your saved plan — not a bill, quote, or coverage decision. "
+            "Visit amounts use your plan’s copay and deductible. "
+            "Medicine amounts use the mock formulary retail copay. "
+            "PA-flagged medicines are listed but not priced as if already allowed."
         ),
-        "likely_visits": lines,
-        "patient_owes_low": total_low,
-        "patient_owes_high": total_high,
+        "likely_visits": visit_lines,
+        "medicines": medicine_lines,
+        "visit_owes_low": visit_low,
+        "visit_owes_high": visit_high,
+        "medicine_owes_low": med_low,
+        "medicine_owes_high": med_high,
+        "medicine_unpriced_count": len(unpriced),
+        "patient_owes_low": round(visit_low + med_low, 2),
+        "patient_owes_high": round(visit_high + med_high, 2),
         "warnings": [],
     }
-    if from_transcript and not lines:
+    if from_transcript and not visit_lines:
         estimate["warnings"].append(
             "No billable service could be pulled from this transcript yet. "
             "Estimated costs stay empty instead of a demo boilerplate."
         )
-    if "[NEEDS VERIFICATION" in json.dumps(lines):
+    if "[NEEDS VERIFICATION" in json.dumps(visit_lines + medicine_lines):
         estimate["warnings"].append(
-            "At least one visit type was inferred from symptoms. A clinician should confirm."
+            "At least one line was inferred or unmatched. A clinician or pharmacist should confirm."
         )
-    suggestion = guess_specialty(symptoms, prior_text)
+    if unpriced:
+        estimate["warnings"].append(
+            f"{len(unpriced)} medicine(s) are listed without a dollar estimate "
+            "(PA or no mock formulary match)."
+        )
     estimate["suggested_specialty"] = suggestion["code"]
     estimate["suggested_specialty_label"] = suggestion["label"]
-    first_cpt = lines[0]["code"] if lines else ""
+    first_cpt = visit_lines[0]["code"] if visit_lines else ""
     estimate["claim_acceptance"] = claim_acceptance_estimate(
         symptoms=symptoms,
         prior_visit_note=prior_text,
