@@ -55,7 +55,7 @@ Patients only see and write their own visits. `service_role` bypasses RLS (serve
 
 | Actor | What |
 |-------|------|
-| Patient JWT (intended) | Insert/update when a visit journey is saved onto History. |
+| Patient (intended) | Insert/update when a visit journey is saved onto Past visits. The **browser app uses a cookie session**, not a JS-held JWT. |
 | Running app today | **`localStorage` thread** (`frontend/js/careloop.js`). No `visits` API yet. |
 | Scribe APIs | Draft SOAP in memory / response JSON. They do **not** persist this table today. |
 | Coverage / Insurance screens | Must not insert visit rows. `coverage_label` is a snapshot string copied at save time. |
@@ -66,7 +66,7 @@ Patients only see and write their own visits. `service_role` bypasses RLS (serve
 | Path | Rows |
 |------|------|
 | **Start my first visit** | None until the patient finishes a journey and History save exists. Empty list is valid. |
-| **I’m returning** | Zero or more prior rows. Demo UI currently **seeds** one local visit (Diabetes follow-up / Dr. Priya Shah / Aetna) — that seed is **not** automatically this table until wired. |
+| **LOGIN** (returning) | Zero or more prior rows. Demo UI currently **seeds** one local visit (Diabetes follow-up) — that seed is **not** this table until wired. |
 
 Completed visits **append**; they are not overwritten. The visit journey is **not** a hamburger item; History is.
 
@@ -75,7 +75,7 @@ Completed visits **append**; they are not overwritten. The visit journey is **no
 Generated markdown/PDF from the care record. Rules:
 
 - Record export only — **not** a PA, appeal, or demand letter.
-- Must not skip HITL/watermark for generated **letters**.
+- Must not skip watermark / human approval for generated **letters** (there is no letter UI on `main`).
 - Do **not** add a `packets` table for the hackathon.
 
 ## Do not put on `visits`

@@ -1,8 +1,10 @@
 # CareLoop patient workflow (teammate map)
 
-How the **hackathon web app** should feel for the patient. Visual clickthrough: [`frontend/mockups/`](frontend/mockups/) → http://localhost:8080/mockups/. Owner/build split: [`plan.md`](plan.md) (Vivek = shell + thread + history share). This file is **not** a product spec for live insurance or clinical decisions.
+How the **hackathon web app** should feel for the patient. Visual clickthrough: [`frontend/mockups/`](frontend/mockups/) → http://localhost:8080/mockups/. **What is live:** [`README.md`](README.md) (showcase narrative + engineering). Owner split: [`plan.md`](plan.md). This file is **not** a product spec for live insurance or clinical decisions.
 
-**Demo patient (fictional, no PHI):** Maya Chen · Horizon Health PPO · metformin already on file · golden-path T2DM fixture.
+**Live app vs this file:** the running shell uses **Jane Doe / Aetna** (`jane` / `demo`). Login is **LOGIN** (returning) and **Start my first visit** (signup), not two equal mockup buttons. Hamburger on `main`: Today · **Past visits** · Upcoming visits · **Reminders** · **Prescriptions** · **Test records** · Insurance · Profile. Mockup names below (History / Medicines / Tests, Maya Chen, Horizon) are the static clickthrough.
+
+**Demo patient in the mockups (fictional, no PHI):** Maya Chen · Horizon Health PPO · metformin already on file · golden-path T2DM fixture.
 
 **Rule for all copy and buttons:** draft / suggest / review / estimate. The app does **not** diagnose, prescribe, approve care, or decide coverage. **PA ≠ claim.** Letter downloads stay **HITL**.
 
@@ -28,7 +30,7 @@ Order, top to bottom:
 
 The **visit journey is not in the hamburger:** symptoms → doctors → book → visit → transcript → SOAP → **estimated costs** → plan (then follow-ups). Resume it from **Today** (Continue / start a visit) or first-time onboarding.
 
-**Back** (←) is local (scan → insurance hub, book → doctor list). DenialShield Provider / Patient Advocate tabs are a different surface.
+**Back** (←) is local (scan → insurance hub, book → doctor list). Do not restore Provider / Patient Advocate letter tabs as CareLoop chrome.
 
 ### Two workflows
 
@@ -38,7 +40,7 @@ The **visit journey is not in the hamburger:** symptoms → doctors → book →
 | **New visit** | The first journey *is* the record | Start/continue visit from Today; completed visits **append to History → My visits** |
 | **Skip insurance** | Allowed (go to Today). No cost estimates later (skip that screen). In-network suggestions are weaker. | N/A unless they clear/update Insurance |
 
-Login mockup: **Continue (first visit)** vs **I’m returning** so both paths are demoable.
+Login mockup: **Continue (first visit)** vs **I’m returning**. Live app: **LOGIN** vs **Start my first visit** (signup).
 
 ---
 
@@ -265,8 +267,8 @@ Skip insurance → Today (no cost screen on that visit)
 | Claim / EOB | **Separate mock object** from PA. Do not collapse. |
 | Meds taken/missed/refill | **Local/mock schedule** after mock dispense. No pharmacy, no eRx. |
 | History packet (For the clinic) | **Export fixture** from the thread. Not a signed appeal. |
-| DenialShield letters (PA/appeal/demand) | **Real LLM drafts** when `XAI_API_KEY` is set, plus **watermark + HITL**. Journey *calls* those APIs; no new letter types. |
-| Provider / Patient Advocate tabs | **Existing app** at `/`. Keep reachable; not CareLoop chrome. |
+| Letter APIs (PA/appeal/demand) | **LLM drafts** when `XAI_API_KEY` is set, plus **watermark**. **No letter UI** on `main`; HITL required if a download page is added. History packet is a record export. |
+| Provider / Patient Advocate tabs | **Removed.** Do not restore as product chrome. |
 | Live payer, EHR, eRx, real claims, production HIPAA | **Out of scope.** |
 
-Until the store exists, UI can mock `GET /api/careloop/thread`. After Vivek’s B lands, one thread is source of truth (Dave writes Coverage; Sreekar writes encounter/orders/auth/meds/claim/follow-up; Vivek presents + share/export).
+There is **no** `GET /api/careloop/thread` on `main`. The patient shell persists a thread in `localStorage`; coverage also uses a signed cookie. After Vivek’s store / table wiring lands, one server thread should become source of truth (Dave writes Coverage; Sreekar writes encounter/orders/auth/meds/claim/follow-up; Vivek presents + share/export).

@@ -1,189 +1,229 @@
 # CareLoop
 
-Hackathon product: **one mocked US patient journey** so context survives coverage → visit → orders → prior auth → delivery → claim → meds → follow-up → **shareable history for the next visit**.
+**One thread through care.** A mocked US patient-journey demo, built at Johns Hopkins for HopHacks 2026.
 
-It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. Drafts are for a human to review; the app never files, faxes, e-prescribes, or calls a live insurer.
+CareLoop connects coverage, appointments, clinical notes, costs, medications, authorizations, and follow-ups into one understandable patient journey. It is **not** a payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. The app never files, faxes, e-prescribes, or calls a live insurer.
 
-The running app is **CareLoop** (patient shell behind login: Today / History / Medicines / Tests / Insurance / Profile, plus an 8-step visit). The old DenialShield PA/appeal forms (`/letters`) have been removed as outdated; **Insurance Claims Management** is Coming soon on the Insurance screen. Demo login: **`jane` / `demo`**. Details: [`AGENTS.md`](AGENTS.md).
+| Surface | URL |
+|---------|-----|
+| Product story (showcase) | [`/showcase`](frontend/showcase.html) · http://localhost:8080/showcase |
+| Live demo (patient app) | [`/`](frontend/index.html) · http://localhost:8080 |
+| Visual mockups (static) | http://localhost:8080/mockups/ |
 
-**Who builds what:** **Dave** (payer dropdown + optional card/SBC → mock coverage, visit/cost guess, in-network clinicians), **Sreekar** (visit → scribe → orders → PA/appeal/meds/claims/follow-up), **Vivek** (patient-facing workflow first, longitudinal thread, history share/export, **Dribbble polish later**). Full split, DoD, curls, and object contract: **[`plan.md`](plan.md)**. Hosted Supabase tables (`profiles`, `visits`, `insurance`): **[`docs/database/`](docs/database/README.md)** (SQL in [`supabase/`](supabase/README.md)). Login still uses Auth + `profiles` only; coverage/visits are not wired to those tables yet.
-
----
-
-## What CareLoop is (and is not)
-
-**Thesis:** US care is a chain of handoffs. Point tools optimize one moment. The demo gap is **one patient, one data thread** — encounter evidence still available at PA, appeal, dispense, follow-up, and the **next doctor visit**.
-
-**In scope for the hackathon:** a scripted golden path (coverage/card → PCP visit → SOAP/Plan → HbA1c + Rx → PA required → mock payer **step-therapy denial** → policy-to-evidence checklist → appeal → approve → dispense → taken/missed + refill nudge → follow-up → **history the patient can share next visit**). Mock eligibility and payer. Go deepest on **scribe + policy/evidence appeal**. Keep reminders simple. **Patient-facing workflow first** (what happened / waiting / who acts); visual polish from Dribbble **after** that flow works. The **integrated journey** is the product.
-
-**Out of scope:** live payer/PBM PA APIs, real eligibility, eRx, claims adjudication networks, EHR/FHIR write-back, production HIPAA, verified multi-plan legal knowledge bases, ambient scribe without heavy clinician review. The brief is not operational billing, legal, or medical guidance. Full list: [`plan.md`](plan.md) (Out of scope).
+Demo login: **`jane` / `demo`**. Agent notes: [`AGENTS.md`](AGENTS.md). Hosted schema: [`docs/database/`](docs/database/README.md). Owner split (historical + remaining work): [`plan.md`](plan.md).
 
 ---
 
-## Already shipped vs planned
+## Product
 
-Workstreams, owner sections, object sketches, curls, and suggested order live in **[`plan.md`](plan.md)**. Do not treat this README as a second plan.
+Healthcare is a chain of handoffs. Records, coverage, appointments, prescriptions, and next steps live in different places—leaving the patient to carry context between them. Point tools optimize one moment. CareLoop’s gap is **one patient, one continuous thread**.
 
-### Already here (DenialShield — keep; reuse as Authorization seed)
+At every step the demo answers three questions: **what happened, what is waiting, and who acts next?**
 
-Two **disconnected**, stateless form tabs. No accounts, no database, no timeline.
+Follow Jane (fictional; no PHI):
 
-| Capability | Where |
-|------------|--------|
-| ICD-10 / CPT search (~91 / ~76 codes) | `GET /api/codes/icd10`, `/api/codes/cpt`; `backend/data/*.json`; `frontend/js/provider.js` |
-| Heuristic denial-risk score (0–100) | `POST /api/risk-score`; `backend/risk_engine.py` |
-| PA letter draft | `POST /api/generate-pa` |
-| Denial / EOB parse | `POST /api/parse-denial` |
-| Appeal letter draft | `POST /api/generate-appeal` |
-| Claim-file request letter (ERISA file access, not a legal threat) | `POST /api/generate-demand` |
-| Cited national denial/appeal stats | `GET /api/national-stats`; `backend/config.py` |
-| HITL approve-before-download | `frontend/js/app.js` |
-| Draft watermark | `backend/llm.py` + `DRAFT_WATERMARK` |
+1. **Understand coverage** — turn a card into a plain-language snapshot (active plan, copay, deductible remaining). Estimates only.
+2. **Find appropriate care** — match the visit reason to in-network options (ZIP + suggested specialty).
+3. **Understand the visit** — turn conversation into a patient-readable clinical draft. Nothing is final without clinician review.
+4. **See what comes next** — labeled cost estimates, medicines, tests, and who owns each action (you / clinic / insurer).
+5. **Carry context forward** — a shareable history packet for the next visit (record export, not a letter).
 
-Provider / Patient Advocate letter UIs are **not in the nav**. Use **Insurance Claims Management** (Coming soon). Login: **`jane` / `demo`**.
+AI translates and organizes. People stay in control: See (card → JSON) · Listen (visit → draft) · Connect (encounter → costs and follow-ups) · Protect (clinician review; no invented eligibility).
 
-### Greenfield (three owners; original A–F still apply)
+The **integrated journey** is the product. Visual prototype screens live under [`frontend/mockups/`](frontend/mockups/); the running app is the patient shell in [`frontend/js/careloop.js`](frontend/js/careloop.js).
 
-See [`plan.md`](plan.md) for inherited A–F mapping.
+---
 
-| Owner | Builds |
-|--------|--------|
-| **Dave** | Payer **dropdown** (required) + optional typed card fields / card scan / SBC-EOB → mock coverage confirmation; symptoms + optional prior-visit PDF; visit/cost **guess**; in-network clinicians by ZIP; Coverage facts for history. **Login** (Supabase Auth + `profiles` when env is set) + **one-step wizard**. |
-| **Sreekar** | First visit → transcribe/SOAP/Plan → orders, mock payer + PA + step-therapy denial + policy-to-evidence + appeal (DenialShield HITL/watermark), meds/adherence/refill, claims/EOB light, follow-up; clinical/admin **history fact capture** |
-| **Vivek** | Patient-facing CareLoop workflow (basic) + SQLite/in-memory **thread** as app shell + unified timeline + **history share/export**; **Dribbble-informed polish later** |
+## Who it is for
 
-**Golden-path demo (target):** payer dropdown / card/coverage → confirm mock eligibility → symptoms + optional prior-visit docs → visit/cost guess → in-network PCP → clinician-reviewed SOAP + Plan → HbA1c (no PA) + Rx (PA required) → mock PA submit → step-therapy denial with citable policy → match policy to encounter evidence → watermarked appeal + HITL → mock approve → dispense → taken/missed + refill nudge → timeline / follow-up → share history next visit. Keep a **separate** claim (optional claim denial) so judges see two insurance moments.
+- **Judges / demo** — open `/showcase`, then `/` as Jane.
+- **Teammates / agents** — FastAPI + vanilla JS, one process; see Architecture and Run below.
+- **Not for** — live insurance filing, e-prescribing, EHR write-back, or production HIPAA.
+
+---
+
+## What you get after login
+
+**☰** Today · Past visits (My visits | For the clinic) · Upcoming visits · Reminders · Prescriptions · Test records · Insurance · Profile · Log out.
+
+The **visit journey is not in the hamburger.** Booking is steps 1–3 (symptoms → clinicians → save request). Opening an upcoming visit starts visit-day: optional new symptoms → check-in → record / upload / seeded demos → summary → skippable estimated costs → plan → follow-ups.
+
+| Login path | What happens |
+|------------|----------------|
+| **LOGIN** (`jane` / `demo`) | Returning demo: **Today**, with Jane Doe / Aetna coverage confirmed via Dave’s APIs if none is on file. |
+| **Start my first visit** | Self-serve signup (when Supabase env is set) → insurance hub. Skip insurance is allowed; estimated costs are then skipped. |
+
+There are no Provider / Patient Advocate tabs. **Insurance Claims Management** is a Coming soon row on Insurance.
 
 ---
 
 ## Architecture
 
-Single FastAPI app serves API + static SPA. **No** frontend bundler, **no** test suite, **no** linter, **no** build step.
+Single FastAPI app serves API + static frontend. **No** bundler, **no** test suite required to run, **no** linter, **no** build step.
 
 | Layer | Technology |
 |--------|-------------|
 | Backend | Python + FastAPI (`backend/main.py`) |
-| LLM | xAI Grok (`XAI_API_KEY`); optional Groq text fallback |
-| Frontend | Vanilla HTML/CSS/JS (`frontend/`) — ivory/sage/terracotta patient UI |
-| Data today | Embedded JSON (ICD-10, CPT, CARC/RARC) |
-
-**Request flow (letters):** Pydantic model in `main.py` → user-message string → `backend/llm.py` `generate()` / `generate_json()` → system prompt from `backend/prompts.py`. New CareLoop routes stay on this app (`main.py` or an imported `backend/careloop/` package). Do not fork a second server. Frontend talks only through named methods in `frontend/js/api.js`.
+| Frontend | Vanilla HTML/CSS/JS (`frontend/`) — ivory/sage patient UI |
+| Hosting | Vercel (`backend.main:app` in [`pyproject.toml`](pyproject.toml)) |
+| Auth + hosted tables | Supabase Auth + Postgres (`profiles`, `visits`, `insurance`) |
+| LLM / vision / STT | xAI (`XAI_API_KEY`); optional Groq text fallback |
+| Eligibility sandbox | Stedi 270/271 when `STEDI_API_KEY` is a **test** key |
 
 ```
 .
-├── AGENTS.md               # Demo login + what the running app is (for agents)
-├── plan.md                 # Owner split (Dave / Sreekar / Vivek) + A–F; source of truth for *what to build*
-├── workflow.md             # Patient-facing screen flow (teammate map; pairs with frontend/mockups/)
-├── CLAUDE.md               # Agent/dev invariants (watermark, HITL, file roles)
-├── docs/database/          # Hosted Supabase table docs (profiles, visits, insurance)
-├── supabase/               # Idempotent SQL matching hosted tables (CLI not required)
+├── AGENTS.md               # Running-app notes for agents (login, safety, files)
+├── plan.md                 # Owner split + remaining golden-path work (not “what is live”)
+├── workflow.md             # Patient screen map (pairs with frontend/mockups/)
+├── CLAUDE.md               # Dev invariants
+├── docs/database/          # Hosted tables: profiles, visits, insurance
+├── supabase/               # Idempotent SQL (CLI not required)
 ├── backend/
-│   ├── main.py             # All routes; mounts static; serves index.html
-│   ├── config.py           # Keys, model names, DRAFT_WATERMARK, national stats
+│   ├── main.py             # Routes; mounts static; `/` and `/showcase`
+│   ├── careloop/           # Auth, coverage, Stedi, scribe, STT, extract, PDF
 │   ├── llm.py              # xAI + optional Groq; watermark on generate()
-│   ├── prompts.py          # PA, appeal, demand, denial-parse (zero-hallucination)
+│   ├── prompts.py          # PA / appeal / demand / denial-parse (zero hallucination)
 │   ├── risk_engine.py      # Deterministic heuristic scorer (no LLM)
-│   └── data/               # icd10_codes.json, cpt_codes.json, denial_reasons.json
+│   └── data/               # ICD-10, CPT, fixtures, mock users
 ├── frontend/
-│   ├── index.html          # Patient shell (login first-time vs returning)
-│   ├── css/style.css       # Patient UI (Instrument Serif + DM Sans)
-│   └── js/
-│       ├── api.js          # Named fetch methods per endpoint
-│       ├── app.js          # HITL modal helpers, toasts
-│       └── careloop.js     # Patient IA; calls Dave coverage APIs
+│   ├── index.html          # Patient app
+│   ├── showcase.html       # Product story
+│   └── js/careloop.js      # Patient IA
 ├── requirements.txt
-├── pyproject.toml          # Vercel FastAPI entrypoint: backend.main:app
-├── vercel.json
+├── pyproject.toml
 └── .env.example
 ```
 
-Shared objects (thread contract): Patient, Encounter, Orders, Authorization, Claim, Medication, Follow-up, **Coverage**, **History** — details in [`plan.md`](plan.md).
+Frontend talks only through named methods in `frontend/js/api.js`. New CareLoop routes stay on this app (`main.py` or `backend/careloop/`). Do not fork a second server.
 
 ---
 
-## Safety invariants
+## Mocked vs real
 
-Load-bearing. Do not weaken them when adding the journey.
+Honest labels from the showcase: **functional depth, honestly labeled.**
 
-1. **Watermark** — Every free-text generated document (PA, appeal, demand) is wrapped in `DRAFT_WATERMARK` by `llm.py` `generate()`. No new path that returns LLM letter text without it.
-2. **Human-in-the-loop** — The frontend never downloads a generated document without `App.requestApproval()` first. No bypass download button.
-3. **Zero hallucination** — Prompts use only supplied facts; uncertain claims tagged `[NEEDS VERIFICATION]`; API surfaces those as `warnings`.
-4. **No independent clinical or coverage decisions** — Draft, organize, cite, and surface evidence. A clinician or authorized staff member decides what to submit. Policy-to-evidence is a **checklist**, not a determination. The model must not “approve” care, change diagnosis/dose, or decide coverage.
-5. **Do not collapse PA vs claim denial** — **PA denial** is *before* the planned drug/service is covered. **Claim denial** is *during/after* billing or dispensing. Separate objects, statuses, screens, and demo steps. A PA approval does **not** mean the later claim is paid.
-6. **Drafts only** — The product does not file, fax, e-prescribe, or call a real payer.
+| Piece | On `main` today |
+|--------|-----------------|
+| Patient journey | **Live in the demo.** Coverage intake, clinician search, booking, visit flow, SOAP draft, costs, care plan, history packet. |
+| Coverage numbers | **Mock default** matching Jane Doe / Aetna `AETNA12345` / DOB `2004-04-04` (ACTIVE PPO Gold, office copay **$30**, INN deductible **$500** remaining **$500**). Optional Stedi **test** 270/271 for that canned member only. Production Stedi keys are refused. |
+| Network / slots | **Mock directory.** Booking is a **request**. Nearby search uses ZIP (≤ 40 miles, then farther). |
+| Transcript / SOAP | Seeded demos (psoriasis / lumbar MRI / chronic-migraine Botox) or optional live STT (`XAI_API_KEY`). Clinician-review gate before orders. |
+| Cost output | Labeled **estimate** from `POST /api/careloop/coverage/visit-guess`. Golden-path diabetes follow-up is about **$75** patient-owed (office copay $30 + HbA1c $45 against remaining deductible) when Aetna is on file. |
+| Image → JSON | Optional xAI vision on Insurance (cards, doctor pages, lab pages). Unreadable fields tagged `[NEEDS VERIFICATION]`. Never invent a copay that is not printed. **No** letter watermark on JSON. |
+| Signup / login | **Live** against hosted Supabase when env is set; otherwise HMAC mock login (`jane` / `demo` still works). |
+| PA / appeal / demand letters | **APIs only** (`POST /api/generate-pa`, parse, appeal, demand) + risk score + code search. Watermarked by `generate()`. **No letter UI** in the patient app (`/letters` was removed). Showcase still describes this as a live capability of the stack. |
+| Claims / EOB | **Coming soon** on Insurance. Separate from prior auth. |
+| `visits` / `insurance` tables | **Exist in hosted Supabase.** The running app does **not** read or write them yet. |
+| Thread / meds / tests / packet | **Browser `localStorage`** (+ signed coverage cookie). There is **no** `GET /api/careloop/thread`. |
+| Live payer, EHR, eRx, production HIPAA | **Out of scope.** |
+
+---
+
+## Data: tables vs still local
+
+| Store | Used by the running app? |
+|--------|---------------------------|
+| Supabase Auth + `public.profiles` | **Yes** for signup/login when `SUPABASE_*` + `SESSION_SECRET` are set. No `login` table. Passwords stay in Auth. |
+| `public.visits` | Documented; **not wired.** Past visits live in `localStorage`. |
+| `public.insurance` | Documented; **not wired.** Coverage snapshot = in-memory + signed `careloop_coverage` cookie + `localStorage`. |
+| Prescriptions, test records, reminders, open visits, new symptoms | **Local only.** Not tables. |
+| History packet | Generated markdown → `POST /api/careloop/history/pdf`. Record export, not a PA/appeal letter. |
+
+Columns and RLS: [`docs/database/`](docs/database/README.md). SQL: [`supabase/`](supabase/README.md).
+
+---
+
+## Auth and cookies
+
+When `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a **32+ character `SESSION_SECRET`** are set **on the server** (never in frontend JS):
+
+1. Username login looks up `public.profiles`, then Auth signs in with that row’s email + password.
+2. Signup uses the Admin API with `email_confirm: true` (no verification email), inserts `profiles` (including DOB), and starts a session.
+3. The browser gets a signed **`careloop_session`** cookie: `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS, 30 days. **The browser does not store the Supabase access token in JavaScript.**
+4. `require_user` also accepts a bearer token for non-browser API clients.
+
+Without those env slots, login falls back to [`backend/data/mock_users.json`](backend/data/mock_users.json) and the same cookie workflow. Live signup returns HTTP 503. The hardcoded signing fallback is for the local mock only.
+
+Profile shows whether each key slot is loaded — **never the secret value.** `GET /api/careloop/demo-env` is the same status JSON (auth required).
+
+---
+
+## Environment variables
+
+Inject at process/container launch or in **Vercel → Project Settings → Environment Variables** (Production + Preview), then Redeploy. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, commit `.env`, or paste secrets in chat. Never put `service_role` in frontend JS.
+
+| Name | Required for | Notes |
+|------|----------------|-------|
+| `SUPABASE_URL` | Live signup/login | Hosted project URL |
+| `SUPABASE_ANON_KEY` | Live signup/login | Server-side |
+| `SUPABASE_SERVICE_ROLE_KEY` | Live signup/login | Server-only; username lookup + profile insert |
+| `SESSION_SECRET` | Live auth | Random, **32+ chars**; signs session + coverage cookies |
+| `XAI_API_KEY` | Letters, image JSON, visit STT | Already used on Vercel. Seeded transcript / sample card work without it. |
+| `STEDI_API_KEY` | Optional live 270/271 | Must be a **`test_`** key. Production keys refused. |
+| `GROQ_API_KEY` | Optional | Letter text fallback if xAI is down |
+
+Documented in [`.env.example`](.env.example). Copy it locally; do not use `echo > .env` (that wipes other keys).
 
 ---
 
 ## Setup and run
 
-Commands match [`plan.md`](plan.md) and [`CLAUDE.md`](CLAUDE.md).
-
-### 1. xAI API key
-
-Already on Vercel as `XAI_API_KEY`. Local: [console.x.ai](https://console.x.ai) → create a key and inject it at launch. Seeded transcripts and the Jane Doe sample card work without it.
-
-### 2. Environment
-
 ```bash
 cp .env.example .env
-# Edit .env (do not use `echo > .env` — that wipes other keys):
-#   SUPABASE_URL=https://your-project.supabase.co
-#   SUPABASE_ANON_KEY=your_anon_key_here
-#   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here   # server-only; never frontend JS
-#   XAI_API_KEY=                          # letters + image JSON + visit STT (already on Vercel)
-#   STEDI_API_KEY=test_your_sandbox_key   # sandbox 270/271; prefer injecting at launch
-#   GROQ_API_KEY=                         # optional letter fallback if xAI is down
-#   SESSION_SECRET=                       # required for live auth; 32+ chars, server-only
-```
-
-**Required on Vercel for live signup/login:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a random 32+ character `SESSION_SECRET` (Project Settings → Environment Variables, Production + Preview, then Redeploy). Login sets a signed 30-day `HttpOnly` cookie; the browser does not store Supabase tokens in JavaScript. Signup creates Auth + `public.profiles`; login reads them. Hosted `visits` and `insurance` tables exist ([`docs/database/`](docs/database/README.md)) but the app does not read them yet (coverage cookie + `localStorage`). Never commit real keys or put `service_role` in frontend JS.
-
-Same names on the **process/container at launch** or in **Vercel**. Cursor/cloud-agent env does not reach Vercel. Do not bake keys into the image, git, or chat. A local `.env` is only a laptop fallback (`load_dotenv` will not override a container env var).
-
-The patient shell **Profile** page lists whether each slot is loaded (never the secret). Extra keys can be added the same way. Demo login **`jane` / `demo`** and the Jane Doe / Aetna canned member: [`AGENTS.md`](AGENTS.md). Without the Supabase slots, the server still accepts the same mock `jane` / `demo` HMAC login.
-
-### 3. Install and run (API + frontend, one process)
-
-```bash
+# fill server-side slots as needed; never commit real values
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
 
-Open **http://localhost:8080**
+Open **http://localhost:8080** (app) or **http://localhost:8080/showcase** (story).
 
-Log in as **`jane` / `demo`**. **I’m returning** seeds **Aetna / Jane Doe** via Dave’s APIs and opens **Today**. **Start my first visit** resets coverage and opens the insurance hub (date of birth required; sample card is the Stedi canned member; skip allowed → no estimated-costs step). Visit journey is 8 steps (symptoms suggest a specialty for the clinician list → SOAP → skippable estimated costs from `POST /api/careloop/coverage/visit-guess` → plan).
+```bash
+curl -s -c cookies.txt -X POST http://localhost:8080/api/careloop/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"jane","password":"demo"}'
+```
 
-Patient-facing **visual mockups** (static clickthrough): **http://localhost:8080/mockups/**. Text walkthrough: **[`workflow.md`](workflow.md)**.
+Send the saved cookies on later requests (`curl -b cookies.txt ...`). Unauthenticated coverage calls return **401**.
 
-Letter endpoints return HTTP 500 with setup instructions if `XAI_API_KEY` is missing or still a placeholder. Mocked coverage/card/network and the thread store do not require xAI.
+Coverage, network, and login do **not** need `XAI_API_KEY`. Letter generate endpoints return HTTP 500 if that key is missing or still a placeholder.
 
-### Useful curls (Authorization core)
+Useful (no LLM):
 
 ```bash
 curl -s "http://localhost:8080/api/codes/icd10?q=diabetes"
-curl -s "http://localhost:8080/api/codes/cpt?q=83036"
-
 curl -s -X POST http://localhost:8080/api/risk-score \
   -H "Content-Type: application/json" \
   -d '{"icd10_code":"E11.9","cpt_code":"83036","has_prior_auth":false,"has_clinical_notes":true,"is_emergency":false}'
-
 curl -s http://localhost:8080/api/national-stats
 ```
 
-PA / parse / appeal / demand need a real `XAI_API_KEY`. Example bodies are in [`plan.md`](plan.md) (Sreekar — Authorization curls). Isolation curls for store/coverage/history are in the same file under each owner.
+---
+
+## Safety invariants
+
+Do not weaken these.
+
+1. **No independent clinical or coverage decisions.** Draft, organize, cite. Cost output is a guess. Specialty is a directory filter, not a diagnosis.
+2. **Do not invent eligibility or copays.** Unreadable OCR is `[NEEDS VERIFICATION]`. Estimates are labeled.
+3. **Clinician review before finalization** of SOAP/orders in the visit flow.
+4. **PA ≠ claim.** Prior-auth denial is *before* a drug/service is authorized. Claim denial is *during/after* billing. Separate objects and screens. A PA approval does **not** mean a later claim is paid. Claims UI is Coming soon.
+5. **Drafts only.** No file/fax/eRx/live insurer.
+6. **Synthetic demo data.** Fictional Jane Doe; never use real PHI.
+7. **Letter APIs** still wrap free-text in `DRAFT_WATERMARK` (`backend/llm.py` `generate()`). JSON extract is **not** watermarked. History packet is **not** a letter. There is currently **no** letter-download UI; if one is added, it must go through human approval (`App.requestApproval()` in `frontend/js/app.js`) before download.
+
+Zero-hallucination prompts (`backend/prompts.py`) only use supplied facts; `main.py` surfaces `[NEEDS VERIFICATION]` as `warnings`.
 
 ---
 
-## How to work from `plan.md`
+## Team and further docs
 
-Pick an **owner**; original letters **A–F** still name the slices. Coordinate on **object shapes** first (stream **B**, Vivek). One process: `uvicorn backend.main:app`. Isolate by not calling other modules, not by a second server.
+Built at Johns Hopkins University for HopHacks 2026: Vivek Budania, Dave Nganga, Sreekantha Sreekar, Sree Lohith. LinkedIn on [`/showcase`](frontend/showcase.html).
 
-| Owner | Original streams | Isolation |
-|--------|------------------|-----------|
-| **Dave** | Eligibility/network/copay from **D**; **added** card scan + wizard + login; CareLoop is the app UX | Curl coverage after login; see [`AGENTS.md`](AGENTS.md) |
-| **Sreekar** | **A** Authorization, **C** scribe, **D** mock payer (PA half), **E** meds; claims later via Coming soon tab | Letter curls still exist; do not add Provider/Advocate nav tabs |
-| **Vivek** | **B** store, **F** timeline; **added** history share/export; Dribbble later | Curl `thread`/`reset`; static fixture until B lands |
-
-**Suggested order:** B first (or a frozen JSON schema) → A **and** Dave coverage in parallel → C then D for the insurance half → E after approve/dispense (or a seeded dispensed state) → F can prototype against a static thread, then bind to B → history share as a demo beat → Dribbble polish last.
-
-**PR conventions:** one workstream per PR when possible; branch from latest `main`; describe stream letter (A–F) and/or owner, how to demo, and that PA vs claim were **not** collapsed. Details in [`plan.md`](plan.md).
+| Doc | Role |
+|-----|------|
+| [`AGENTS.md`](AGENTS.md) | Dummy login, what is wired, files that matter |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture notes for coding agents |
+| [`plan.md`](plan.md) | Original owner split (Dave / Sreekar / Vivek) and remaining golden-path items |
+| [`workflow.md`](workflow.md) | Screen-by-screen IA (mockups; live names differ slightly) |
+| [`docs/database/`](docs/database/README.md) | Hosted `profiles` / `visits` / `insurance` |
+| [`supabase/README.md`](supabase/README.md) | How to treat checked-in SQL |

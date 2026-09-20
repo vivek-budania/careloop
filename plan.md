@@ -1,10 +1,12 @@
 # CareLoop hackathon plan
 
-Teammate split for wrapping DenialShield in a **mocked golden-path journey**. The product is the flow, not another letter type. This file is the working plan; keep `README.md` / `CLAUDE.md` as the source of truth for setup commands.
+Teammate split for a **mocked golden-path journey**. The product is the flow, not another letter type.
 
-**Scope:** one scripted patient thread (insurance/coverage context → PCP visit → SOAP/Plan → HbA1c + Rx → PA required → mock payer step-therapy denial → policy-to-evidence → appeal → approve → dispense → taken/missed + refill nudge → follow-up summary → **shareable history for the next visit**). Mock eligibility and payer. No real payer/EHR/eRx/claims APIs.
+**What is live on `main`:** [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md). Product narrative: `/showcase`. Do not treat the “Current repo vs target” snapshot below as today’s UI — Provider/Patient tabs and `/letters` are **gone**; letter **APIs** remain; the patient shell + coverage/scribe APIs are the running app. This file is still the owner split (Dave / Sreekar / Vivek), object contract, and **remaining** golden-path work (PA submit → step-therapy denial → appeal → claim as a separate moment, SQLite/thread store, wiring `visits`/`insurance`). Setup commands: `README.md` / `CLAUDE.md`.
 
-**Owners:** **Dave** (coverage / card / network / cost display), **Sreekar** (visit start → clinical/admin chain: scribe, orders, PA/appeal, meds, claims, follow-up **fact capture**), **Vivek** (patient-facing workflow shell, longitudinal thread, shareable history UX, Dribbble polish later). Original workstreams **A–F are all still in this plan** — remapped below, never dropped.
+**Scope:** one scripted patient thread (insurance/coverage context → visit → SOAP/Plan → orders → PA when required → mock payer denial → appeal → approve → dispense → meds → follow-up → **shareable history for the next visit**). Mock eligibility and payer. No real payer/EHR/eRx/claims APIs.
+
+**Owners:** **Dave** (coverage / card / network / cost display), **Sreekar** (visit start → clinical/admin chain: scribe, orders, PA/appeal, meds, claims, follow-up **fact capture**), **Vivek** (patient-facing workflow shell, longitudinal thread, shareable history UX). Original workstreams **A–F are still in this plan** — remapped below.
 
 ---
 
@@ -35,24 +37,26 @@ The brief is not operational billing, legal, or medical guidance.
 
 ### Current repo vs target
 
-DenialShield today is a FastAPI + vanilla JS SPA (no frontend build). Two **disconnected** form modules. Stateless. No DB.
+**Live on `main` (do not regress):** FastAPI + vanilla JS patient shell at `/`, showcase at `/showcase`, cookie sessions, Dave coverage APIs, Sreekar scribe APIs, history PDF export, hosted Supabase **Auth + `profiles`**. `visits` / `insurance` exist in the hosted project but are **not wired**. Visit/meds/tests/thread state is **`localStorage`**. There is **no** `GET /api/careloop/thread`.
+
+Letter generate/parse/risk APIs remain as an Authorization seed. **No letter UI** (`letters.html` / `provider.js` / `patient.js` removed). HITL helpers in `app.js` have no `#hitl-modal` on the patient page. Watermark still applies to `generate()`.
 
 #### Already exists (keep; reuse as Authorization seed)
 
 | Capability | Where |
 |------------|--------|
-| ICD-10 / CPT search | `GET /api/codes/icd10`, `/api/codes/cpt`; `backend/data/*.json`; `frontend/js/provider.js` |
+| ICD-10 / CPT search | `GET /api/codes/icd10`, `/api/codes/cpt`; `backend/data/*.json` |
 | Heuristic denial risk score | `POST /api/risk-score`; `backend/risk_engine.py` |
 | PA letter draft | `POST /api/generate-pa`; `PA_SYSTEM_PROMPT` |
 | Denial / EOB parse | `POST /api/parse-denial`; `DENIAL_PARSE_PROMPT` |
 | Appeal letter draft | `POST /api/generate-appeal` |
 | Claim-file demand letter | `POST /api/generate-demand` |
 | National appeal stats | `GET /api/national-stats`; `config.py` |
-| HITL modal + download | `frontend/js/app.js` |
+| HITL helpers (no modal in the patient app) | `frontend/js/app.js` |
 | Watermark | `backend/llm.py` + `DRAFT_WATERMARK` |
-| Provider / Patient Advocate tabs | `frontend/index.html` — **keep**; they are **not** the CareLoop UX |
+| Patient shell + coverage/scribe | `frontend/js/careloop.js`; `backend/careloop/` — **this is the CareLoop UX** |
 
-#### Greenfield (build)
+#### Still to build / wire
 
 | Gap | Notes | Owner |
 |-----|--------|--------|
@@ -62,7 +66,7 @@ DenialShield today is a FastAPI + vanilla JS SPA (no frontend build). Two **disc
 | Mock eligibility + mock payer | Eligibility/benefits/network/cost → Dave. Deterministic **once** step-therapy PA denial + citable policy text → Sreekar (D split; see owner sections) | Dave + Sreekar |
 | Policy-to-evidence match | Encounter as evidence source; checklist vs policy criteria | Sreekar (D) |
 | Med schedule / taken / missed / refill | Simple; not a full pharmacy system | Sreekar (E) |
-| Unified timeline UX | **New CareLoop journey UI**; old tabs remain | Vivek (F) |
+| Unified timeline UX | Patient shell is live; remaining: bind to a real thread store | Vivek (F) |
 | Distinct claim flow | Light mock claim + EOB; not the same as PA denial | Sreekar (assigned from original D/greenfield claim path) |
 | **Insurance identity → coverage** | **Added.** Payer dropdown (required) + optional typed fields, card OCR, SBC/EOB | Dave |
 | **In-network clinicians** | **Added/assigned** from original mock eligibility “in-network” stub; filter by ZIP | Dave |
@@ -128,16 +132,13 @@ Do **not** reimplement PA letters or let the model approve coverage. Cost figure
 
 ### Login, wizard, and tabs
 
-CareLoop **is the app**. Intake is **one step at a time**. Mock login: `POST /api/careloop/login`. Password for every demo account is `demo`. Full dummy table: [`AGENTS.md`](AGENTS.md).
+CareLoop **is the app**. `POST /api/careloop/login`. Seeded password: `demo`. Live path: [`AGENTS.md`](AGENTS.md) (**LOGIN** vs **Start my first visit**).
 
-After login every role sees:
+After login the hamburger is the product chrome (Today, Past visits, … Insurance, Profile). **Insurance Claims Management** is Coming soon on Insurance.
 
-- **CareLoop** — coverage wizard (the product)
-- **Insurance Claims Management** — Coming soon (Provider + Patient Advocate letter tools are not shown)
+Do not restore Provider / Patient Advocate as product tabs. Letter APIs may remain for later claims work.
 
-Do not restore Provider / Patient Advocate as top-level product tabs. Letter APIs may remain for later claims work.
-
-This is **not** production auth (no HIPAA, plaintext demo passwords, in-memory sessions).
+This is **not** production auth (no HIPAA). Browser sessions are a 30-day `HttpOnly` cookie, not a JS-held JWT.
 
 ### Scope
 
@@ -225,8 +226,7 @@ Do **not** reimplement PA letters or decide coverage. Surface mocked benefits an
 Same env/run as everyone (one uvicorn process):
 
 ```bash
-cp .env.example .env
-echo "XAI_API_KEY=your_key_here" > .env   # already on Vercel; console.x.ai
+cp .env.example .env   # edit keys in place; do not `echo > .env`
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
@@ -258,7 +258,7 @@ curl -s http://localhost:8080/api/careloop/coverage
 curl -s "http://localhost:8080/api/careloop/network?specialty=pcp&zip=94110"
 ```
 
-Until those exist, use `GET /api/careloop/thread` (Vivek) and read `coverage` once seeded.
+There is **no** `GET /api/careloop/thread` on `main`. Coverage is cookie + `localStorage` until Vivek’s store / `insurance` wiring lands. Curl Dave’s coverage routes after login instead.
 
 ### Dependencies on the other two
 
@@ -269,7 +269,7 @@ Until those exist, use `GET /api/careloop/thread` (Vivek) and read `coverage` on
 
 ## Sreekar — visit start through clinical/admin chain
 
-Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests, follow-up, and the insurance **authorization / appeal / claim** chain that DenialShield already seeds. Keep DenialShield PA / parse / appeal / HITL / watermark work here.
+Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests, follow-up, and the insurance **authorization / appeal / claim** chain that the letter APIs already seed. Keep PA / parse / appeal / watermark work here.
 
 ### Scope
 
@@ -281,13 +281,13 @@ Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests
 
 #### A — Authorization core
 
-**Owner files:** `backend/main.py` (existing generate/parse/risk/code routes), `backend/llm.py`, `backend/prompts.py`, `backend/risk_engine.py`, `backend/config.py`, `backend/data/*.json`, `frontend/js/provider.js`, `frontend/js/patient.js`, HITL in `frontend/js/app.js`.
+**Owner files:** `backend/main.py` (existing generate/parse/risk/code routes), `backend/llm.py`, `backend/prompts.py`, `backend/risk_engine.py`, `backend/config.py`, `backend/data/*.json`, HITL helpers in `frontend/js/app.js`. The old Provider/Patient letter pages are **removed**.
 
-**Job:** Keep PA generate, denial parse, appeal, demand letter, risk score, code search. Preserve watermark + HITL. Do **not** add more letter types. CareLoop journey should **call these APIs** (or thin wrappers) rather than reimplement LLM letters.
+**Job:** Keep PA generate, denial parse, appeal, demand letter, risk score, code search. Preserve watermark + HITL **if a download UI is added**. Do **not** add more letter types. CareLoop journey should **call these APIs** (or thin wrappers) rather than reimplement LLM letters.
 
 **Done when:**
 
-- Existing Provider/Patient tabs still work end-to-end.
+- Letter APIs still work via curl; any new UI uses watermark + `App.requestApproval()`.
 - All free-text drafts still watermarked; downloads still HITL-gated.
 - Journey can pass encounter-derived context into existing generate/parse/appeal endpoints.
 - PA denial and claim-file/claim-denial paths stay conceptually separate (demand letter is claim-file access, not a PA appeal).
@@ -345,8 +345,7 @@ Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests
 ### Env setup
 
 ```bash
-cp .env.example .env
-echo "XAI_API_KEY=your_key_here" > .env   # already on Vercel; console.x.ai
+cp .env.example .env   # edit keys in place; do not `echo > .env`
 ```
 
 Optional Groq fallback (used by `backend/llm.py` if xAI fails): add `GROQ_API_KEY` to `.env` if you have one. Not required if xAI works.
@@ -401,7 +400,7 @@ One process: `uvicorn backend.main:app`. Isolate by **not calling other modules*
 
 | Stream | How to work in isolation |
 |--------|---------------------------|
-| **A Authorization** | Run server; use Provider/Patient tabs + curls above. Avoid new CareLoop files except API wrappers. |
+| **A Authorization** | Run server; curl the generate/parse/risk routes. Avoid restoring Provider/Advocate tabs. |
 | **C Scribe** | Depend on B seed; curl SOAP/plan; postpone timeline polish. |
 | **D Mock payer** | Curl submit-PA → expect same step-therapy body every time; then match endpoint. |
 | **E Meds** | After a fixture with `dispensed` status; curl taken/missed. |
@@ -415,7 +414,7 @@ One process: `uvicorn backend.main:app`. Isolate by **not calling other modules*
 
 ## Vivek — patient-facing workflow first, then Dribbble polish
 
-Own the **CareLoop journey UI** and the **longitudinal thread as the app shell**. Workflow first (basic, readable: what happened / waiting / who acts). Visual polish using **Dribbble for design ideas** comes **after** the basic patient-facing flow works. Do **not** treat Provider/Patient tabs as the CareLoop UX.
+Own the **CareLoop journey UI** and the **longitudinal thread as the app shell**. The patient shell is already on `main`; remaining work is persistence (store / hosted `visits` + `insurance`) and remaining golden-path beats. Do **not** restore Provider/Patient tabs as the CareLoop UX.
 
 ### Scope
 
@@ -439,18 +438,18 @@ Own the **CareLoop journey UI** and the **longitudinal thread as the app shell**
 - Other streams persist through this store (not local-only UI state for the demo thread).
 - Timeline can list events from the thread without inventing a second source of truth.
 
-**Suggested contract (sketch, not frozen):** `GET /api/careloop/thread`, `POST /api/careloop/reset`, plus per-object actions owned by later streams.
+**Suggested contract (sketch, not on main):** `GET /api/careloop/thread`, `POST /api/careloop/reset`. The running app stores the thread in `localStorage` instead.
 
 #### F — Unified timeline UX (CareLoop journey)
 
 **Owner files:** `frontend/index.html` (new nav + journey view), `frontend/css/style.css`, `frontend/js/app.js` (third module tab), `frontend/js/careloop.js`, `frontend/js/api.js` (named CareLoop methods).
 
-**Job:** New **CareLoop** journey UI. **Do not treat Provider/Patient tabs as CareLoop.** Timeline joins encounter, orders, PA, **claim**, meds, follow-up, **coverage**, **history**. Every screen: what happened / what’s waiting / who acts / what evidence.
+**Job:** Keep evolving the **CareLoop** journey UI. Timeline should join encounter, orders, PA, **claim**, meds, follow-up, **coverage**, **history**. Every screen: what happened / what’s waiting / who acts / what evidence.
 
 **Done when:**
 
-- Third tab (or equivalent) walks the golden path without using Provider/Patient as the demo.
-- Provider + Patient tabs still reachable.
+- Patient shell walks the golden path (this part is largely live).
+- Provider + Patient letter tabs stay **out** of the product nav.
 - No download of generated letters without HITL.
 - Browser-verifiable end-to-end golden path (not a single screenshot).
 
@@ -471,8 +470,7 @@ After the basic workflow is demoable: visual pass inspired by Dribbble (healthca
 ### Copy-pasteable commands (Vivek)
 
 ```bash
-cp .env.example .env
-echo "XAI_API_KEY=your_key_here" > .env   # already on Vercel; console.x.ai
+cp .env.example .env   # edit keys in place; do not `echo > .env`
 pip3 install -r requirements.txt
 python3 -m uvicorn backend.main:app --reload --port 8080
 ```
@@ -482,13 +480,14 @@ Open **http://localhost:8080**. `XAI_API_KEY` is only needed when exercising Sre
 | Stream | How to work in isolation |
 |--------|---------------------------|
 | **B Store** | Add store + `reset`/`thread` endpoints; curl JSON only; skip UI. |
-| **F Timeline** | Mock `GET /api/careloop/thread` with a static fixture until B lands; then switch to live thread. |
+| **F Timeline** | Patient shell is live; remaining is binding to a server thread when B lands. |
 | **History export** | Curl thread/history JSON; postpone Dribbble polish. |
 
 ```bash
+# Sketch only — these thread/reset routes are **not** on main yet.
+# Live history export: POST /api/careloop/history/pdf (auth cookie).
 curl -s -X POST http://localhost:8080/api/careloop/reset
 curl -s http://localhost:8080/api/careloop/thread
-# History share (sketch)
 curl -s http://localhost:8080/api/careloop/history
 ```
 
@@ -503,7 +502,7 @@ curl -s http://localhost:8080/api/careloop/history
 
 Freeze shapes early so the three owners can work in parallel. Frontend talks only through named methods in `frontend/js/api.js`. One app: `backend/main.py` or imported `backend/careloop/` — do not fork a second server.
 
-**Suggested contract (sketch, not frozen):** `GET /api/careloop/thread`, `POST /api/careloop/reset`, plus per-object actions owned by each person.
+**Suggested contract (sketch, not on main):** `GET /api/careloop/thread`, `POST /api/careloop/reset`, plus per-object actions owned by each person. Today the patient shell keeps a thread in `localStorage`.
 
 | Object | Contains (min) | Writes facts | Patient-facing surface |
 |--------|----------------|--------------|------------------------|
@@ -581,8 +580,8 @@ git push -u origin stream-b/longitudinal-store
 - Production HIPAA program (auth, audit logs, BAA, encryption-at-rest as a platform), multi-tenant accounts
 - Multi-plan / multi-state policy knowledge base as verified legal source
 - High-quality ambient clinical scribe without a heavy clinician review burden
-- Expanding DenialShield sideways into more letter types instead of the journey
-- Treating Provider/Patient tabs as the CareLoop product UX
+- Expanding the stack sideways into more letter types instead of the journey
+- Treating Provider/Patient letter tabs as the CareLoop product UX (they were removed; do not restore them as primary chrome)
 - Letting the model make coverage or clinical decisions
 - Collapsing PA denial and claim denial into one flow
 
@@ -592,7 +591,7 @@ git push -u origin stream-b/longitudinal-store
 
 ## Pointers
 
+- What is live: `README.md`, `AGENTS.md`, `/showcase`
 - Runbook: `README.md`, `CLAUDE.md`
-- Existing app: `backend/main.py`, `frontend/index.html`
-- This plan only; implementation is follow-on PRs per owner / original workstream.
-- Dribbble is a **reference for later polish**, not a requirement to clone a shot in the first workflow PR.
+- Existing app: `backend/main.py`, `frontend/index.html`, `frontend/js/careloop.js`
+- This plan is the owner/contract file; implementation continues in follow-on PRs.

@@ -39,13 +39,13 @@ No insert/delete policies for `authenticated`. Demo users are **seeded** in the 
 |-------|------|
 | Human in Supabase dashboard | Creates Auth user + matching `profiles` row (already done for Jane). |
 | `/api/careloop/signup` | Calls Supabase Auth signup, then inserts the matching row with the server-only service role. |
-| `/api/careloop/login` | **Reads** by username; does not insert or update. |
+| `/api/careloop/login` | **Reads** by username; does not insert or update. Issues an `HttpOnly` cookie; does not put a Supabase JWT in browser JS. |
 | Patient Profile screen | Today: **localStorage** display name / email / ZIP. Does **not** write this table yet. ZIP is an insurance field, not a profiles column. |
 | Coverage APIs | Must **not** write this table. |
 
 ## First visit vs returning
 
-Same `profiles` row either way. First-time vs returning is **not** stored here (no `is_returning` flag). The patient shell chooses the path at login (`I’m returning` vs `Start my first visit`).
+Same `profiles` row either way. First-time vs returning is **not** stored here (no `is_returning` flag). The patient shell chooses the path at login (**LOGIN** vs **Start my first visit**).
 
 ## Do not put on `profiles`
 

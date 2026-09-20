@@ -56,14 +56,14 @@ Enabled. **`auth.uid() = user_id`.**
 |--------|---------|------|------|
 | `insurance_own_rows` | `ALL` | `authenticated` | `USING` + `WITH CHECK` (`auth.uid() = user_id`) |
 
-Login does not read this table today (JWT/HMAC only). Intended returning path: server or client loads `is_current` **after** Auth.
+Login does not read this table today (cookie session / optional bearer for API clients). Intended returning path: load `is_current` **after** Auth.
 
 ## Who writes
 
 | Actor | What |
 |-------|------|
-| Patient JWT on **save** (intended) | Upsert current row: payer + optional card fields + DOB. `confirmed_at` stays null. `eligibility_status` / money fields may stay null. |
-| Patient JWT on **Confirm** or **Refresh** | Same row: fill eligibility columns, `source`, `raw_eligibility`, set `confirmed_at = now()`, `is_current = true`. |
+| Patient on **save** (intended) | Upsert current row: payer + optional card fields + DOB. `confirmed_at` stays null. `eligibility_status` / money fields may stay null. Browser uses cookie session, not a JS-held JWT. |
+| Patient on **Confirm** or **Refresh** | Same row: fill eligibility columns, `source`, `raw_eligibility`, set `confirmed_at = now()`, `is_current = true`. |
 | Dave APIs today | `coverage.py` in-process state + cookie. **Not this table.** |
 | xAI vision (`XAI_API_KEY`) | Returns JSON for printed card/SBC fields. Do not persist card **images**. JSON extract is not watermarked. |
 | `profiles` / login | Must not add insurance columns to `profiles`. |
@@ -74,7 +74,7 @@ Login does not read this table today (JWT/HMAC only). Intended returning path: s
 | Path | Behavior |
 |------|----------|
 | **Start my first visit** | Opens insurance hub. Sample card = Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Skip ⇒ **no** `is_current` row ⇒ **skip estimated costs**. |
-| **I’m returning** | Hydrate the Insurance snapshot from `is_current`. If none, treat as skip (no cost step). App today **seeds** Aetna Jane Doe via Dave APIs instead of this table. |
+| **LOGIN** (returning) | Hydrate the Insurance snapshot from `is_current`. If none, treat as skip (no cost step). App today **confirms Jane Doe / Aetna via Dave APIs** instead of this table. |
 | Inactive Demo Plan / member `X-…` | `eligibility_status = inactive`. Still a coverage snapshot, not a claim. |
 
 No row is different from an inactive row: skip vs “we checked and it is inactive.”

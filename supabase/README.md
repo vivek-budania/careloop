@@ -12,7 +12,7 @@ Server-side env (never frontend JS, never commit real values):
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-Signup and login use **Auth + `public.profiles` only**. Signup uses the server-only Admin API with `email_confirm: true` (no verification email), then the service role creates the matching profile. See [`docs/database/`](../docs/database/README.md).
+Signup and login use **Auth + `public.profiles` only**. Signup uses the server-only Admin API with `email_confirm: true` (no verification email), then the service role creates the matching profile. The browser session is a signed `HttpOnly` cookie, not a JS-held JWT. See [`docs/database/`](../docs/database/README.md).
 
 ## Layout
 

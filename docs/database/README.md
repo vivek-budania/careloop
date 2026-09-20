@@ -10,7 +10,7 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 |-------|-------------------|
 | Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance` |
 | Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
-| This signup PR | Adds self-serve Auth + profile creation only. Coverage and clinical data flows are unchanged. |
+| Returning login | **LOGIN** (`jane` / `demo`) opens Today. If no coverage cookie/`localStorage` snapshot, the client confirms the Jane Doe / Aetna fixture via Dave’s APIs — **not** `public.insurance`. |
 
 ## ER (what exists)
 
@@ -59,7 +59,7 @@ erDiagram
 ```
 
 - **`auth.users` 1:1 `profiles`.** `profiles.id` = `auth.users.id`. There is **no** `login` table. Password is Auth-only (never a column on `profiles`).
-- **`insurance`:** many rows allowed; **at most one** `is_current` per user (partial unique index). Returning login hydrates coverage from that row.
+- **`insurance`:** many rows allowed; **at most one** `is_current` per user (partial unique index). **Intended:** returning login hydrates coverage from that row. **Today:** returning login uses Dave’s APIs + cookie/`localStorage`.
 - **`visits`:** many per user. **Past visits → My visits.** The clinic packet (`.md` / PDF) is **generated**, not a table.
 
 ## What is not in the database yet
@@ -73,7 +73,7 @@ Do not invent these tables in migrations:
 | New symptoms at check-in | `localStorage` `journey.new_symptoms` + `new_symptoms_log` | Not a `visits` column yet |
 | Open / upcoming visits | `localStorage` `openVisits` | Persist to `visits` only after the journey is completed |
 | Claims / EOB | Insurance screen: Coming soon | Separate from PA |
-| PA / appeal / demand letters | `/letters` + HITL; watermarked drafts | Not stored as rows |
+| PA / appeal / demand letters | Letter **APIs** (`/api/generate-*`); no `/letters` UI | Watermarked drafts; not stored as rows |
 | Transcripts | Scribe fixture / STT API | Do not dump onto `insurance` |
 | History packet | Generated export | Not a table |
 | Visit symptoms / cost guess | Dave intake APIs (in-memory) | Not insurance columns |
@@ -83,7 +83,7 @@ Do not invent these tables in migrations:
 1. User types username + password (`jane` / `demo`).
 2. Server looks up `public.profiles` by **username** (service_role, bypasses RLS).
 3. Auth password grant with that row’s **email**.
-4. Server issues a signed 30-day `HttpOnly` app-session cookie; the Supabase access token is not exposed to browser JavaScript.
+4. Server issues a signed 30-day `HttpOnly` app-session cookie; the Supabase access token is not exposed to browser JavaScript. (Bearer tokens remain for non-browser API clients.)
 
 Self-serve signup uses the server-only Supabase Admin API with `email_confirm: true`, which creates the Auth user without sending a verification email. The server then inserts the matching `profiles` row (including validated `date_of_birth`) and starts the browser session immediately.
 
@@ -94,7 +94,7 @@ Seeded live user: username `jane`, email `jane@careloop.local`, password `demo`.
 | Path | `insurance` | `visits` | App (today, still local) |
 |------|-------------|----------|---------------------------|
 | **Start my first visit** | No current row after skip; save creates/updates `is_current` | Empty until a journey is saved | Opens insurance hub; skip → no estimated-costs step |
-| **I’m returning** | Read `is_current` | List for History → My visits | Today + seeded Aetna Jane Doe via Dave APIs (not this table yet) |
+| **LOGIN** (returning) | Read `is_current` | List for Past visits → My visits | Today + Jane Doe / Aetna via Dave APIs (not this table yet) |
 
 No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a coverage decision.
 
@@ -102,9 +102,9 @@ No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a 
 
 | Table | Writers | Readers |
 |-------|---------|---------|
-| `profiles` | Dashboard seed or `/api/careloop/signup` (server service role after Auth signup). Login does **not** insert. | Login (service_role); patient JWT may select/update **own** row |
-| `visits` | Patient JWT after a visit is saved to History | Owner only (`auth.uid() = user_id`) |
-| `insurance` | Patient JWT on Insurance save / Confirm / Refresh | Owner only; returning login reads `is_current` |
+| `profiles` | Dashboard seed or `/api/careloop/signup` (server service role after Auth signup). Login does **not** insert. | Login (service_role). RLS allows an authenticated Supabase JWT to select/update **own** row; the **browser app does not hold that JWT** (cookie session). |
+| `visits` | Intended: owner after a visit is saved to Past visits | Owner only (`auth.uid() = user_id`). **Not wired.** |
+| `insurance` | Intended: owner on Insurance save / Confirm / Refresh | Owner only; intended returning login reads `is_current`. **Not wired.** |
 
 RLS is on for all three. `service_role` bypasses RLS (server login lookup only for `profiles`).
 
@@ -113,7 +113,7 @@ RLS is on for all three. `service_role` bypasses RLS (server login lookup only f
 - No independent clinical or coverage decisions.
 - Do not collapse **PA denial** (before care is authorized) vs **claim denial** (after billing).
 - Do not store API keys, `service_role`, card images, or live secrets in these tables or in git.
-- Letter downloads still need watermark + HITL. History packet is a record export, not a letter.
+- Letter downloads still need watermark + human approval if a letter UI is added. History packet is a record export, not a letter.
 
 ## Table pages
 
