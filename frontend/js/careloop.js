@@ -2062,20 +2062,68 @@ const CareLoop = {
     }
   },
 
+  medicinesForCostGuess() {
+    const plan = (this.encounter && this.encounter.plan) || [];
+    const fromPlan = plan
+      .filter((item) => String(item.type || '').toLowerCase() === 'rx')
+      .map((item) => ({
+        id: item.id || item.plan_item_id,
+        name: this.careName(item.description) || item.description,
+        description: item.description || '',
+        pa_required: Boolean(item.pa_required),
+        code: item.code || null,
+      }));
+    if (fromPlan.length) return fromPlan;
+    return (this.careFromEncounter().prescriptions || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: [item.name, item.notes].filter(Boolean).join(' · '),
+      pa_required: /PA may be required/i.test(item.notes || ''),
+      code: null,
+    }));
+  },
+
+  costMoneyCell(line) {
+    if (!line || line.priced === false || line.patient_owes_low == null) {
+      if (line && line.pa_required) {
+        return `${this.tag('PA may be required', 'peach')} — not priced`;
+      }
+      return this.tag('Not priced', 'gray');
+    }
+    return this.money(line.patient_owes_low);
+  },
+
   costBody() {
     const estimate = this.costEstimate || this.coverageSnap.visit_cost_estimate;
     const e = this.coverageSnap.eligibility;
     if (!estimate) {
       return `<h2>A little visibility into costs.</h2><p>Loading mock amounts from your saved plan…</p><div class="notice">Guess only — not a bill or a coverage decision. PA-may-be-required is not a price.</div>`;
     }
-    const lines = estimate.likely_visits || [];
-    const rows = lines.map((line) => {
+    const visitRows = (estimate.likely_visits || []).map((line) => {
       const allowed = line.allowed;
       const you = line.patient_owes_low;
       const planPays = (allowed != null && you != null) ? Math.max(0, Number(allowed) - Number(you)) : null;
-      return `<tr><td>${this.esc(line.description)} <small>(${this.esc(line.code)})</small><br><small>${this.esc(line.basis || '')}</small></td><td>${this.money(allowed)}</td><td>${this.money(planPays)}</td><td>${this.money(you)}</td></tr>`;
+      return `<tr><td>${this.esc(line.description)} <small>(${this.esc(line.code)})</small><div class="cost-basis">${this.esc(line.basis || '')}</div></td><td>${this.money(allowed)}</td><td>${planPays == null ? '—' : this.money(planPays)}</td><td>${this.money(you)}</td></tr>`;
     }).join('');
-    return `<h2>A little visibility into costs.</h2><p>Mock amounts from Dave’s visit/cost guess for this saved plan. An estimate, not a bill or a coverage decision.</p><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${rows}<tr><td>Add-on medicine</td><td colspan="3">${this.tag('PA may be required', 'peach')} — not priced as if it were allowed</td></tr></tbody></table><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>estimated you-pay · medicine excluded</small></div><p>${this.esc(estimate.disclaimer || '')}</p><p>Coverage status: ${this.esc(e?.status || 'unknown')} · ${this.esc(e?.network_name || '')}. Add-on therapy is a PA flag, not a claim.</p>`;
+    const meds = estimate.medicines || [];
+    const medRows = meds.length
+      ? meds.map((line) => {
+        const tier = line.tier_label ? `<small>${this.esc(line.tier_label)}</small>` : '';
+        return `<tr><td>${this.esc(line.name || line.description || 'Medicine')} ${tier}<div class="cost-basis">${this.esc(line.basis || '')}</div></td><td>${line.allowed != null ? this.money(line.allowed) : '—'}</td><td>${line.priced ? this.money(0) : '—'}</td><td>${this.costMoneyCell(line)}</td></tr>`;
+      }).join('')
+      : '<tr><td colspan="4"><span style="color:var(--muted)">No medicines on this visit plan yet.</span></td></tr>';
+    const visitLow = estimate.visit_owes_low != null ? estimate.visit_owes_low : estimate.patient_owes_low;
+    const visitHigh = estimate.visit_owes_high != null ? estimate.visit_owes_high : estimate.patient_owes_high;
+    const medLow = estimate.medicine_owes_low || 0;
+    const medHigh = estimate.medicine_owes_high || 0;
+    const unpriced = estimate.medicine_unpriced_count || 0;
+    const totalNote = unpriced
+      ? `estimated you-pay · visit + priced medicines · ${unpriced} medicine${unpriced === 1 ? '' : 's'} not priced`
+      : 'estimated you-pay · visit + medicines';
+    const warnings = (estimate.warnings || [])
+      .map((w) => `<div class="notice">${this.esc(w)}</div>`)
+      .join('');
+    return `<h2>A little visibility into costs.</h2><p>Estimates from your saved plan: office/lab visit lines, plus mock formulary retail copays for medicines on this visit’s plan. Not a bill or a coverage decision.</p><h3 class="mt">Visit</h3><table class="cost-table"><thead><tr><th>SUGGESTED SERVICE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${visitRows}</tbody></table><div class="cost-subtotal">Visit subtotal ${this.money(visitLow)}${visitHigh !== visitLow ? `–${this.money(visitHigh)}` : ''}</div><h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>MOCK ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${warnings}<p>${this.esc(estimate.disclaimer || '')}</p><p>Coverage status: ${this.esc(e?.status || 'unknown')} · ${this.esc(e?.network_name || '')}. PA ≠ claim.</p>`;
   },
 
   followups() {
@@ -2364,7 +2412,11 @@ const CareLoop = {
         symptoms,
         use_fixture_prior_visit: Boolean(j.prior) || demo,
       });
-      this.rememberCoverage(await API.guessVisitCost({ symptoms }));
+      this.rememberCoverage(await API.guessVisitCost({
+        symptoms,
+        medicines: this.medicinesForCostGuess(),
+        specialty: j.suggested_specialty || this.coverageSnap.intake?.suggested_specialty || '',
+      }));
       this.costEstimate = this.coverageSnap.visit_cost_estimate;
     } catch (err) {
       this.costEstimate = null;
