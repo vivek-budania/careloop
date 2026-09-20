@@ -1,4 +1,4 @@
-"""Dave's coverage slice: mock card/plan identity, eligibility, visit-cost guess, network.
+"""Dave's coverage slice: mock card/plan identity, eligibility, visit-cost estimate, network.
 
 Optional xAI vision on uploaded card/SBC (XAI_API_KEY at launch). Gemini fallback.
 Optional Stedi sandbox 270/271 (STEDI_API_KEY at launch). Aetna + Jane Doe /
@@ -173,7 +173,7 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "E11.9",
             "description": "Type 2 diabetes mellitus without complications",
-            "reason": "Visit text looks like a diabetes follow-up. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like a diabetes follow-up. Code estimate only — not a diagnosis.",
         }
     if _has_word(
         blob,
@@ -182,7 +182,7 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "L40.0",
             "description": "Psoriasis vulgaris",
-            "reason": "Visit text looks like plaque psoriasis. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like plaque psoriasis. Code estimate only — not a diagnosis.",
         }
     if _has_word(
         blob,
@@ -191,31 +191,31 @@ def guess_icd10(symptoms: str = "", prior_visit_note: str = "") -> Optional[dict
         return {
             "code": "G43.909",
             "description": "Migraine, unspecified, not intractable, without status migrainosus",
-            "reason": "Visit text looks like migraine. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like migraine. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("sciatica", "radiculopathy")):
         return {
             "code": "M54.41",
             "description": "Lumbago with sciatica, right side",
-            "reason": "Visit text looks like sciatica. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like sciatica. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("back", "spine", "lumbar", "meloxicam", "mri", "orthop")):
         return {
             "code": "M54.5",
             "description": "Low back pain",
-            "reason": "Visit text looks like low-back pain. Code guess only — not a diagnosis.",
+            "reason": "Visit text looks like low-back pain. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("headache",)):
         return {
             "code": "R51.9",
             "description": "Headache, unspecified",
-            "reason": "Visit text mentions headache. Code guess only — not a diagnosis.",
+            "reason": "Visit text mentions headache. Code estimate only — not a diagnosis.",
         }
     if _has_word(blob, ("fatigue", "thirst")):
         return {
             "code": "R53.83",
             "description": "Other fatigue",
-            "reason": "Visit text mentions fatigue. Code guess only — not a diagnosis.",
+            "reason": "Visit text mentions fatigue. Code estimate only — not a diagnosis.",
         }
     return None
 
@@ -967,7 +967,7 @@ def _rx_line_cost(medicine: dict, eligibility: dict) -> dict:
         "allowed": float(copay),
         "basis": (
             f"{entry.get('tier_label') or 'Mock formulary'} retail copay ${copay} "
-            f"(from saved plan — guess only)"
+            f"(from your saved plan)"
         ),
     }
 
@@ -1028,12 +1028,13 @@ def visit_guess(
 
     estimate = {
         "is_guess": True,
+        "is_estimate": True,
         "from_transcript": bool(from_transcript),
         "disclaimer": (
-            "Guess only — not a bill, quote, or coverage decision. "
-            "Visit amounts use your saved plan copay / deductible. "
-            "Medicine amounts use a mock formulary retail copay. "
-            "PA-flagged medicines are listed but not priced as if allowed."
+            "Estimate based on your saved plan — not a bill, quote, or coverage decision. "
+            "Visit amounts use your plan’s copay and deductible. "
+            "Medicine amounts use the mock formulary retail copay. "
+            "PA-flagged medicines are listed but not priced as if already allowed."
         ),
         "likely_visits": visit_lines,
         "medicines": medicine_lines,
