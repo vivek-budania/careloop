@@ -226,14 +226,60 @@ def signup(
             last_name=last_name,
         )
     except ValueError as exc:
-        message = str(exc).lower()
+        raw_msg = str(exc).strip()
+        message = raw_msg.lower()
         if "already" in message or "registered" in message or "duplicate" in message:
             raise SignupConflictError("An account already exists for that email address.") from None
+        if raw_msg and not raw_msg.startswith("Supabase request failed"):
+            raise ValueError(raw_msg) from None
         raise ValueError("Could not create the account in Supabase Auth.") from None
 
-    auth_user = signup_result.get("user") if isinstance(signup_result, dict) else None
-    auth_user = auth_user if isinstance(auth_user, dict) else {}
-    user_id = (auth_user.get("id") or "").strip()
+    # Robust user_id extraction: GoTrue may return the user object directly at root,
+    # nested under 'user', or within 'data' / 'session'.
+    user_id = ""
+    if isinstance(signup_result, dict):
+        if signup_result.get("id"):
+            user_id = str(signup_result["id"]).strip()
+        elif isinstance(signup_result.get("user"), dict) and signup_result["user"].get("id"):
+            user_id = str(signup_result["user"]["id"]).strip()
+        elif isinstance(signup_result.get("data"), dict):
+            d = signup_result["data"]
+            if d.get("id"):
+                user_id = str(d["id"]).strip()
+            elif isinstance(d.get("user"), dict) and d["user"].get("id"):
+                user_id = str(d["user"]["id"]).strip()
+        elif isinstance(signup_result.get("session"), dict):
+            s_user = signup_result["session"].get("user")
+            if isinstance(s_user, dict) and s_user.get("id"):
+                user_id = str(s_user["id"]).strip()
+
+    # Check for empty identities list (Supabase GoTrue returns HTTP 200 with identities=[] when user already exists)
+    user_obj = signup_result.get("user") if isinstance(signup_result.get("user"), dict) else signup_result
+    identities = user_obj.get("identities") if isinstance(user_obj, dict) else None
+    if identities is not None and isinstance(identities, list) and len(identities) == 0:
+        existing_profile = supabase_auth.profile_by_email(email) or (
+            supabase_auth.profile_by_id(user_id) if user_id else None
+        )
+        if existing_profile:
+            raise SignupConflictError("An account already exists for that email address.")
+
+        # Incomplete/orphaned Auth user from an interrupted signup: clean up and retry once
+        if user_id:
+            try:
+                supabase_auth.delete_auth_user(user_id)
+                signup_result = supabase_auth.sign_up_user(
+                    email=email,
+                    password=password,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+                user_id = str(signup_result.get("id") or (signup_result.get("user") or {}).get("id") or "").strip()
+            except Exception:
+                raise SignupConflictError("An account already exists for that email address.")
+        else:
+            raise SignupConflictError("An account already exists for that email address.")
+
     if not user_id:
         raise ValueError("Supabase Auth did not return a user id.")
     try:
@@ -255,9 +301,14 @@ def signup(
         message = str(exc).lower()
         if "duplicate" in message or "unique" in message:
             raise SignupConflictError("That username or email is already in use.") from None
-        raise ValueError("Could not create the profile row.") from None
+        raise ValueError(f"Could not create the profile row: {exc}") from None
 
-    token = (signup_result.get("access_token") or "").strip()
+    token = ""
+    if isinstance(signup_result, dict):
+        if signup_result.get("access_token"):
+            token = str(signup_result["access_token"]).strip()
+        elif isinstance(signup_result.get("session"), dict) and signup_result["session"].get("access_token"):
+            token = str(signup_result["session"]["access_token"]).strip()
     return {
         "token": token,
         "user": public_user_from_profile(profile),
