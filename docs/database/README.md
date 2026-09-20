@@ -10,7 +10,7 @@ This is a mocked US patient-journey demo. It is **not** a payer, EHR, PBM, or cl
 |-------|-------------------|
 | Hosted tables | `auth.users`, `public.profiles`, `public.visits`, `public.insurance` |
 | Running app | Signup writes **Auth + `profiles`**; login reads them. Coverage still uses Dave’s in-memory snapshot + signed cookie + `localStorage`. Visits / meds / tests / packet stay in the browser until a later wiring PR. |
-| This signup PR | Adds self-serve Auth + profile creation only. Coverage and clinical data flows are unchanged. |
+| Login vs tables | Login uses Auth + `profiles` only. Coverage and clinical data flows are unchanged. |
 
 ## ER (what exists)
 
@@ -73,28 +73,28 @@ Do not invent these tables in migrations:
 | New symptoms at check-in | `localStorage` `journey.new_symptoms` + `new_symptoms_log` | Not a `visits` column yet |
 | Open / upcoming visits | `localStorage` `openVisits` | Persist to `visits` only after the journey is completed |
 | Claims / EOB | Insurance screen: Coming soon | Separate from PA |
-| PA / appeal / demand letters | `/letters` + HITL; watermarked drafts | Not stored as rows |
+| PA / appeal / demand letters | Letter APIs + HITL if a download UI is added; watermarked drafts. No `/letters` page. | Not stored as rows |
 | Transcripts | Scribe fixture / STT API | Do not dump onto `insurance` |
 | History packet | Generated export | Not a table |
 | Visit symptoms / cost guess | Dave intake APIs (in-memory) | Not insurance columns |
 
 ## Auth (no `login` table)
 
-1. User types username + password (`jane` / `demo`).
+1. User types username + password (dummy credentials: [`AGENTS.md`](../../AGENTS.md)).
 2. Server looks up `public.profiles` by **username** (service_role, bypasses RLS).
 3. Auth password grant with that row’s **email**.
 4. Server issues a signed 30-day `HttpOnly` app-session cookie; the Supabase access token is not exposed to browser JavaScript.
 
 Self-serve signup uses the server-only Supabase Admin API with `email_confirm: true`, which creates the Auth user without sending a verification email. The server then inserts the matching `profiles` row (including validated `date_of_birth`) and starts the browser session immediately.
 
-Seeded live user: username `jane`, email `jane@careloop.local`, password `demo`. See [`AGENTS.md`](../../AGENTS.md).
+Seeded live user: username `jane`, password `demo` (sample-patient display name). See [`AGENTS.md`](../../AGENTS.md).
 
 ## First visit vs returning (intended when coverage is stored)
 
 | Path | `insurance` | `visits` | App (today, still local) |
 |------|-------------|----------|---------------------------|
 | **Start my first visit** | No current row after skip; save creates/updates `is_current` | Empty until a journey is saved | Opens insurance hub; skip → no estimated-costs step |
-| **I’m returning** | Read `is_current` | List for History → My visits | Today + seeded Aetna Jane Doe via Dave APIs (not this table yet) |
+| **I’m returning** | Read `is_current` | List for History → My visits | Today + seeded sample plan via Dave APIs (not this table yet) |
 
 No `is_current` row ⇒ skip estimated costs. Cost output is a **guess**, not a coverage decision.
 

@@ -30,7 +30,7 @@ Vivek already created `visits` and `insurance` in the hosted SQL editor / Table 
 - **Fresh env:** applying them creates the same tables, indexes, and RLS.
 - **Hosted CareLoop:** `CREATE TABLE IF NOT EXISTS` is a no-op if the table is already there. Comments in each file say so.
 
-Do not treat applying these files as a data wipe. They do not insert Jane Doe, coverage rows, or visits.
+Do not treat applying these files as a data wipe. They do not insert sample patients, coverage rows, or visits.
 
 ## How to apply (optional)
 

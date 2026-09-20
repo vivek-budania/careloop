@@ -28,9 +28,9 @@ Figures are **labeled estimates** (mock fixture or Stedi **test** 271). They are
 | `plan_type` | `text` | yes | — | e.g. `PPO`. |
 | `network_name` | `text` | yes | — | e.g. `PPO Gold Plan`. |
 | `member_name` | `text` | yes | — | Optional typed/scanned subscriber name. |
-| `member_id` | `text` | yes | — | Optional. Golden path `AETNA12345`. |
+| `member_id` | `text` | yes | — | Optional. Sample-card member id from the payer fixture. |
 | `group_number` | `text` | yes | — | Optional. |
-| `date_of_birth` | `date` | yes | — | **Nullable in DB** so skip has no row. **App-required on save** (Stedi Jane Doe `2004-04-04`). |
+| `date_of_birth` | `date` | yes | — | **Nullable in DB** so skip has no row. **App-required on save** (canned sandbox member DOB). |
 | `zip` | `text` | yes | — | Text (not int). Network search uses this. |
 | `eligibility_status` | `text` | yes | — | `active` / `inactive` after Confirm. Null until Confirm/Refresh. |
 | `estimated_copay_pcp` | `numeric` | yes | — | Estimate only. Do not invent a copay that was not printed or returned. |
@@ -73,8 +73,8 @@ Login does not read this table today (JWT/HMAC only). Intended returning path: s
 
 | Path | Behavior |
 |------|----------|
-| **Start my first visit** | Opens insurance hub. Sample card = Jane Doe / Aetna / `AETNA12345` / `2004-04-04`. Skip ⇒ **no** `is_current` row ⇒ **skip estimated costs**. |
-| **I’m returning** | Hydrate the Insurance snapshot from `is_current`. If none, treat as skip (no cost step). App today **seeds** Aetna Jane Doe via Dave APIs instead of this table. |
+| **Start my first visit** | Opens insurance hub. Sample card = fixture member/plan. Skip ⇒ **no** `is_current` row ⇒ **skip estimated costs**. |
+| **I’m returning** | Hydrate the Insurance snapshot from `is_current`. If none, treat as skip (no cost step). App today **seeds** a sample plan via Dave APIs instead of this table. |
 | Inactive Demo Plan / member `X-…` | `eligibility_status = inactive`. Still a coverage snapshot, not a claim. |
 
 No row is different from an inactive row: skip vs “we checked and it is inactive.”

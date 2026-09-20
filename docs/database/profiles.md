@@ -16,9 +16,9 @@ Username → email lookup so `/api/careloop/login` can call Auth’s password gr
 |--------|------|------|---------|--------|
 | `id` | `uuid` | no | — | **PK.** Must equal `auth.users.id`. `ON DELETE CASCADE` from Auth. |
 | `username` | `text` | no | — | **Unique.** Demo handle (`jane`). Case-insensitive unique index on `lower(username)`. |
-| `email` | `text` | no | — | **Unique.** Auth email (`jane@careloop.local`). |
-| `first_name` | `text` | yes | — | Given name (`Jane`). |
-| `last_name` | `text` | yes | — | Family name (`Doe`). |
+| `email` | `text` | no | — | **Unique.** Auth email for that username. |
+| `first_name` | `text` | yes | — | Given name (sample patient). |
+| `last_name` | `text` | yes | — | Family name (sample patient). |
 | `date_of_birth` | `date` | yes | — | Validated patient-entered DOB captured during signup for identity-matching APIs. |
 | `created_at` | `timestamptz` | no | `now()` | Insert time. |
 
@@ -37,7 +37,7 @@ No insert/delete policies for `authenticated`. Demo users are **seeded** in the 
 
 | Actor | What |
 |-------|------|
-| Human in Supabase dashboard | Creates Auth user + matching `profiles` row (already done for Jane). |
+| Human in Supabase dashboard | Creates Auth user + matching `profiles` row (already done for the seeded demo user). |
 | `/api/careloop/signup` | Calls Supabase Auth signup, then inserts the matching row with the server-only service role. |
 | `/api/careloop/login` | **Reads** by username; does not insert or update. |
 | Patient Profile screen | Today: **localStorage** display name / email / ZIP. Does **not** write this table yet. ZIP is an insurance field, not a profiles column. |
@@ -61,6 +61,6 @@ Same `profiles` row either way. First-time vs returning is **not** stored here (
 
 | username | email | name | Auth password |
 |----------|-------|------|----------------|
-| `jane` | `jane@careloop.local` | Jane Doe | `demo` |
+| `jane` | `jane@careloop.local` | sample patient | `demo` |
 
 Do not invent other live passwords. HMAC fallback usernames (`maya`, `priya`, …) are `backend/data/mock_users.json` only — not this table.
