@@ -180,6 +180,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SignupRequest(BaseModel):
+    username: str
+    full_name: str
+    email: str
+    password: str
+    date_of_birth: str
+
+
 def require_coverage_user(
     request: Request,
     user: dict = Depends(careloop_auth.require_user),
@@ -416,6 +424,28 @@ def careloop_login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=401, detail=str(e))
     careloop_coverage.bind_user(result["user"]["username"])
     return _set_session_cookies(JSONResponse(result), request, result["token"])
+
+
+@app.post("/api/careloop/signup")
+def careloop_signup(req: SignupRequest, request: Request):
+    try:
+        result = careloop_auth.signup(
+            username=req.username,
+            full_name=req.full_name,
+            email=req.email,
+            password=req.password,
+            date_of_birth=req.date_of_birth,
+        )
+    except careloop_auth.SignupUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except careloop_auth.SignupConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result.get("token"):
+        careloop_coverage.bind_user(result["user"]["username"])
+        return _set_session_cookies(JSONResponse(result), request, result["token"])
+    return JSONResponse(result)
 
 
 @app.post("/api/careloop/logout")
@@ -787,3 +817,8 @@ if os.path.isdir(FRONTEND_DIR):
     def serve_letters():
         """Secondary DenialShield PA / appeal surface. Not the CareLoop patient UX."""
         return FileResponse(os.path.join(FRONTEND_DIR, "letters.html"))
+
+    @app.get("/showcase")
+    def serve_showcase():
+        """Judge-facing HopHacks product story."""
+        return FileResponse(os.path.join(FRONTEND_DIR, "showcase.html"))

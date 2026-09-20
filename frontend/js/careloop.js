@@ -63,6 +63,7 @@ const CareLoop = {
     trash: 'M5 7h14M9 7V5h6v2m-7 0 1 14h8l1-14',
     eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
     'eye-off': 'M3 3l18 18M10.58 10.58a3 3 0 0 0 4.24 4.24M9.88 4.24A10.94 10.94 0 0 1 12 5c6 0 10 7 10 7a17.9 17.9 0 0 1-3.14 4.06M6.1 6.1C3.51 7.86 2 10.5 2 10.5S6 17.5 12 17.5c1.13 0 2.19-.2 3.17-.55',
+    stop: 'M8 8h8v8H8z',
   },
 
   stepNames: [
@@ -1279,8 +1280,12 @@ const CareLoop = {
     }
   },
 
-  async login(username, password, mode, profile = null) {
+  async login(username, password, mode) {
     const result = await API.login(username, password);
+    return this.startSession(result, mode);
+  },
+
+  async startSession(result, mode, profile = null) {
     API.setToken(result.token);
     App.user = result.user;
     if (mode === 'first') {
@@ -1382,7 +1387,7 @@ const CareLoop = {
 
   renderSignup() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your information stays in this interactive demo.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">UI demo only · No real account is created.</p></form></section></div>`;
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>Your account is secured by Supabase Auth.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><div class="signup-grid"><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Username<input name="username" autocomplete="username" placeholder="yourname" maxlength="30" required></label></div><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">Creates a CareLoop demo account · Never use real medical information.</p></form></section></div>`;
     const form = document.getElementById('signup-form');
     const passwordInput = form.password;
     const errBox = document.getElementById('signup-error');
@@ -1437,6 +1442,11 @@ const CareLoop = {
         showSignupError('Enter a valid email address, like name@example.com.', form.email);
         return;
       }
+      const username = form.username.value.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)) {
+        showSignupError('Use 3–30 letters, numbers, dots, dashes, or underscores.', form.username);
+        return;
+      }
       if (form.password.value.length < 8) {
         showSignupError('Password must be at least 8 characters.', form.password);
         return;
@@ -1453,7 +1463,14 @@ const CareLoop = {
       submit.disabled = true;
       submit.textContent = 'CREATING YOUR CARE SPACE…';
       try {
-        await this.login('jane', 'demo', 'first', {
+        const result = await API.signup({
+          username,
+          full_name: fullName,
+          email,
+          password: form.password.value,
+          date_of_birth: form.dateOfBirth.value,
+        });
+        this.renderSignupSuccess(result, {
           name: fullName,
           email,
           dateOfBirth: form.dateOfBirth.value,
@@ -1464,6 +1481,22 @@ const CareLoop = {
         submit.disabled = false;
         submit.innerHTML = `CREATE MY CARE SPACE ${this.icon('arrow')}`;
       }
+    });
+  },
+
+  renderSignupSuccess(result, profile) {
+    const app = document.getElementById('app');
+    const needsEmail = Boolean(result.requires_email_confirmation);
+    const username = result.user?.username || '';
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>${needsEmail ? 'One quick email check, then your journey can begin.' : 'Your account is created. Continue when you’re ready.'}</p>${this.art()}<small>CareLoop keeps account passwords in Supabase Auth, never in the profile table.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>${needsEmail ? 'Check your email.' : 'Welcome to CareLoop.'}</h2><p>${needsEmail ? `We sent a verification link to <strong>${this.esc(profile.email)}</strong>. After verifying, return and log in with <strong>${this.esc(username)}</strong>.` : `Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.`}</p>${needsEmail ? '<button type="button" class="btn pill full" data-signup-action="login">BACK TO LOGIN</button>' : `<button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button>`}<p class="fine-print">Your password is managed only by Supabase Auth.</p></div></section></div>`;
+    const button = app.querySelector('[data-signup-action]');
+    button.addEventListener('click', async () => {
+      if (button.dataset.signupAction === 'login') {
+        this.renderLogin();
+        return;
+      }
+      button.disabled = true;
+      await this.startSession(result, 'first', profile);
     });
   },
 
@@ -1681,19 +1714,21 @@ const CareLoop = {
   recordControls(purpose) {
     const visit = purpose === 'visit';
     const day = purpose === 'day-symptoms';
-    const label = this.recording
-      ? `${this.icon('mic')} Stop & transcribe`
-      : this.sttBusy
-        ? 'Transcribing…'
-        : (visit ? `${this.icon('mic')} Record this visit` : day ? `${this.icon('mic')} Record new symptoms` : `${this.icon('mic')} Record your reason`);
-    const recordClass = this.recording ? 'coral' : 'secondary';
-    const recordDisabled = this.sttBusy && !this.recording ? 'disabled' : '';
     const action = visit ? 'record-visit' : day ? 'record-day-symptoms' : 'record-symptoms';
     const upload = visit ? 'pick-visit-audio' : day ? 'pick-day-symptoms-audio' : 'pick-symptoms-audio';
+    if (this.recording) {
+      const status = this.recordStatus
+        ? `<div class="notice" id="scribe-record-status">${this.esc(this.recordStatus)}</div>`
+        : '<div id="scribe-record-status" hidden></div>';
+      return `<div class="visit-record voice-orb-active" id="visit-record-controls"><div class="voice-orb-wrap"><canvas id="voice-orb" class="voice-orb" width="220" height="220" aria-hidden="true"></canvas><button type="button" class="voice-orb-btn" data-action="${action}" aria-label="Stop and transcribe">${this.icon('mic')}</button></div><input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
+    }
+    const label = this.sttBusy
+      ? 'Transcribing…'
+      : (visit ? `${this.icon('mic')} Record this visit` : day ? `${this.icon('mic')} Record new symptoms` : `${this.icon('mic')} Record your reason`);
     const status = this.recordStatus
-      ? `<div class="notice ${this.recording ? '' : 'green'}" id="scribe-record-status">${this.recording ? '<span class="record-pulse" aria-hidden="true"></span>' : ''}${this.esc(this.recordStatus)}</div>`
+      ? `<div class="notice green" id="scribe-record-status">${this.esc(this.recordStatus)}</div>`
       : '<div id="scribe-record-status" hidden></div>';
-    return `<div class="visit-record" id="visit-record-controls">${this.btn(label, action, recordClass, recordDisabled)}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
+    return `<div class="visit-record" id="visit-record-controls">${this.btn(label, action, 'secondary', this.sttBusy ? 'disabled' : '')}${this.btn('Upload audio', upload, 'secondary', this.sttBusy ? 'disabled' : '')}<input type="file" id="visit-audio" accept="audio/*,.webm,.m4a,.mp3,.wav,.ogg" tabindex="-1" aria-hidden="true"></div>${status}`;
   },
 
   symptomsBody() {
@@ -2033,7 +2068,7 @@ const CareLoop = {
       const leftMs = this.RECORD_MAX_MS - (Date.now() - this.recordStartedAt);
       const left = Math.max(0, Math.ceil(leftMs / 1000));
       const el = document.getElementById('scribe-record-status');
-      const label = `Listening… ${left}s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.`;
+      const label = `Listening… ${left}s left (max 2 minutes). Tap the orb to stop.`;
       this.recordStatus = label;
       if (el) {
         const pulse = el.querySelector('.record-pulse');
@@ -2049,11 +2084,115 @@ const CareLoop = {
     }, 250);
   },
 
+  /** Web Audio analyser driving the voice-orb canvas — mic level only, never routed to speakers. */
+  startVoiceOrb() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || !this.recordStream) return;
+    try {
+      this.orbAudioCtx = new Ctx();
+      const source = this.orbAudioCtx.createMediaStreamSource(this.recordStream);
+      this.orbAnalyser = this.orbAudioCtx.createAnalyser();
+      this.orbAnalyser.fftSize = 256;
+      this.orbAnalyser.smoothingTimeConstant = 0.8;
+      source.connect(this.orbAnalyser);
+      this.orbData = new Uint8Array(this.orbAnalyser.frequencyBinCount);
+      this.orbLevel = 0;
+      this.orbPoints = null;
+      this.orbT = 0;
+      this.drawVoiceOrb();
+    } catch (_) {
+      /* Web Audio unavailable/blocked — recording still works without the animation */
+    }
+  },
+
+  drawVoiceOrb() {
+    const canvas = document.getElementById('voice-orb');
+    if (!canvas || !this.orbAnalyser) {
+      this.orbRAF = null;
+      return;
+    }
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    this.orbAnalyser.getByteTimeDomainData(this.orbData);
+    let sum = 0;
+    for (let i = 0; i < this.orbData.length; i++) {
+      const v = (this.orbData[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / this.orbData.length);
+    const target = Math.min(1, rms * 4.5);
+    this.orbLevel += (target - this.orbLevel) * 0.25;
+
+    if (!this.orbPoints) {
+      this.orbPoints = [];
+      for (let i = 0; i < 480; i++) {
+        this.orbPoints.push({
+          a: Math.random() * Math.PI * 2,
+          r: Math.sqrt(Math.random()),
+          tw: 0.6 + Math.random() * 0.8,
+          seed: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    ctx.clearRect(0, 0, w, h);
+    this.orbT += 0.02;
+    const t = this.orbT;
+    const level = this.orbLevel;
+    const baseR = Math.min(w, h) * 0.24;
+    const wobbleAmp = Math.min(w, h) * 0.1;
+    const wobble = (angle) => (
+      Math.sin(angle * 3 + t * 1.3) * 0.5
+      + Math.sin(angle * 5 - t * 2.1) * 0.3
+      + Math.sin(angle * 2 + t * 0.7) * 0.2
+    );
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    for (const p of this.orbPoints) {
+      const edge = wobble(p.a) * wobbleAmp * (0.4 + level * 1.2);
+      const R = baseR + edge + level * wobbleAmp * 0.8;
+      const rr = p.r * (R + Math.sin(t * p.tw + p.seed) * 3);
+      const x = Math.cos(p.a) * rr;
+      const y = Math.sin(p.a) * rr;
+      const edgeFactor = Math.pow(p.r, 2.2);
+      const alpha = 0.08 + edgeFactor * (0.5 + level * 0.4);
+      const size = 0.6 + edgeFactor * 1.6 + level * 1.2;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(49,89,75,${alpha.toFixed(3)})`;
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    this.orbRAF = requestAnimationFrame(() => this.drawVoiceOrb());
+  },
+
+  stopVoiceOrb() {
+    if (this.orbRAF) {
+      cancelAnimationFrame(this.orbRAF);
+      this.orbRAF = null;
+    }
+    if (this.orbAudioCtx) {
+      try { this.orbAudioCtx.close(); } catch (_) { /* ignore */ }
+      this.orbAudioCtx = null;
+    }
+    this.orbAnalyser = null;
+    this.orbPoints = null;
+    this.orbLevel = 0;
+    this.orbT = 0;
+  },
+
   cancelRecording() {
     this.discardRecording = this.recording || Boolean(this.mediaRecorder);
     this.recording = false;
     this.sttBusy = false;
     this.clearRecordTimer();
+    this.stopVoiceOrb();
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try { this.mediaRecorder.stop(); } catch (_) { /* ignore */ }
     }
@@ -2150,10 +2289,11 @@ const CareLoop = {
 
       this.mediaRecorder.start(250);
       this.recording = true;
-      this.recordStatus = 'Listening… 120s left (max 2 minutes). Keep the mic close, then tap Stop & transcribe.';
+      this.recordStatus = 'Listening… 120s left (max 2 minutes). Tap the orb to stop.';
       this.startRecordTimer();
       this.refreshRecordUi();
-      this.toast('Listening — max 2 minutes. Tap Stop & transcribe when done.');
+      this.startVoiceOrb();
+      this.toast('Listening — max 2 minutes. Tap the orb to stop.');
     } catch (err) {
       this.stopRecordTracks();
       this.recording = false;
@@ -2168,6 +2308,7 @@ const CareLoop = {
     this.sttBusy = true;
     this.clearRecordTimer();
     this.recordStatus = 'Sending the recording to Grok…';
+    this.stopVoiceOrb();
     this.refreshRecordUi();
     try {
       if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();

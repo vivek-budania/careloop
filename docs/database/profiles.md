@@ -1,6 +1,6 @@
 # `public.profiles`
 
-1:1 with `auth.users`. This is the **only** table login reads. SQL: [`supabase/migrations/20260919100000_create_profiles.sql`](../../supabase/migrations/20260919100000_create_profiles.sql). Overview: [`README.md`](README.md).
+1:1 with `auth.users`. This is the **only** table login reads. Base SQL: [`supabase/migrations/20260919100000_create_profiles.sql`](../../supabase/migrations/20260919100000_create_profiles.sql); signup DOB migration: [`20260919103000_add_profile_date_of_birth.sql`](../../supabase/migrations/20260919103000_add_profile_date_of_birth.sql). Overview: [`README.md`](README.md).
 
 Created in the hosted project’s Table Editor. The migration is idempotent and **may already exist in prod**.
 
@@ -19,6 +19,7 @@ Username → email lookup so `/api/careloop/login` can call Auth’s password gr
 | `email` | `text` | no | — | **Unique.** Auth email (`jane@careloop.local`). |
 | `first_name` | `text` | yes | — | Given name (`Jane`). |
 | `last_name` | `text` | yes | — | Family name (`Doe`). |
+| `date_of_birth` | `date` | yes | — | Validated patient-entered DOB captured during signup for identity-matching APIs. |
 | `created_at` | `timestamptz` | no | `now()` | Insert time. |
 
 ## RLS
@@ -37,6 +38,7 @@ No insert/delete policies for `authenticated`. Demo users are **seeded** in the 
 | Actor | What |
 |-------|------|
 | Human in Supabase dashboard | Creates Auth user + matching `profiles` row (already done for Jane). |
+| `/api/careloop/signup` | Calls Supabase Auth signup, then inserts the matching row with the server-only service role. |
 | `/api/careloop/login` | **Reads** by username; does not insert or update. |
 | Patient Profile screen | Today: **localStorage** display name / email / ZIP. Does **not** write this table yet. ZIP is an insurance field, not a profiles column. |
 | Coverage APIs | Must **not** write this table. |
@@ -48,10 +50,11 @@ Same `profiles` row either way. First-time vs returning is **not** stored here (
 ## Do not put on `profiles`
 
 - Plaintext or hashed **password**
-- Insurance fields (`payer_name`, member id, DOB, copay, eligibility, ZIP)
+- Insurance fields (`payer_name`, member id, copay, eligibility, ZIP)
 - SOAP, transcripts, visit reason, clinician
 - Medicines, tests, claims, PA/appeal letter bodies
 - API keys, card images, Stedi/Gemini secrets
+
 - Role / tabs (app derives `role: patient` from this demo)
 
 ## Seed (hosted)
