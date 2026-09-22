@@ -795,6 +795,112 @@ def save_intake(
 
 
 
+DESYNPUF_FILE = "desynpuf_carrier_allowed.json"
+_MONEY_KEYS = ("p25", "median", "p75")
+_DESYNPUF_DISCLAIMER = (
+    "Estimate based on your saved plan. The allowed-charge range comes from xAI "
+    "reading synthetic CMS DE-SynPUF 2008–2010 carrier line allowed charges supplied "
+    "in the request. Not a bill and not current Medicare payment."
+)
+_FIXTURE_DISCLAIMER = "Estimate based on your saved plan — not a bill."
+_MIXED_DISCLAIMER = (
+    "Estimate based on your saved plan. Some allowed-charge ranges come from xAI "
+    "reading synthetic CMS DE-SynPUF 2008–2010 carrier line allowed charges supplied "
+    "in the request; other services use the demo fee schedule. Not a bill and not "
+    "current Medicare payment."
+)
+
+
+def _xai_cost_configured() -> bool:
+    """True only when an xAI key is loaded. Cost estimates do not use Groq."""
+    from backend.llm import _is_configured, _xai_key
+
+    return _is_configured(_xai_key())
+
+
+def _desynpuf_extract() -> dict:
+    try:
+        payload = _load_json(DESYNPUF_FILE)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _desynpuf_code_stats(code: str) -> Optional[dict]:
+    row = (_desynpuf_extract().get("codes") or {}).get(code)
+    if not isinstance(row, dict):
+        return None
+    try:
+        if int(row.get("n") or 0) <= 0:
+            return None
+        for key in _MONEY_KEYS:
+            float(row[key])
+    except (TypeError, ValueError, KeyError):
+        return None
+    return row
+
+
+def _desynpuf_dollar_figures(stats: dict) -> list[float]:
+    """Dollar figures Grok is allowed to return. Row counts are not included."""
+    figures: list[float] = []
+    blocks = [stats]
+    by_year = stats.get("by_year") or {}
+    if isinstance(by_year, dict):
+        blocks.extend(year for year in by_year.values() if isinstance(year, dict))
+    for block in blocks:
+        if int(block.get("n") or 0) <= 0:
+            continue
+        for key in _MONEY_KEYS:
+            if key not in block:
+                continue
+            try:
+                figures.append(round(float(block[key]), 2))
+            except (TypeError, ValueError):
+                continue
+    unique: list[float] = []
+    for figure in figures:
+        if not any(abs(figure - seen) <= 0.001 for seen in unique):
+            unique.append(figure)
+    return unique
+
+
+def _money_matches(value: float, figure: float) -> bool:
+    return abs(value - figure) <= 0.011
+
+
+def _format_desynpuf_code(code: str, description: str, stats: dict) -> str:
+    lines = [
+        f"Code {code} ({description}):",
+        (
+            f"- overall LINE_ALOWD_CHRG_AMT: n={int(stats['n'])} "
+            f"p25={float(stats['p25']):.2f} median={float(stats['median']):.2f} "
+            f"p75={float(stats['p75']):.2f}"
+        ),
+    ]
+    by_year = stats.get("by_year") or {}
+    if isinstance(by_year, dict):
+        for year in sorted(by_year):
+            year_stats = by_year[year]
+            if not isinstance(year_stats, dict) or int(year_stats.get("n") or 0) <= 0:
+                lines.append(f"- {year}: n=0 (no included rows; do not invent an amount)")
+                continue
+            lines.append(
+                f"- {year}: n={int(year_stats['n'])} "
+                f"p25={float(year_stats['p25']):.2f} "
+                f"median={float(year_stats['median']):.2f} "
+                f"p75={float(year_stats['p75']):.2f}"
+            )
+    return "\n".join(lines)
+
+
+def _pricing_disclosure(sources: set[str]) -> tuple[str, str]:
+    if sources == {"desynpuf"}:
+        return "desynpuf", _DESYNPUF_DISCLAIMER
+    if "desynpuf" in sources:
+        return "mixed", _MIXED_DISCLAIMER
+    return "fixture", _FIXTURE_DISCLAIMER
+
+
 def _office_copay(eligibility: dict, specialty_code: str = "") -> tuple[float, str]:
     """Pick PCP vs specialist office copay from the saved eligibility snapshot."""
     if _is_specialist_specialty(specialty_code):
@@ -817,48 +923,82 @@ def _grok_visit_price_estimate(
     symptoms: str = "",
     prior_visit_note: str = "",
 ) -> dict[str, tuple[float, float]]:
-    """Ask Grok for a realistic allowed-charge range per CPT code, for this ZIP/region.
+    """Ask xAI for an allowed-charge range grounded in supplied DE-SynPUF figures.
 
-    Returns {} on any failure (no XAI_API_KEY, request error, bad/partial JSON) so
-    callers fall back to the static fee schedule. Grok never computes what the patient
-    owes — only the typical billed/allowed charge; copay/deductible/coinsurance math
-    stays deterministic in Python from the patient's real plan data (see `_line_cost`).
+    Only codes that have DE-SynPUF rows are sent. Returns {} when XAI_API_KEY is
+    missing, the call fails, or no returned amount matches the supplied figures,
+    so callers keep the fixture fee. A code omitted from the result also keeps
+    the fixture fee. xAI never computes what the patient owes — copay, deductible,
+    and coinsurance stay in `_line_cost`.
     """
-    if not candidates or not zip_code:
+    if not candidates or not _xai_cost_configured():
         return {}
 
-    services_blob = "\n".join(
-        f"- {c['code']}: {c['description']} (setting: {c['setting']})" for c in candidates
+    grounded: list[tuple[dict, dict]] = []
+    for candidate in candidates:
+        stats = _desynpuf_code_stats(candidate["code"])
+        if stats and _desynpuf_dollar_figures(stats):
+            grounded.append((candidate, stats))
+    if not grounded:
+        return {}
+
+    extract = _desynpuf_extract()
+    meta = extract.get("metadata") if isinstance(extract.get("metadata"), dict) else {}
+    file_names = [
+        str(item.get("file_name"))
+        for item in (meta.get("files") or [])
+        if isinstance(item, dict) and item.get("file_name")
+    ]
+    services_blob = "\n\n".join(
+        _format_desynpuf_code(candidate["code"], candidate.get("description") or "", stats)
+        for candidate, stats in grounded
     )
     user_message = (
-        f"Patient ZIP code: {zip_code}\n"
-        f"Insurance payer: {payer_name or 'unknown'} "
+        "Synthetic CMS DE-SynPUF 2008-2010 carrier claims. "
+        "The dollar figures below are the only amounts you may use. "
+        "They are line allowed charges (LINE_ALOWD_CHRG_AMT), not a bill and "
+        "not current Medicare payment.\n"
+        f"CMS files: {', '.join(file_names) or 'see the supplied figures'}.\n"
+        "Years are the calendar year of CLM_FROM_DT inside those files.\n\n"
+        f"{services_blob}\n\n"
+        "Context only — do not use this to change any amount:\n"
+        f"ZIP: {zip_code or 'not provided'}\n"
+        f"Payer: {payer_name or 'unknown'} "
         f"({plan_type or 'unknown plan type'}, network: {network_name or 'unknown'})\n"
-        f"Visit reason (context only — do not diagnose): {symptoms or 'not provided'}\n"
-        f"Prior visit note (context only): {prior_visit_note or 'none'}\n\n"
-        f"Services needing a typical allowed-charge estimate for this ZIP code:\n{services_blob}"
+        f"Visit reason: {symptoms or 'not provided'}\n"
+        f"Prior visit note: {prior_visit_note or 'none'}"
     )
 
     try:
-        raw = generate_json(COST_ESTIMATE_SYSTEM_PROMPT, user_message)
+        raw = generate_json(
+            COST_ESTIMATE_SYSTEM_PROMPT,
+            user_message,
+            allow_groq_fallback=False,
+        )
         payload = json.loads(raw)
     except Exception:
         return {}
 
-    wanted = {c["code"] for c in candidates}
+    allowed_figures = {
+        candidate["code"]: _desynpuf_dollar_figures(stats) for candidate, stats in grounded
+    }
     out: dict[str, tuple[float, float]] = {}
-    for row in (payload.get("visit_prices") or []) if isinstance(payload, dict) else []:
+    rows = (payload.get("visit_prices") or []) if isinstance(payload, dict) else []
+    for row in rows:
         if not isinstance(row, dict):
             continue
         code = str(row.get("code") or "").strip()
-        if code not in wanted:
+        figures = allowed_figures.get(code)
+        if not figures:
             continue
         try:
             low = float(row["allowed_low"])
             high = float(row["allowed_high"])
         except (KeyError, TypeError, ValueError):
             continue
-        if low < 0 or high < 0:
+        if not any(_money_matches(low, figure) for figure in figures):
+            continue
+        if not any(_money_matches(high, figure) for figure in figures):
             continue
         if high < low:
             low, high = high, low
@@ -881,8 +1021,13 @@ def _line_cost(
     fee = _fee_schedule().get(code)
     if not fee:
         raise ValueError("Could not estimate a price for that visit service.")
+    allowed_source = "desynpuf" if price_range else "fixture"
     allowed_low, allowed_high = price_range if price_range else (fee["allowed"], fee["allowed"])
-    fee = {**fee, "allowed": round((allowed_low + allowed_high) / 2, 2)}
+    fee = {
+        **fee,
+        "allowed": round((allowed_low + allowed_high) / 2, 2),
+        "allowed_source": allowed_source,
+    }
     status = (eligibility or {}).get("status")
     if status != "active":
         return {
@@ -1121,8 +1266,6 @@ def visit_guess(
         )
         for code, setting in codes
     ]
-    priced_via_grok = bool(price_overrides)
-
     medicine_lines = estimate_medicines(medicines, eligibility)
 
     visit_low = round(sum(line["patient_owes_low"] or 0 for line in visit_lines), 2) if visit_lines else 0
@@ -1132,16 +1275,15 @@ def visit_guess(
     med_high = round(sum(line["patient_owes_high"] or 0 for line in priced_meds), 2)
     unpriced = [line for line in medicine_lines if not line.get("priced")]
 
+    pricing_source, disclaimer = _pricing_disclosure(
+        {line.get("allowed_source") or "fixture" for line in visit_lines}
+    )
     estimate = {
         "is_guess": True,
         "is_estimate": True,
         "from_transcript": bool(from_transcript),
-        "disclaimer": (
-            f"Estimate based on your saved plan and typical charges near {zip_code} — not a bill."
-            if priced_via_grok and zip_code
-            else "Estimate based on your saved plan — not a bill."
-        ),
-        "pricing_source": "grok" if priced_via_grok else "fixture",
+        "disclaimer": disclaimer,
+        "pricing_source": pricing_source,
         "zip_code": zip_code,
         "likely_visits": visit_lines,
         "medicines": medicine_lines,

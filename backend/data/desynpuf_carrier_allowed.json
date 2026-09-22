@@ -1,0 +1,253 @@
+{
+  "metadata": {
+    "dataset": "CMS Linkable 2008-2010 Medicare Data Entrepreneurs' Synthetic Public Use File (DE-SynPUF)",
+    "file_type": "Carrier Claims (physician/supplier Part B)",
+    "license": "Synthetic public use file published by CMS for software development and research training. No beneficiary in the DE-SynPUF is a real Medicare patient. These figures are not a current Medicare fee schedule, not a bill, and not a payment rate. CMS coarsened, imputed, and suppressed variables, including line allowed charges, so the file must not be used to infer actual Medicare payments.",
+    "source_pages": [
+      "https://www.cms.gov/data-research/statistics-trends-and-reports/medicare-claims-synthetic-public-use-files/cms-2008-2010-data-entrepreneurs-synthetic-public-use-file-de-synpuf/de10-sample-1"
+    ],
+    "dictionary": {
+      "title": "CMS Linkable 2008\u20132010 Medicare DE-SynPUF Codebook",
+      "url": "https://www.cms.gov/files/document/de-10-codebook.pdf-0",
+      "updated": "2013-02-20",
+      "users_guide_url": "https://www.cms.gov/research-statistics-data-and-systems/downloadable-public-use-files/synpufs/downloads/synpuf_dug.pdf",
+      "carrier_variables": 142
+    },
+    "years": [
+      "2008",
+      "2009",
+      "2010"
+    ],
+    "year_column": "CLM_FROM_DT",
+    "year_rule": "Carrier files store 2008, 2009, and 2010 together. The year is the calendar year of CLM_FROM_DT (YYYYMMDD).",
+    "columns": {
+      "hcpcs": [
+        "HCPCS_CD_1",
+        "HCPCS_CD_2",
+        "HCPCS_CD_3",
+        "HCPCS_CD_4",
+        "HCPCS_CD_5",
+        "HCPCS_CD_6",
+        "HCPCS_CD_7",
+        "HCPCS_CD_8",
+        "HCPCS_CD_9",
+        "HCPCS_CD_10",
+        "HCPCS_CD_11",
+        "HCPCS_CD_12",
+        "HCPCS_CD_13"
+      ],
+      "line_allowed_charge": [
+        "LINE_ALOWD_CHRG_AMT_1",
+        "LINE_ALOWD_CHRG_AMT_2",
+        "LINE_ALOWD_CHRG_AMT_3",
+        "LINE_ALOWD_CHRG_AMT_4",
+        "LINE_ALOWD_CHRG_AMT_5",
+        "LINE_ALOWD_CHRG_AMT_6",
+        "LINE_ALOWD_CHRG_AMT_7",
+        "LINE_ALOWD_CHRG_AMT_8",
+        "LINE_ALOWD_CHRG_AMT_9",
+        "LINE_ALOWD_CHRG_AMT_10",
+        "LINE_ALOWD_CHRG_AMT_11",
+        "LINE_ALOWD_CHRG_AMT_12",
+        "LINE_ALOWD_CHRG_AMT_13"
+      ],
+      "claim_start_date": "CLM_FROM_DT"
+    },
+    "column_labels": {
+      "HCPCS_CD_1_to_13": "DESYNPUF: Line HCFA Common Procedure Coding System 1-13 (codebook variables 39-51)",
+      "LINE_ALOWD_CHRG_AMT_1_to_13": "DESYNPUF: Line Allowed Charge Amount 1-13 (codebook variables 104-116)",
+      "CLM_FROM_DT": "DESYNPUF: Claims start date (codebook variable 3)"
+    },
+    "allowed_charge_definition": "Codebook CAR-104-116: the amount of allowed charges for the line item service on the noninstitutional claim. The amount includes beneficiary-paid amounts (deductible and coinsurance).",
+    "inclusion_rule": "A claim line is included when HCPCS_CD_n equals a target code, CLM_FROM_DT falls in 2008, 2009, or 2010, and the paired LINE_ALOWD_CHRG_AMT_n parses as a number greater than zero. Zero, blank, and unparseable allowed amounts are counted and excluded. No rows are fabricated when a code is absent.",
+    "allowed_low_high_inputs": "For each code, n is the count of included lines. p25, median, and p75 are Hyndman-Fan type 7 percentiles of LINE_ALOWD_CHRG_AMT (index = (n - 1) * p / 100, linear interpolation), rounded half-up to cents. The same statistics are computed for each year. allowed_low / allowed_high sent to xAI must be chosen from these dollar figures (not from n).",
+    "target_codes_from": "backend/data/mock_fee_schedule.json",
+    "target_codes": [
+      "72148",
+      "83036",
+      "99203",
+      "99213",
+      "99214"
+    ],
+    "codes_without_rows": [],
+    "files": [
+      {
+        "file_name": "DE1_0_2008_to_2010_Carrier_Claims_Sample_1A.zip",
+        "csv_name": "DE1_0_2008_to_2010_Carrier_Claims_Sample_1A.csv",
+        "url": "https://downloads.cms.gov/files/DE1_0_2008_to_2010_Carrier_Claims_Sample_1A.zip",
+        "sample_page": "https://www.cms.gov/data-research/statistics-trends-and-reports/medicare-claims-synthetic-public-use-files/cms-2008-2010-data-entrepreneurs-synthetic-public-use-file-de-synpuf/de10-sample-1",
+        "sample": 1,
+        "segment": "A",
+        "zip_bytes": 113217928,
+        "csv_bytes": 1236512878,
+        "sha256": "4b4038b5f6cd9c524fa3a655a3f467aef01af56c3cae0f08902a35a9945bed97",
+        "claim_rows": 2370667
+      },
+      {
+        "file_name": "DE1_0_2008_to_2010_Carrier_Claims_Sample_1B.zip",
+        "csv_name": "DE1_0_2008_to_2010_Carrier_Claims_Sample_1B.csv",
+        "url": "https://downloads.cms.gov/files/DE1_0_2008_to_2010_Carrier_Claims_Sample_1B.zip",
+        "sample_page": "https://www.cms.gov/data-research/statistics-trends-and-reports/medicare-claims-synthetic-public-use-files/cms-2008-2010-data-entrepreneurs-synthetic-public-use-file-de-synpuf/de10-sample-1",
+        "sample": 1,
+        "segment": "B",
+        "zip_bytes": 113267827,
+        "csv_bytes": 1236509358,
+        "sha256": "99149d9d40e3a1556264be87a26909f829f283366293798aab81b88e2a0f3acd",
+        "claim_rows": 2370668
+      }
+    ],
+    "samples_required_note": "CMS splits each carrier sample into segment A and segment B. Both segments of each requested sample are included."
+  },
+  "codes": {
+    "72148": {
+      "n": 6589,
+      "p25": 40.0,
+      "median": 70.0,
+      "p75": 110.0,
+      "lines_excluded_nonpositive": 732,
+      "lines_excluded_blank": 0,
+      "lines_excluded_unparseable": 0,
+      "lines_excluded_year_outside_2008_2010": 0,
+      "by_year": {
+        "2008": {
+          "n": 2289,
+          "p25": 40.0,
+          "median": 70.0,
+          "p75": 110.0
+        },
+        "2009": {
+          "n": 2625,
+          "p25": 40.0,
+          "median": 70.0,
+          "p75": 110.0
+        },
+        "2010": {
+          "n": 1675,
+          "p25": 50.0,
+          "median": 70.0,
+          "p75": 130.0
+        }
+      }
+    },
+    "83036": {
+      "n": 49339,
+      "p25": 10.0,
+      "median": 20.0,
+      "p75": 40.0,
+      "lines_excluded_nonpositive": 21496,
+      "lines_excluded_blank": 0,
+      "lines_excluded_unparseable": 0,
+      "lines_excluded_year_outside_2008_2010": 0,
+      "by_year": {
+        "2008": {
+          "n": 17971,
+          "p25": 10.0,
+          "median": 10.0,
+          "p75": 40.0
+        },
+        "2009": {
+          "n": 19064,
+          "p25": 10.0,
+          "median": 20.0,
+          "p75": 40.0
+        },
+        "2010": {
+          "n": 12304,
+          "p25": 10.0,
+          "median": 20.0,
+          "p75": 40.0
+        }
+      }
+    },
+    "99203": {
+      "n": 34774,
+      "p25": 40.0,
+      "median": 60.0,
+      "p75": 100.0,
+      "lines_excluded_nonpositive": 4165,
+      "lines_excluded_blank": 0,
+      "lines_excluded_unparseable": 0,
+      "lines_excluded_year_outside_2008_2010": 0,
+      "by_year": {
+        "2008": {
+          "n": 11133,
+          "p25": 40.0,
+          "median": 60.0,
+          "p75": 90.0
+        },
+        "2009": {
+          "n": 13168,
+          "p25": 40.0,
+          "median": 60.0,
+          "p75": 90.0
+        },
+        "2010": {
+          "n": 10473,
+          "p25": 40.0,
+          "median": 70.0,
+          "p75": 100.0
+        }
+      }
+    },
+    "99213": {
+      "n": 522594,
+      "p25": 40.0,
+      "median": 60.0,
+      "p75": 90.0,
+      "lines_excluded_nonpositive": 77412,
+      "lines_excluded_blank": 0,
+      "lines_excluded_unparseable": 0,
+      "lines_excluded_year_outside_2008_2010": 0,
+      "by_year": {
+        "2008": {
+          "n": 193237,
+          "p25": 40.0,
+          "median": 60.0,
+          "p75": 90.0
+        },
+        "2009": {
+          "n": 202975,
+          "p25": 40.0,
+          "median": 60.0,
+          "p75": 90.0
+        },
+        "2010": {
+          "n": 126382,
+          "p25": 40.0,
+          "median": 70.0,
+          "p75": 100.0
+        }
+      }
+    },
+    "99214": {
+      "n": 369766,
+      "p25": 30.0,
+      "median": 60.0,
+      "p75": 100.0,
+      "lines_excluded_nonpositive": 59883,
+      "lines_excluded_blank": 0,
+      "lines_excluded_unparseable": 0,
+      "lines_excluded_year_outside_2008_2010": 0,
+      "by_year": {
+        "2008": {
+          "n": 130345,
+          "p25": 30.0,
+          "median": 60.0,
+          "p75": 90.0
+        },
+        "2009": {
+          "n": 145064,
+          "p25": 30.0,
+          "median": 60.0,
+          "p75": 100.0
+        },
+        "2010": {
+          "n": 94357,
+          "p25": 30.0,
+          "median": 70.0,
+          "p75": 100.0
+        }
+      }
+    }
+  }
+}
