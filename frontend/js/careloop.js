@@ -3019,10 +3019,11 @@ const CareLoop = {
     const source = demo
       ? 'Sample amounts from the selected demo conversation, your saved plan, and medicines on this visit’s plan.'
       : 'Amounts from your transcript, your saved plan, and medicines on this visit’s plan.';
+    const pricingNote = estimate.disclaimer ? `<p>${this.esc(estimate.disclaimer)}</p>` : '';
     const visitTable = lines.length
       ? `<h3 class="mt">Visit</h3><table class="cost-table"><thead><tr><th>ESTIMATED SERVICE</th><th>ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${visitRows}</tbody></table><div class="cost-subtotal">Visit subtotal ${this.money(visitLow)}${visitHigh !== visitLow ? `–${this.money(visitHigh)}` : ''}</div>`
       : `<h3 class="mt">Visit</h3><div class="notice">No visit services priced yet.</div>`;
-    return `<h2>A little visibility into costs.</h2><p>${source}</p>${visitTable}<h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${claim}`;
+    return `<h2>A little visibility into costs.</h2><p>${source}</p>${pricingNote}${visitTable}<h3 class="mt">Prescription medicines</h3><table class="cost-table"><thead><tr><th>MEDICINE</th><th>ALLOWED</th><th>PLAN PAYS</th><th>YOU PAY</th></tr></thead><tbody>${medRows}</tbody></table><div class="cost-subtotal">Medicines subtotal ${this.money(medLow)}${medHigh !== medLow ? `–${this.money(medHigh)}` : ''}${unpriced ? ` · ${unpriced} not priced` : ''}</div><div class="cost-total">${this.money(estimate.patient_owes_low)}${estimate.patient_owes_high !== estimate.patient_owes_low ? `–${this.money(estimate.patient_owes_high)}` : ''} <small>${this.esc(totalNote)}</small></div>${claim}`;
   },
 
   followups() {

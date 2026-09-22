@@ -75,7 +75,7 @@ Letter flow: Pydantic model in `main.py` → user-message string → `llm.genera
 |------------|-------------------|
 | Login / signup | **Real** Supabase Auth + `profiles` when `SUPABASE_*` + `SESSION_SECRET` are set. Else mock users in `backend/data/mock_users.json`. Signup is 503 without Supabase. |
 | Coverage confirm | **Mock** fixture by default. **Optional real sandbox:** Stedi *test* 270/271 if a `test_` key is loaded and the member matches that payer’s canned sandbox subscriber. Production Stedi keys are refused. |
-| Network / cost guess | **Mock** directory + fee schedule. Output is a labeled **estimate**, not a bill or approval. |
+| Network / cost guess | **Mock** clinician directory. Visit allowed-charge ranges come from xAI reading a committed extract of CMS DE-SynPUF 2008–2010 carrier line allowed charges (synthetic public use file, sample 1 segments A and B; not real patients; not a current Medicare fee schedule). Patient-owed copay, deductible, and coinsurance stay deterministic Python. If `XAI_API_KEY` is missing, the call fails, or a code has no DE-SynPUF rows, that line uses `mock_fee_schedule.json` and the disclaimer does not claim DE-SynPUF. Output is a labeled **estimate**, not a bill or approval. |
 | Card / page extract | **Optional real** xAI vision. Unreadable fields tagged `[NEEDS VERIFICATION]`. JSON is **not** watermarked. Never invent a copay that was not printed. |
 | Scribe / STT | Seeded demo transcripts always; live STT needs `XAI_API_KEY`. SOAP is a draft until review. |
 | PA / appeal / demand | **Draft text only** (watermark + HITL if a download UI is added). No file/fax. |

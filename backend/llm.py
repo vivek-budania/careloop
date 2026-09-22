@@ -180,12 +180,28 @@ def generate(system_prompt: str, user_message: str, add_watermark: bool = True) 
     return text
 
 
-def generate_json(system_prompt: str, user_message: str, media: list | None = None) -> str:
+def generate_json(
+    system_prompt: str,
+    user_message: str,
+    media: list | None = None,
+    *,
+    allow_groq_fallback: bool = True,
+) -> str:
     """Generate JSON from xAI. Do not watermark.
 
     Used for denial parsing, insurance-card extraction, and printed-page summaries.
     `media` is a list of {mime_type, data: bytes} for vision.
+    Visit cost estimates pass allow_groq_fallback=False so a missing or failed
+    xAI call stays on the fixture fee schedule instead of another model.
     """
+    if not allow_groq_fallback:
+        return _xai_generate(
+            system_prompt,
+            user_message,
+            json_mode=True,
+            temperature=0.1,
+            media=media,
+        )
     return _generate_with_fallback(
         system_prompt,
         user_message,
