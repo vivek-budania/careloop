@@ -1,5 +1,11 @@
 # CareLoop
 
+## Watch the demo
+
+[Watch the CareLoop patient-journey walkthrough on YouTube (2:44)](https://www.youtube.com/watch?v=QZQ3VV0eWpM)
+
+A walkthrough of the HopHacks 2026 prototype, from preparing for a visit to summaries, estimated costs, follow-ups, and shareable history.
+
 Mocked US **patient-journey demo**: one FastAPI process serves a vanilla JS patient shell so coverage, visit, orders, prior auth, delivery, claim, meds, and follow-up stay on **one thread**.
 
 It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is local demo state. Drafts are for a human to review. The app never files, faxes, e-prescribes, or calls a live insurer.
