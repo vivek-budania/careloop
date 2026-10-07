@@ -1,4 +1,4 @@
-# CareLoop patient workflow (teammate map)
+# VisitArc patient workflow (teammate map)
 
 How the **hackathon web app** should feel for the patient. Visual clickthrough: [`frontend/mockups/`](frontend/mockups/) → http://localhost:8080/mockups/. Owner/build split: [`plan.md`](plan.md) (Vivek = shell + thread + history share). This file is **not** a product spec for live insurance or clinical decisions.
 
@@ -48,7 +48,7 @@ Not a ☰ item. Stepper is **1–8 of 8** on the visit itself (symptoms … plan
 
 ### 0. Login — `#s01`
 
-- **User sees:** CareLoop wordmark, demo email `maya.chen@example.com`, password, prototype note (clinician reviews drafts).
+- **User sees:** VisitArc wordmark, demo email `maya.chen@example.com`, password, prototype note (clinician reviews drafts).
 - **User does:** **Continue (first visit)** *or* **I’m returning**.
 - **Goes to:** Insurance hub (`#s02`) if first-time; Today (`#s19`) if repeat.
 
@@ -80,7 +80,7 @@ Dave owns card/coverage APIs; Vivek renders the shell.
 
 ### 1. Issues / symptoms — `#s05` · journey 1 of 8
 
-- **User sees:** Chips (fatigue, thirst, frequent urination on) + free-text. “CareLoop does not diagnose.”
+- **User sees:** Chips (fatigue, thirst, frequent urination on) + free-text. “VisitArc does not diagnose.”
 - **User does:** Edit → **Continue**.
 - **Goes to:** Doctor suggestions (`#s06`). ☰ available but does not contain this step.
 
@@ -266,7 +266,7 @@ Skip insurance → Today (no cost screen on that visit)
 | Meds taken/missed/refill | **Local/mock schedule** after mock dispense. No pharmacy, no eRx. |
 | History packet (For the clinic) | **Export fixture** from the thread. Not a signed appeal. |
 | DenialShield letters (PA/appeal/demand) | **Real LLM drafts** when `XAI_API_KEY` is set, plus **watermark + HITL**. Journey *calls* those APIs; no new letter types. |
-| Provider / Patient Advocate tabs | **Existing app** at `/`. Keep reachable; not CareLoop chrome. |
+| Provider / Patient Advocate tabs | **Existing app** at `/`. Keep reachable; not VisitArc chrome. |
 | Live payer, EHR, eRx, real claims, production HIPAA | **Out of scope.** |
 
 Until the store exists, UI can mock `GET /api/careloop/thread`. After Vivek’s B lands, one thread is source of truth (Dave writes Coverage; Sreekar writes encounter/orders/auth/meds/claim/follow-up; Vivek presents + share/export).

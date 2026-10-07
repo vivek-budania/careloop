@@ -55,7 +55,7 @@ def status() -> dict:
             "configured": True,
             "test_mode": False,
             "message": (
-                "STEDI_API_KEY is set but is not a test_ key. CareLoop will not "
+                "STEDI_API_KEY is set but is not a test_ key. VisitArc will not "
                 "call production eligibility. Use the sandbox test key locally."
             ),
         }

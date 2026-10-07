@@ -40,7 +40,7 @@ function show(id) {
   });
   const cap = document.getElementById("cap-name");
   if (cap) cap.textContent = NAMES[id] || id;
-  document.title = (NAMES[id] || "CareLoop") + " · mockup";
+  document.title = (NAMES[id] || "VisitArc") + " · mockup";
   const i = ORDER.indexOf(id);
   const prev = document.getElementById("prev");
   const next = document.getElementById("next");

@@ -176,7 +176,7 @@ class ScribeSummarizeRequest(BaseModel):
 
 class HistoryPdfRequest(BaseModel):
     markdown: str
-    title: str = "CareLoop history packet"
+    title: str = "VisitArc history packet"
 
 
 class LoginRequest(BaseModel):
@@ -808,7 +808,7 @@ def history_pdf(
     try:
         data = careloop_pdf.build_history_pdf(
             req.markdown,
-            title=req.title or "CareLoop history packet",
+            title=req.title or "VisitArc history packet",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
