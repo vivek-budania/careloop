@@ -158,7 +158,7 @@ const CareLoop = {
   },
 
   logo() {
-    return `<div class="logo">${this.icon('loop')}visitarc<span style="color:#a76e50">.</span></div>`;
+    return `<div class="logo">${this.icon('loop')}careloop<span style="color:#a76e50">.</span></div>`;
   },
 
   esc(s) {
@@ -375,7 +375,7 @@ const CareLoop = {
           <label class="check"><input type="checkbox" name="channel_email" ${emailOn ? 'checked' : ''}> Email ping</label>
           <label class="check"><input type="checkbox" name="channel_calendar" ${calOn ? 'checked' : ''}> Add to calendar (.ics)</label>
         </div>
-        <p style="font-size:11px;margin-top:12px">Demo only. VisitArc stores the reminder here and can open a calendar file or mailto draft — it does not send live email.</p>
+        <p style="font-size:11px;margin-top:12px">Demo only. CareLoop stores the reminder here and can open a calendar file or mailto draft — it does not send live email.</p>
       </form>`,
       this.btn('Cancel', 'close', 'secondary')
         + (existing ? this.btn('Remove', 'reminder-remove', 'coral', `data-rem-id="${this.esc(existing.id)}"`) : '')
@@ -456,16 +456,16 @@ const CareLoop = {
     const endDate = new Date(row.when);
     endDate.setMinutes(endDate.getMinutes() + 30);
     const end = this.icsStamp(endDate.toISOString());
-    const summary = String(row.title || 'VisitArc reminder').replace(/\n/g, ' ');
+    const summary = String(row.title || 'CareLoop reminder').replace(/\n/g, ' ');
     const description = [
       row.detail || '',
-      `VisitArc ${this.reminderKindLabel(row.kind)} reminder.`,
+      `CareLoop ${this.reminderKindLabel(row.kind)} reminder.`,
       'Demo calendar file — not a live clinic notification.',
     ].filter(Boolean).join('\\n');
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//VisitArc//Reminders//EN',
+      'PRODID:-//CareLoop//Reminders//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'BEGIN:VEVENT',
@@ -491,9 +491,9 @@ const CareLoop = {
       this.toast('No email on this reminder.');
       return;
     }
-    const subject = encodeURIComponent(`VisitArc reminder: ${row.title}`);
+    const subject = encodeURIComponent(`CareLoop reminder: ${row.title}`);
     const body = encodeURIComponent(
-      `${row.title}\n${this.formatReminderWhen(row.when)}\n${row.detail || ''}\n\nDemo draft only — VisitArc does not send live email.`,
+      `${row.title}\n${this.formatReminderWhen(row.when)}\n${row.detail || ''}\n\nDemo draft only — CareLoop does not send live email.`,
     );
     window.location.href = `mailto:${encodeURIComponent(row.email)}?subject=${subject}&body=${body}`;
   },
@@ -1393,7 +1393,7 @@ const CareLoop = {
     const raw = String((err && err.message) || err || '').trim();
     if (!raw) return 'Something didn’t work. Try again.';
     if (/cannot connect|failed to fetch|backend running|networkerror/i.test(raw)) {
-      return 'Couldn’t reach VisitArc. Try again in a moment.';
+      return 'Couldn’t reach CareLoop. Try again in a moment.';
     }
     if (/XAI_API_KEY|GEMINI_API_KEY|GROQ_API_KEY|STEDI_API_KEY|API_KEY|\.env/i.test(raw)) {
       return 'That step isn’t available on this host right now. Try a sample, or continue.';
@@ -1438,7 +1438,7 @@ const CareLoop = {
       status.textContent = 'Preparing your packet…';
     }
     try {
-      const blob = await API.fetchHistoryPdf(markdown, 'VisitArc history packet');
+      const blob = await API.fetchHistoryPdf(markdown, 'CareLoop history packet');
       if (this.packetPdf.url) URL.revokeObjectURL(this.packetPdf.url);
       const url = URL.createObjectURL(blob);
       this.packetPdf = { key: markdown, url };
@@ -1555,7 +1555,7 @@ const CareLoop = {
       }\nCoverage at visit: ${v.coverage}\n`
     )).join('');
     return [
-      '# VisitArc · Patient history packet',
+      '# CareLoop · Patient history packet',
       '',
       `Patient: ${this.displayName()}`,
       `Coverage: ${coverageLine}`,
@@ -1756,7 +1756,7 @@ const CareLoop = {
 
   renderSignup() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>A few details now. A clearer first visit later.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><div class="signup-grid"><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Username<input name="username" autocomplete="username" placeholder="yourname" maxlength="30" required></label></div><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">Creates a VisitArc demo account · Never use real medical information.</p></form></section></div>`;
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Let’s begin<br>with <em>you.</em></h1><p>A few details now help keep your first visit organized from the start.</p>${this.art()}<small>A few details now. A clearer first visit later.</small></section><section class="login-form signup-form"><form id="signup-form"><button type="button" class="back signup-back">${this.icon('back')} Back to login</button><span class="eyebrow">Start your care journey</span><h2>Create your care space.</h2><p>Tell us who you are, then we’ll help you prepare for your first visit.</p><div class="signup-grid"><label class="field">Full name<input name="name" autocomplete="name" placeholder="Your full name" required></label><label class="field">Date of birth<input name="dateOfBirth" type="date" autocomplete="bday" required></label></div><div class="signup-grid"><label class="field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label class="field">Username<input name="username" autocomplete="username" placeholder="yourname" maxlength="30" required></label></div><label class="field">Create password<div class="password-wrap"><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required><button type="button" class="toggle-password" aria-label="Show password">${this.icon('eye')}</button></div></label><label class="field">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="signup-consent"><input name="consent" type="checkbox" required><span>I agree to use fictional information for this interactive demo.</span></label><div class="error" id="signup-error" role="alert"></div><button class="btn pill full" type="submit">CREATE MY CARE SPACE ${this.icon('arrow')}</button><p class="fine-print">Creates a CareLoop demo account · Never use real medical information.</p></form></section></div>`;
     const form = document.getElementById('signup-form');
     const passwordInput = form.password;
     const errBox = document.getElementById('signup-error');
@@ -1856,7 +1856,7 @@ const CareLoop = {
   renderSignupSuccess(result, profile) {
     const app = document.getElementById('app');
     const username = result.user?.username || '';
-    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>Your account is created. Continue when you’re ready.</p>${this.art()}<small>Your password stays with your account, not in your care profile.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>Welcome to VisitArc.</h2><p>Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.</p><button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button><p class="fine-print">Your password stays with your account.</p></div></section></div>`;
+    app.innerHTML = `<div class="login signup"><section class="login-story">${this.logo()}<h1>Your care space<br>is <em>ready.</em></h1><p>Your account is created. Continue when you’re ready.</p>${this.art()}<small>Your password stays with your account, not in your care profile.</small></section><section class="login-form signup-form"><div class="signup-success"><span class="signup-success-icon">${this.icon('check')}</span><span class="eyebrow">Account created</span><h2>Welcome to CareLoop.</h2><p>Your username is <strong>${this.esc(username)}</strong>. Your first-visit setup is ready.</p><button type="button" class="btn pill full" data-signup-action="continue">CONTINUE TO MY CARE ${this.icon('arrow')}</button><p class="fine-print">Your password stays with your account.</p></div></section></div>`;
     const button = app.querySelector('[data-signup-action]');
     button.addEventListener('click', async () => {
       button.disabled = true;
@@ -1882,7 +1882,7 @@ const CareLoop = {
     const navActive = ['Today', 'Past visits', 'History', 'Upcoming visits', 'Reminders', 'Prescriptions', 'Test records', 'Insurance', 'Profile'].includes(this.view)
       ? (this.view === 'History' ? 'Past visits' : this.view)
       : '';
-    document.getElementById('app').innerHTML = `<button class="overlay" data-action="menu" aria-label="Close navigation"></button><aside class="sidebar">${this.logo()}<span class="eyebrow">Your space</span><nav class="nav" aria-label="Main navigation">${destinations.map(([n, i]) => `<button type="button" data-nav="${n}" class="${navActive === n ? 'active' : ''}" ${navActive === n ? 'aria-current="page"' : ''}>${this.icon(i)}${n}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="profile-mini"><button type="button" class="profile-mini-main" data-nav="Profile" aria-label="Open profile"><div class="avatar">${this.esc(this.initials(name))}</div><div><strong style="font-size:12px">${this.esc(name)}</strong><small>My personal care space</small></div></button><button type="button" class="logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></aside><div class="shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open navigation">${this.icon('menu')}</button><span class="mobile-brand">visitarc.</span><div class="breadcrumb">My care <span>/</span><strong>${this.esc(crumb)}</strong></div><div class="topright"><span class="demo-badge"><span class="dot"></span> DEMO MODE</span><button class="icon-btn" aria-label="Notifications" data-action="notifications">${this.icon('bell')}</button><div class="account-chip"><button class="avatar" data-nav="Profile" aria-label="Open profile">${this.esc(this.initials(name))}</button><button type="button" class="logout topbar-logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></header><main>${content}<footer class="footer"><span>Your care, connected. &nbsp; ♡</span><span>Fictional data · No live care or insurance actions</span></footer></main></div>`;
+    document.getElementById('app').innerHTML = `<button class="overlay" data-action="menu" aria-label="Close navigation"></button><aside class="sidebar">${this.logo()}<span class="eyebrow">Your space</span><nav class="nav" aria-label="Main navigation">${destinations.map(([n, i]) => `<button type="button" data-nav="${n}" class="${navActive === n ? 'active' : ''}" ${navActive === n ? 'aria-current="page"' : ''}>${this.icon(i)}${n}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="profile-mini"><button type="button" class="profile-mini-main" data-nav="Profile" aria-label="Open profile"><div class="avatar">${this.esc(this.initials(name))}</div><div><strong style="font-size:12px">${this.esc(name)}</strong><small>My personal care space</small></div></button><button type="button" class="logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></aside><div class="shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open navigation">${this.icon('menu')}</button><span class="mobile-brand">careloop.</span><div class="breadcrumb">My care <span>/</span><strong>${this.esc(crumb)}</strong></div><div class="topright"><span class="demo-badge"><span class="dot"></span> DEMO MODE</span><button class="icon-btn" aria-label="Notifications" data-action="notifications">${this.icon('bell')}</button><div class="account-chip"><button class="avatar" data-nav="Profile" aria-label="Open profile">${this.esc(this.initials(name))}</button><button type="button" class="logout topbar-logout" data-action="logout" aria-label="Log out" title="Log out">${this.icon('logout')}<span>Log out</span></button></div></div></header><main>${content}<footer class="footer"><span>Your care, connected. &nbsp; ♡</span><span>Fictional data · No live care or insurance actions</span></footer></main></div>`;
   },
 
   upcomingVisitCard(j, c) {
@@ -2309,7 +2309,7 @@ const CareLoop = {
     const j = this.thread.journey || {};
     const text = this.transcriptText();
     const live = Boolean(this.liveTranscript());
-    const lines = ['# VisitArc · Visit transcript', '', `Patient: ${this.displayName()}`];
+    const lines = ['# CareLoop · Visit transcript', '', `Patient: ${this.displayName()}`];
     if (j.doctor) lines.push(`Clinician: ${j.doctor}`);
     if (j.symptoms) lines.push(`Visit reason: ${j.symptoms}`);
     lines.push('', '## Full conversation', '');
@@ -3141,7 +3141,7 @@ const CareLoop = {
       return `<div class="narrow">${this.head('Insurance, a little clearer.', 'Your plan details stay alongside your care.')}<section class="card empty">${this.icon('shield')}<h2>No plan on file.</h2><p>You can add a sample plan or continue without estimates.</p><div class="row" style="flex-wrap:wrap">${this.btn('Try a sample card', 'sample-card')}${this.btn('Add insurance', 'update-insurance', 'secondary')}</div></section></div>`;
     }
     const e = this.coverageSnap.eligibility || {};
-    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>visitarc / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.displayName())}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(c.status, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'your plan')}</small></div></div>${this.eligibilityNote() ? `<div class="notice">${this.esc(this.eligibilityNote())}</div>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon</small></div></div></section></div>`;
+    return `<div class="narrow">${this.head('Insurance, a little clearer.', 'One place for your plan, estimated costs, and what needs a second look.')}<section class="card journey-panel"><div class="insurance-card"><div class="row" style="justify-content:space-between"><span>careloop / coverage</span>${this.icon('shield')}</div><h2>${this.esc(c.payer)}</h2><strong>${this.esc(this.displayName())}</strong><div class="split"><div><small>MEMBER ID</small><p style="color:white">${this.esc(c.member || 'Not provided')}</p></div><div><small>DOB</small><p style="color:white">${this.esc(c.dob || 'Not provided')}</p></div></div></div><div class="section-heading"><h3>Coverage snapshot</h3>${this.tag(c.status, c.status === 'active' ? '' : 'peach')}</div><div class="coverage-stats"><div><small>PCP copay</small><strong>${c.status === 'active' ? this.money(c.copay) : '—'}</strong><small>estimated</small></div><div><small>Deductible left</small><strong>${c.status === 'active' ? this.money(c.deductible) : '—'}</strong><small>remaining</small></div><div><small>Plan type</small><strong>${this.esc(c.plan || '—')}</strong><small>${this.esc(e.network_name || 'your plan')}</small></div></div>${this.eligibilityNote() ? `<div class="notice">${this.esc(this.eligibilityNote())}</div>` : ''}<div class="actions">${this.btn('Update plan details', 'update-insurance', 'secondary')}${this.btn('Refresh coverage', 'refresh-eligibility')}${this.link('Start a visit', 'start')}</div><div class="rule"></div><div class="document mt"><div style="flex:1"><h3>Insurance Claims Management</h3><small>Coming soon</small></div></div></section></div>`;
   },
 
   profile() {
@@ -3894,7 +3894,7 @@ const CareLoop = {
             a.download = 'careloop-history.pdf';
             a.click();
           } else {
-            await API.downloadHistoryPdf(markdown, 'VisitArc history packet');
+            await API.downloadHistoryPdf(markdown, 'CareLoop history packet');
           }
           this.toast('PDF packet downloaded.');
         } catch (err) {
@@ -3903,7 +3903,7 @@ const CareLoop = {
         break;
       case 'export-transcript-pdf':
         try {
-          await API.downloadHistoryPdf(this.transcriptMarkdown(), 'VisitArc visit transcript', 'visit-transcript.pdf');
+          await API.downloadHistoryPdf(this.transcriptMarkdown(), 'CareLoop visit transcript', 'visit-transcript.pdf');
           this.toast('Full transcript downloaded.');
         } catch (err) {
           this.toast(err.message);

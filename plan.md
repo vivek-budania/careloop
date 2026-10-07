@@ -1,4 +1,4 @@
-# VisitArc hackathon plan
+# CareLoop hackathon plan
 
 Teammate split for wrapping DenialShield in a **mocked golden-path journey**. The product is the flow, not another letter type. This file is the working plan; keep `README.md` / `CLAUDE.md` as the source of truth for setup commands.
 
@@ -12,7 +12,7 @@ Teammate split for wrapping DenialShield in a **mocked golden-path journey**. Th
 
 ### Thesis
 
-US care is a chain of handoffs (symptoms → visit → encounter → orders → coverage → care → claim → follow-up). Point tools optimize one moment. VisitArc’s gap is **one patient, one data thread**: context from the encounter survives PA, delivery, claims, meds, and the next visit.
+US care is a chain of handoffs (symptoms → visit → encounter → orders → coverage → care → claim → follow-up). Point tools optimize one moment. CareLoop’s gap is **one patient, one data thread**: context from the encounter survives PA, delivery, claims, meds, and the next visit.
 
 Go deepest on **scribe + policy/evidence appeal**. Mock the payer. Keep reminders simple. The **integrated journey** is the demo, not production reimbursement.
 
@@ -50,7 +50,7 @@ DenialShield today is a FastAPI + vanilla JS SPA (no frontend build). Two **disc
 | National appeal stats | `GET /api/national-stats`; `config.py` |
 | HITL modal + download | `frontend/js/app.js` |
 | Watermark | `backend/llm.py` + `DRAFT_WATERMARK` |
-| Provider / Patient Advocate tabs | `frontend/index.html` — **keep**; they are **not** the VisitArc UX |
+| Provider / Patient Advocate tabs | `frontend/index.html` — **keep**; they are **not** the CareLoop UX |
 
 #### Greenfield (build)
 
@@ -62,7 +62,7 @@ DenialShield today is a FastAPI + vanilla JS SPA (no frontend build). Two **disc
 | Mock eligibility + mock payer | Eligibility/benefits/network/cost → Dave. Deterministic **once** step-therapy PA denial + citable policy text → Sreekar (D split; see owner sections) | Dave + Sreekar |
 | Policy-to-evidence match | Encounter as evidence source; checklist vs policy criteria | Sreekar (D) |
 | Med schedule / taken / missed / refill | Simple; not a full pharmacy system | Sreekar (E) |
-| Unified timeline UX | **New VisitArc journey UI**; old tabs remain | Vivek (F) |
+| Unified timeline UX | **New CareLoop journey UI**; old tabs remain | Vivek (F) |
 | Distinct claim flow | Light mock claim + EOB; not the same as PA denial | Sreekar (assigned from original D/greenfield claim path) |
 | **Insurance identity → coverage** | **Added.** Payer dropdown (required) + optional typed fields, card OCR, SBC/EOB | Dave |
 | **In-network clinicians** | **Added/assigned** from original mock eligibility “in-network” stub; filter by ZIP | Dave |
@@ -78,7 +78,7 @@ Payer dropdown and/or card / coverage panel (Dave) → mock eligibility confirm 
 
 #### Original workstream map (A–F preserved)
 
-Coordinate on **object shapes** first (original stream B). Frontend talks only through named methods in `frontend/js/api.js` (do not `fetch` from feature files). New VisitArc routes can live in `backend/main.py` or a clearly imported `backend/careloop/` package mounted from `main.py` — do not fork a second app.
+Coordinate on **object shapes** first (original stream B). Frontend talks only through named methods in `frontend/js/api.js` (do not `fetch` from feature files). New CareLoop routes can live in `backend/main.py` or a clearly imported `backend/careloop/` package mounted from `main.py` — do not fork a second app.
 
 | Original | Title | Owner now |
 |----------|--------|-----------|
@@ -87,7 +87,7 @@ Coordinate on **object shapes** first (original stream B). Frontend talks only t
 | **C** | Scribe / SOAP / structured Plan | **Sreekar** |
 | **D** | Mock payer + step-therapy denial + policy-to-evidence | **Sreekar**; **eligibility/benefits/network/copay** from D **assigned to Dave** |
 | **E** | Med adherence + refill | **Sreekar** |
-| **F** | Unified timeline UX (VisitArc journey) | **Vivek** |
+| **F** | Unified timeline UX (CareLoop journey) | **Vivek** |
 | **(new)** | Payer dropdown + optional card/SBC, mock eligibility, symptoms/prior-visit intake, visit/cost guess, which doctors | **Dave** |
 | **(new, first-class)** | History maintenance so the patient can share history on the next doctor visit | Capture: **Dave** (coverage) + **Sreekar** (encounter/order/med/auth/claim/follow-up). Share/export/history thread UX: **Vivek** |
 
@@ -128,11 +128,11 @@ Do **not** reimplement PA letters or let the model approve coverage. Cost figure
 
 ### Login, wizard, and tabs
 
-VisitArc **is the app**. Intake is **one step at a time**. Mock login: `POST /api/careloop/login`. Password for every demo account is `demo`. Full dummy table: [`AGENTS.md`](AGENTS.md).
+CareLoop **is the app**. Intake is **one step at a time**. Mock login: `POST /api/careloop/login`. Password for every demo account is `demo`. Full dummy table: [`AGENTS.md`](AGENTS.md).
 
 After login every role sees:
 
-- **VisitArc** — coverage wizard (the product)
+- **CareLoop** — coverage wizard (the product)
 - **Insurance Claims Management** — Coming soon (Provider + Patient Advocate letter tools are not shown)
 
 Do not restore Provider / Patient Advocate as top-level product tabs. Letter APIs may remain for later claims work.
@@ -177,7 +177,7 @@ What production systems actually call is **X12 270/271 eligibility** (JSON wrapp
 | **Availity Coverages** (`POST /v1/coverages`) | Large US clearinghouse 270/271 | Demo plan is **canned scenarios**, auto-approved. Live data needs contracting. |
 | **Change / Optum, Eligible, etc.** | Same 270/271 idea | Sales / enrollment; not a weekend integration. |
 | **CMS Patient Access / SMART on FHIR** | Patient OAuths into *their* payer | Correct long-term consumer path; per-payer apps; bad demo. |
-| **VisitArc mock** (`MockEligibility.check`) | Map dropdown payer (+ optional member ID) → fixture: active, network, copay/deductible/OOP | **This is the judged path.** Label the UI as mock. |
+| **CareLoop mock** (`MockEligibility.check`) | Map dropdown payer (+ optional member ID) → fixture: active, network, copay/deductible/OOP | **This is the judged path.** Label the UI as mock. |
 
 **Dave implements:** `MockEligibility.check(profile)` always, as fallback. If `STEDI_API_KEY` is a **test** key on the process/container at launch (laptop `.env` is a fallback) **and** the profile matches that payer’s canned sandbox subscriber (see `backend/data/mock_payers.json`), call Stedi’s `POST …/2026-06-01/eligibility-check` (`Authorization: Key …`) and flatten 271 benefits onto the coverage card. Ignore raw `x12`. If it does not match or the key is missing, fall back to the fixture and say so. Do **not** send real card PHI to a production eligibility endpoint. Do **not** commit the key, bake it into the image, or paste it in chat.
 
@@ -202,7 +202,7 @@ Not a coverage decision and not Sreekar’s SOAP.
 - `backend/data/mock_insurance_card.json` / `backend/data/mock_network.json` / `backend/data/mock_fee_schedule.json` (fixtures)
 - Payer dropdown source: small list in `backend/data/mock_payers.json` (commercial payers plus a mock payer — names only)
 - Coverage fields on the store (Vivek owns store shape; Dave proposes Coverage contract, including `symptoms`, `prior_visit_notes`, `visit_cost_estimate`)
-- Journey **coverage / card / network / intake** panels consumed via `frontend/js/api.js` named methods (Vivek wires VisitArc chrome)
+- Journey **coverage / card / network / intake** panels consumed via `frontend/js/api.js` named methods (Vivek wires CareLoop chrome)
 
 Do **not** reimplement PA letters or decide coverage. Surface mocked benefits and labeled estimates only.
 
@@ -283,7 +283,7 @@ Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests
 
 **Owner files:** `backend/main.py` (existing generate/parse/risk/code routes), `backend/llm.py`, `backend/prompts.py`, `backend/risk_engine.py`, `backend/config.py`, `backend/data/*.json`, `frontend/js/provider.js`, `frontend/js/patient.js`, HITL in `frontend/js/app.js`.
 
-**Job:** Keep PA generate, denial parse, appeal, demand letter, risk score, code search. Preserve watermark + HITL. Do **not** add more letter types. VisitArc journey should **call these APIs** (or thin wrappers) rather than reimplement LLM letters.
+**Job:** Keep PA generate, denial parse, appeal, demand letter, risk score, code search. Preserve watermark + HITL. Do **not** add more letter types. CareLoop journey should **call these APIs** (or thin wrappers) rather than reimplement LLM letters.
 
 **Done when:**
 
@@ -294,7 +294,7 @@ Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests
 
 #### C — Scribe / SOAP / structured Plan
 
-**Owner files (proposed):** `backend/careloop/scribe.py`, seed SOAP in seed fixture, encounter step markup (Vivek owns VisitArc chrome; Sreekar owns encounter/scribe behavior). Original note also listed `frontend/js/careloop.js` (encounter step only) + markup in `frontend/index.html` — **assigned:** implement encounter/scribe logic; coordinate DOM with Vivek so F is not forked.
+**Owner files (proposed):** `backend/careloop/scribe.py`, seed SOAP in seed fixture, encounter step markup (Vivek owns CareLoop chrome; Sreekar owns encounter/scribe behavior). Original note also listed `frontend/js/careloop.js` (encounter step only) + markup in `frontend/index.html` — **assigned:** implement encounter/scribe logic; coordinate DOM with Vivek so F is not forked.
 
 **Job:** Seeded mock PCP encounter is **explicitly OK**. Optional: paste/play mock transcript → SOAP + Plan. Clinician review gate before Plan becomes orders. Extract: HbA1c, continue metformin, PA-required add-on Rx, follow-up.
 
@@ -321,7 +321,7 @@ Everything after the visit starts: transcribe → SOAP/Plan → medicines, tests
 
 #### E — Med adherence + refill
 
-**Owner files (proposed):** medication fields in the store; med panel in the VisitArc UI (coordinate with Vivek).
+**Owner files (proposed):** medication fields in the store; med panel in the CareLoop UI (coordinate with Vivek).
 
 **Job:** After mock PA approval + dispense, schedule doses. Mark taken/missed. Remaining supply + refill nudge. Intentionally simple.
 
@@ -401,21 +401,21 @@ One process: `uvicorn backend.main:app`. Isolate by **not calling other modules*
 
 | Stream | How to work in isolation |
 |--------|---------------------------|
-| **A Authorization** | Run server; use Provider/Patient tabs + curls above. Avoid new VisitArc files except API wrappers. |
+| **A Authorization** | Run server; use Provider/Patient tabs + curls above. Avoid new CareLoop files except API wrappers. |
 | **C Scribe** | Depend on B seed; curl SOAP/plan; postpone timeline polish. |
 | **D Mock payer** | Curl submit-PA → expect same step-therapy body every time; then match endpoint. |
 | **E Meds** | After a fixture with `dispensed` status; curl taken/missed. |
 
 ### Dependencies on the other two
 
-- **Vivek (B/F):** persist through the store, not local-only UI state. Timeline lists Sreekar’s events. Encounter/med/PA screens live in VisitArc chrome Vivek owns.
+- **Vivek (B/F):** persist through the store, not local-only UI state. Timeline lists Sreekar’s events. Encounter/med/PA screens live in CareLoop chrome Vivek owns.
 - **Dave:** read Coverage / network / copay from the thread before PA; do not mock a second eligibility truth. History coverage facts are Dave’s; Sreekar does not drop them from the packet — they appear alongside clinical facts Vivek exports.
 
 ---
 
 ## Vivek — patient-facing workflow first, then Dribbble polish
 
-Own the **VisitArc journey UI** and the **longitudinal thread as the app shell**. Workflow first (basic, readable: what happened / waiting / who acts). Visual polish using **Dribbble for design ideas** comes **after** the basic patient-facing flow works. Do **not** treat Provider/Patient tabs as the VisitArc UX.
+Own the **CareLoop journey UI** and the **longitudinal thread as the app shell**. Workflow first (basic, readable: what happened / waiting / who acts). Visual polish using **Dribbble for design ideas** comes **after** the basic patient-facing flow works. Do **not** treat Provider/Patient tabs as the CareLoop UX.
 
 ### Scope
 
@@ -441,11 +441,11 @@ Own the **VisitArc journey UI** and the **longitudinal thread as the app shell**
 
 **Suggested contract (sketch, not frozen):** `GET /api/careloop/thread`, `POST /api/careloop/reset`, plus per-object actions owned by later streams.
 
-#### F — Unified timeline UX (VisitArc journey)
+#### F — Unified timeline UX (CareLoop journey)
 
-**Owner files:** `frontend/index.html` (new nav + journey view), `frontend/css/style.css`, `frontend/js/app.js` (third module tab), `frontend/js/careloop.js`, `frontend/js/api.js` (named VisitArc methods).
+**Owner files:** `frontend/index.html` (new nav + journey view), `frontend/css/style.css`, `frontend/js/app.js` (third module tab), `frontend/js/careloop.js`, `frontend/js/api.js` (named CareLoop methods).
 
-**Job:** New **VisitArc** journey UI. **Do not treat Provider/Patient tabs as VisitArc.** Timeline joins encounter, orders, PA, **claim**, meds, follow-up, **coverage**, **history**. Every screen: what happened / what’s waiting / who acts / what evidence.
+**Job:** New **CareLoop** journey UI. **Do not treat Provider/Patient tabs as CareLoop.** Timeline joins encounter, orders, PA, **claim**, meds, follow-up, **coverage**, **history**. Every screen: what happened / what’s waiting / who acts / what evidence.
 
 **Done when:**
 
@@ -547,7 +547,7 @@ B store (Vivek)  ─────────────────────
 ```
 
 1. **B first** (or a frozen JSON schema) so C/D/E/F/Dave/history do not invent incompatible objects. **Vivek.**
-2. **A in parallel** from day one (protect existing endpoints; add VisitArc-shaped wrappers). **Sreekar.**
+2. **A in parallel** from day one (protect existing endpoints; add CareLoop-shaped wrappers). **Sreekar.**
 3. **Dave coverage/card/network in parallel** with A (dropdown + fixtures OK); bind to B when store exists. Live 270/271 is optional sandbox only.
 4. **C then D** for the insurance half of the golden path (orders must exist before PA submit). **Sreekar.** Eligibility must be on the thread before PA (Dave or seed).
 5. **E after** mock approve + dispense (or a seeded “already dispensed” state). **Sreekar.**
@@ -582,7 +582,7 @@ git push -u origin stream-b/longitudinal-store
 - Multi-plan / multi-state policy knowledge base as verified legal source
 - High-quality ambient clinical scribe without a heavy clinician review burden
 - Expanding DenialShield sideways into more letter types instead of the journey
-- Treating Provider/Patient tabs as the VisitArc product UX
+- Treating Provider/Patient tabs as the CareLoop product UX
 - Letting the model make coverage or clinical decisions
 - Collapsing PA denial and claim denial into one flow
 

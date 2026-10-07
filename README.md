@@ -1,8 +1,8 @@
-# VisitArc
+# CareLoop
 
 ## Watch the demo
 
-[Watch the VisitArc patient-journey walkthrough on YouTube (2:44)](https://www.youtube.com/watch?v=QZQ3VV0eWpM)
+[Watch the CareLoop patient-journey walkthrough on YouTube (2:44)](https://www.youtube.com/watch?v=QZQ3VV0eWpM)
 
 A walkthrough of the HopHacks 2026 prototype, from preparing for a visit to summaries, estimated costs, follow-ups, and shareable history.
 
@@ -16,7 +16,7 @@ It is **not** a real payer, PBM, EHR, or claims platform. Mock “submit” is l
 
 ## What it is
 
-US care is a chain of handoffs. Point tools optimize one moment. VisitArc’s demo gap is **one patient, one data thread** — encounter evidence still available at PA, appeal, dispense, follow-up, and the next visit.
+US care is a chain of handoffs. Point tools optimize one moment. CareLoop’s demo gap is **one patient, one data thread** — encounter evidence still available at PA, appeal, dispense, follow-up, and the next visit.
 
 The showcase walkthrough (sample patient / sample plan, not a real identity):
 
@@ -57,7 +57,7 @@ backend/llm.py           generate() watermarks letters; generate_json() does not
 backend/prompts.py       PA / appeal / demand / denial-parse (zero hallucination)
 backend/risk_engine.py   Deterministic 0–100 denial-risk heuristic (no LLM)
 backend/data/            Fixtures + small ICD-10 / CPT / CARC sets
-frontend/index.html       Patient shell (login → VisitArc)
+frontend/index.html       Patient shell (login → CareLoop)
 frontend/showcase.html    Judge-facing product story
 frontend/js/api.js        Named fetch methods — do not call fetch from feature code
 frontend/js/careloop.js   Patient IA
@@ -65,7 +65,7 @@ docs/database/            Hosted Supabase table docs (profiles, visits, insuranc
 supabase/migrations/      Idempotent SQL matching those tables
 ```
 
-Letter flow: Pydantic model in `main.py` → user-message string → `llm.generate()` / `generate_json()` → system prompt in `prompts.py`. New VisitArc routes stay on this app.
+Letter flow: Pydantic model in `main.py` → user-message string → `llm.generate()` / `generate_json()` → system prompt in `prompts.py`. New CareLoop routes stay on this app.
 
 ---
 

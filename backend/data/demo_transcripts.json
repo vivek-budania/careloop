@@ -42,7 +42,7 @@
         "description": "Dermatology follow-up after PA outcome",
         "code": null,
         "pa_required": false,
-        "notes": "Clinic submits the PA. VisitArc does not file it."
+        "notes": "Clinic submits the PA. CareLoop does not file it."
       }
     ]
   },
@@ -89,7 +89,7 @@
         "description": "Review MRI results in clinic",
         "code": null,
         "pa_required": false,
-        "notes": "Clinic submits the imaging PA. VisitArc does not file it."
+        "notes": "Clinic submits the imaging PA. CareLoop does not file it."
       }
     ]
   },
@@ -136,7 +136,7 @@
         "description": "Neurology follow-up after first Botox cycle",
         "code": null,
         "pa_required": false,
-        "notes": "Clinic submits the PA. VisitArc does not file it."
+        "notes": "Clinic submits the PA. CareLoop does not file it."
       }
     ]
   }

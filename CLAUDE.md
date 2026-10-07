@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**VisitArc** is the running web app: a mocked US patient-journey demo (not a real payer/EHR platform). FastAPI + vanilla JS/HTML/CSS, one process.
+**CareLoop** is the running web app: a mocked US patient-journey demo (not a real payer/EHR platform). FastAPI + vanilla JS/HTML/CSS, one process.
 
 Teammate overview: [`README.md`](README.md). Agent demo notes + **dummy logins**: [`AGENTS.md`](AGENTS.md). Owner split: [`plan.md`](plan.md). Hosted schema: [`docs/database/`](docs/database/README.md) (SQL: [`supabase/`](supabase/README.md)).
 
-**Product UX:** after login, **VisitArc** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. The old Provider/Patient Advocate letter-draft UI (`/letters`) has been removed from the frontend; the backend PA/appeal/demand/denial-parse endpoints and `risk_engine.py` still exist but are currently unused by any UI.
+**Product UX:** after login, **CareLoop** (paginated coverage intake) is the app. **Insurance Claims Management** is a Coming soon tab. The old Provider/Patient Advocate letter-draft UI (`/letters`) has been removed from the frontend; the backend PA/appeal/demand/denial-parse endpoints and `risk_engine.py` still exist but are currently unused by any UI.
 
 **Dave’s slice:** login (`jane` / `demo`; see AGENTS.md). Server-side Supabase Auth + `public.profiles` when `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are set. Login does not read `visits` / `insurance` (tables documented, not wired). Insurance requires payer + date of birth. Letters, image → JSON, and visit STT use `XAI_API_KEY` (Vercel slot) — cards, doctor pages, lab pages; no letter watermark on JSON, no invented copays. Coverage is mocked unless `STEDI_API_KEY` is a Stedi *test* key on the process/container at launch and the member matches that payer’s canned sandbox fixture. Profile shows whether Stedi / Groq / xAI / Vercel slots are loaded (no secret values). Visit/cost output is a labeled estimate. Never paste API keys in chat or commit `.env`.
 
@@ -41,7 +41,7 @@ Request flow for all AI-generated documents (PA letters, appeals, demand letters
 **Frontend** (`frontend/`) is a single-page vanilla JS app with no framework/bundler — files are loaded directly as `<script>` tags.
 
 - `js/api.js` — `API` object: single fetch wrapper (`request()`) plus one named method per backend endpoint. Any new backend endpoint should get a corresponding method here rather than calling `fetch` directly from feature code.
-- `js/app.js` — login, tab nav (**VisitArc** + **Insurance Claims Management**), toast. Still has the HITL modal helpers (`setupHITLModal`/`requestApproval`) from the removed `/letters` page; they no-op safely since `#hitl-modal` no longer exists in any page, but any new AI-generated-document feature should reuse this pattern (approve-before-download) rather than reinvent it.
+- `js/app.js` — login, tab nav (**CareLoop** + **Insurance Claims Management**), toast. Still has the HITL modal helpers (`setupHITLModal`/`requestApproval`) from the removed `/letters` page; they no-op safely since `#hitl-modal` no longer exists in any page, but any new AI-generated-document feature should reuse this pattern (approve-before-download) rather than reinvent it.
 - `js/careloop.js` — paginated coverage intake.
 
 **Database (hosted Supabase, not wired to coverage/login beyond `profiles`):** [`docs/database/`](docs/database/README.md). Matching SQL: [`supabase/migrations/`](supabase/migrations/). No `login` table.
@@ -53,4 +53,4 @@ This is a healthcare-adjacent tool generating documents intended for real insura
 1. **Watermarking** — every free-text generated document (PA, appeal, demand) is wrapped in `DRAFT_WATERMARK` by `llm.py`'s `generate()`. Don't add a code path that returns LLM output without it.
 2. **Human-in-the-loop** — the frontend never lets a user download a generated document without passing through the HITL approval modal first.
 
-VisitArc additionally: no independent clinical/coverage decisions; do not collapse PA denial vs claim denial; Dave’s visit/cost output must stay a labeled estimate (not an approval or a bill). Full list: [`README.md`](README.md) (Safety invariants) and [`plan.md`](plan.md) (Shared thesis / Dave intake pipeline).
+CareLoop additionally: no independent clinical/coverage decisions; do not collapse PA denial vs claim denial; Dave’s visit/cost output must stay a labeled estimate (not an approval or a bill). Full list: [`README.md`](README.md) (Safety invariants) and [`plan.md`](plan.md) (Shared thesis / Dave intake pipeline).
