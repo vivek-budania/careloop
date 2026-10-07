@@ -1,4 +1,4 @@
-# CareLoop — agent notes
+# VisitArc — agent notes
 
 Read this before changing the running app. Setup commands also live in [`README.md`](README.md) and [`CLAUDE.md`](CLAUDE.md). Hackathon owner split: [`plan.md`](plan.md).
 
@@ -28,7 +28,7 @@ Do not rebuild the wizard. Do not restore Provider/Advocate tabs. Fixture sample
 
 ## What the product is
 
-**CareLoop is the entire web app.** It is a mocked US patient-journey demo (coverage intake first). It is **not** a real payer, PBM, EHR, or claims platform.
+**VisitArc is the entire web app.** It is a mocked US patient-journey demo (coverage intake first). It is **not** a real payer, PBM, EHR, or claims platform.
 
 After login the user sees the **patient shell** (not Provider/Advocate tabs):
 
@@ -88,7 +88,7 @@ Open http://localhost:8080 → log in as `jane` / `demo` → **I’m returning**
 
 **Vercel:** entrypoint is `backend.main:app` in [`pyproject.toml`](pyproject.toml). Do not replace `/` with a JSON stub. Fold extra keys into the same Vercel env list as they arrive. Live login needs the three `SUPABASE_*` names.
 
-## CareLoop patient UI + Dave coverage
+## VisitArc patient UI + Dave coverage
 
 Patient chrome is `frontend/js/careloop.js` (Vivek’s demo IA). Coverage/cost/network still use Dave’s APIs:
 

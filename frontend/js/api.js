@@ -46,7 +46,7 @@ const API = {
       return await response.json();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        throw new Error('Couldn’t reach CareLoop. Try again in a moment.');
+        throw new Error('Couldn’t reach VisitArc. Try again in a moment.');
       }
       throw err;
     }
@@ -197,7 +197,7 @@ const API = {
     return this.post('/api/careloop/scribe/summarize', data);
   },
 
-  async fetchHistoryPdf(markdown, title = 'CareLoop history packet') {
+  async fetchHistoryPdf(markdown, title = 'VisitArc history packet') {
     const url = `${this.BASE_URL}/api/careloop/history/pdf`;
     const headers = { 'Content-Type': 'application/json' };
 
@@ -220,7 +220,7 @@ const API = {
     return blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
   },
 
-  async downloadHistoryPdf(markdown, title = 'CareLoop history packet', filename = 'careloop-history.pdf') {
+  async downloadHistoryPdf(markdown, title = 'VisitArc history packet', filename = 'careloop-history.pdf') {
     const blob = await this.fetchHistoryPdf(markdown, title);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

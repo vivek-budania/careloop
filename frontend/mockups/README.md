@@ -1,4 +1,4 @@
-# Patient-facing CareLoop mockups (visual prototype)
+# Patient-facing VisitArc mockups (visual prototype)
 
 Static HTML clickthrough for Vivek’s patient app shell. **Not** the live golden-path product and **not** DenialShield’s Provider / Patient Advocate tabs.
 
